@@ -1,0 +1,116 @@
+version: "3.7"
+
+services:
+  # MLflow
+  mlflow:
+    build: .
+    container_name: mlflow
+    ports:
+      - "5000:5000"
+    environment:
+      - BACKEND_STORE_URI=postgresql+psycopg2://mlflow:mlflowpassword@postgre/mlflow
+      - ARTIFACT_STORE=/mlflow/artifacts
+      - MLFLOW_TRACKING_URI=postgresql+psycopg2://mlflow:mlflowpassword@postgre/mlflow
+      - MLFLOW_S3_ENDPOINT_URL=http:/minio:9000
+      - MLFLOW_ARTIFACT_URI=s3://mlflow
+      - AWS_S3_BUCKET=mlflow
+      - AWS_ACCESS_KEY_ID=minio
+      - AWS_SECRET_ACCESS_KEY=Strong#Pass#2022
+    volumes:
+      - ./artifacts:/root/mlflow/artifacts
+    command: mlflow server --backend-store-uri ${BACKEND_STORE_URI} --default-artifact-root ${MLFLOW_ARTIFACT_URI} -h 0.0.0.0
+    networks:
+      - internal
+    depends_on:
+      - postgre
+
+  postgre:
+    image: postgres:14
+    container_name: postgre
+    ports:
+      - 5433:5432
+    environment:
+      POSTGRES_USER: mlflow
+      POSTGRES_PASSWORD: mlflowpassword
+      POSTGRES_DB: mlflow
+    networks:
+      - internal
+    volumes:
+      - mlflow-db-data3:/var/lib/postgresql/data
+
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: Strong#Pass#2022
+    command: server --console-address ":9001" /data
+    networks:
+      - internal
+
+  # Grafana
+  grafana:
+    image: grafana/grafana-oss:10.4.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana-data:/var/lib/grafana
+    networks:
+      - internal
+
+
+  # Node Exporter
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+    networks:
+      - internal
+
+  # Jupyter Notebook
+  jupyter:
+    image: jupyter/base-notebook:latest
+    container_name: jupyter
+    ports:
+      - "8888:8888"
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+    volumes:
+      - ./jupyter-workspace:/home/jovyan/work
+      - ./pip.conf:/etc/pip.conf:ro
+      - ./requirements.txt:/home/jovyan/work/requirements.txt:ro
+    command: start-notebook.sh --NotebookApp.token=''
+    networks:
+      - internal
+
+  # FastAPI
+  fastapi:
+    image: tiangolo/uvicorn-gunicorn-fastapi:python3.9
+    container_name: fastapi
+    command: /app/run.sh
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app
+      - ./pip.conf:/etc/pip.conf:ro
+    environment:
+      - MODULE_NAME=main
+      - VARIABLE_NAME=app
+    networks:
+      - internal
+    depends_on:
+      - mlflow
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  mlflow-db-data3: { }
+  minio_data: { }
