@@ -109,11 +109,12 @@ This project is licensed under the MIT License - see the LICENSE.md file for det
 For support, please open an issue on GitHub or contact the maintainers directly.
 
 ## Acknowledgements
-- We would like to thank VSK, whose support and environment for innovation have been pivotal to the success of the project.
-- Special thanks to Nikulin Vladimir, who not only supervised the business aspects of the 
+We would like to thank VSK, whose support and environment for innovation have been pivotal to the success of the project.
+Special thanks to Nikulin Vladimir, who not only supervised the business aspects of the 
 project but also provided invaluable insights and guidance on integrating it with business workflows. 
-- We appreciate help of our data science department for integration of the framework in the ML processes and MLOps team specifically(Makeev Aleksey, Matyukubov Alexander and Zotov Dmitry) for testing and DevOps integrations.   
+We appreciate help of our data science department for integration of the framework in the ML processes and MLOps team specifically(Makeev Aleksey, Matyukubov Alexander and Zotov Dmitry) for testing and DevOps integrations.   
 
+## Current contributors
 - Semyon Semyonov-  original codebase developement, system design and product management 
 - Suvorov Vladimir - core code development, software architecture
 - Bochkarev Dmitry - code development, development of data science models
