@@ -47,8 +47,8 @@ By default containers map to the following ports:
 2. **Prometheus и Grafana**
    - Grafana требует ручного подключения источника данных (Prometheus).
 
-## How to start
-1. Запустите проект:
+## Getting Started
+1. To start the project
    ```bash
    docker compose up
    ```
@@ -56,6 +56,15 @@ By default containers map to the following ports:
    ```bash
    docker compose up -d
    ```
+
+- To restart:
+  ```bash
+  docker compose down && docker compose up --build
+  ```
+- To stop the project:
+  ```bash
+  docker compose down
+  ```
 
 2. Check availablity
    - MLflow: [http://localhost:5000](http://localhost:5000)
@@ -72,46 +81,45 @@ By default containers map to the following ports:
 4.For testing of FastAPI use Swagger docs: [http://localhost:8000/docs](http://localhost:8000/docs).
 
 ## Possible issues and solutions 
-1. **Контейнеры не запускаются**:
-   - Проверьте логи контейнеров:
-     ```bash
-     docker logs <container_name>
-     ```
-   - Убедитесь, что все зависимости загружены.
-
-2. **Порты заняты**:
-   - Найдите процессы, использующие порты, и освободите их:
+1. **The ports are in sue**:
+   - Find and free the neccesary ports:
      ```bash
      sudo lsof -i:<порт>
      ```
-   - Либо измените порты в `docker-compose.yml`.
+   - Alternatively change the ports in `docker-compose.yml`.
 
-3. **Контейнеры не видят друг друга**:
-   - Проверьте сеть Docker:
+2. **No connection between containers**:
+   - Check names of Docker network:
      ```bash
      docker network inspect <project>_default
      ```
-   - Убедитесь, что имена сервисов совпадают.
 
-4. **Jupyter или MLflow недоступны**:
-   - Убедитесь, что контейнеры запущены и порты проброшены.
-
-5. **FastAPI не работает с MLflow**:
-   - Проверьте связь с MLflow API:
+3. **No connections between FastAPI and MLflow**:
+   - Check connections MLflow API:
      ```bash
      curl http://mlflow:5000/api/2.0/mlflow/experiments/list
      ```
+## Contributing
+We welcome contributions from the community! If you'd like to contribute, please follow the contributing guidelines outlined in CONTRIBUTING.md.
 
-## Полезные команды
-- Перезапустить проект:
-  ```bash
-  docker compose down && docker compose up --build
-  ```
-- Остановить все контейнеры:
-  ```bash
-  docker compose down
-  ```
-- Проверить статус контейнеров:
-  ```bash
-  docker ps
-  
+## License
+This project is licensed under the MIT License - see the LICENSE.md file for details.
+
+## Support
+For support, please open an issue on GitHub or contact the maintainers directly.
+
+## Acknowledgements
+We would like to thank VSK, whose support and environment for innovation have been pivotal to the success of the project. Special thanks to Nikulin Vladimir, who not only supervised the business aspects of the 
+project but also provided invaluable insights and guidance on integrating it with business workflows. We appreciate help of our data science department for integration of the framework in the ML processes and MLOps team specifically(Makeev Aleksey, Matyukubov Alexander and Zotov Dmitry) for testing and DevOps integrations.   
+
+## Contributors
+Semyon Semyonov-  original codebase developement, system design and product management 
+Suvorov Vladimir - core code development, software architecture
+Bochkarev Dmitry - code development, development of data science models
+Matcera Maxim -  specific modules development
+
+If you'd like to contribute, please follow the contributing guidelines outlined in CONTRIBUTING.md.  
+
+   
+   
+
