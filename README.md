@@ -1,4 +1,14 @@
 # README
+OutBoxML is an open-source library designed to improve the process of automating machine learning pipelines from model training to deployment. This toolkit integrates several key components including Python for model development, Grafana for monitoring, FastAPI for serving models, and MLFlow for experiment tracking and management. Our aim is to provide a robust and user-friendly platform for ML practitioners to efficiently build, deploy, and monitor their ML solutions with ease. 
+
+The key components include:
+**AutoML**: Use AutoML algorithm with boosting or implement your custom models using low-code solution 
+**MLFlow**: Track experiments, parameters, and outputs with MLFlow .
+Grafana Monitoring: Utilize Grafana dashboards to monitor your ML models' performance and resource usage in real-time, ensuring that you can quickly identify and react to any issues that may arise.
+FastAPI for Model Serving: Serve your trained models with a high-performance, easy-to-use web framework built on FastAPI that allows for quick deployment and testing of your ML models via RESTful APIs.
+
+Scalable and Modular: Designed to be both scalable to handle large datasets and models, and modular to allow for easy customization and extension of the library to fit your specific needs.
+Comprehensive Documentation: Detailed documentation is available to guide you through the setup, usage, and customization of the library, enabling you to get started quickly and understand the full capabilities of the toolset.
 
 ## Требования к ресурсам
 Для корректной работы всех сервисов рекомендуется:
