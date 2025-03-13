@@ -1,32 +1,25 @@
 # README
-OutBoxML is an open-source library designed to improve the process of automating machine learning pipelines from model training to deployment. This toolkit integrates several key components including Python for model development, Grafana for monitoring, FastAPI for serving models, and MLFlow for experiment tracking and management. Our aim is to provide a robust and user-friendly platform for ML practitioners to efficiently build, deploy, and monitor their ML solutions with ease. 
+OutBoxML is an open-source framework designed to improve the process of automating machine learning pipelines from model training to deployment. This toolkit integrates several key components including Python for model development, Grafana for monitoring, FastAPI for serving models, and MLFlow for experiment tracking and management. Our aim is to provide a robust and user-friendly platform for ML practitioners to efficiently build, deploy, and monitor their ML solutions with ease. 
 
 The key components include:
-**AutoML**: Use AutoML algorithm with boosting or implement your custom models using low-code solution 
-**MLFlow**: Track experiments, parameters, and outputs with MLFlow .
-Grafana Monitoring: Utilize Grafana dashboards to monitor your ML models' performance and resource usage in real-time, ensuring that you can quickly identify and react to any issues that may arise.
-FastAPI for Model Serving: Serve your trained models with a high-performance, easy-to-use web framework built on FastAPI that allows for quick deployment and testing of your ML models via RESTful APIs.
+- **AutoML**: Use AutoML algorithm with boosting or implement your custom models using low-code solution 
+- **MLFlow**: Track experiments, parameters, and outputs with MLFlow .
+- **Grafana Monitoring**: Utilize Grafana dashboards to monitor ML models performance in real-time
+- **FastAPI**: Host the models with FastAPI that allows for quick deployment and testing of ML models via RESTful APIs.
+- **PostgreSQL**: Use open source database to store and update data for AutoML proceses
 
-Scalable and Modular: Designed to be both scalable to handle large datasets and models, and modular to allow for easy customization and extension of the library to fit your specific needs.
-Comprehensive Documentation: Detailed documentation is available to guide you through the setup, usage, and customization of the library, enabling you to get started quickly and understand the full capabilities of the toolset.
+The main connections between components are made with Docker, the framework requires OS with Docker и Docker Compose installed.
 
-## Требования к ресурсам
-Для корректной работы всех сервисов рекомендуется:
-- **Процессор**: Минимум 4 ядра (рекомендуется 8 ядер для интенсивной работы).
-- **Оперативная память**: 16 ГБ или больше (минимум 8 ГБ).
-- **Диск**: Не менее 50 ГБ свободного места для баз данных, артефактов и контейнеров.
-- **ОС**: Linux, macOS, Windows с установленным Docker и Docker Compose.
+ 
+## Communications between the containers
+All containers use one Docker network, by default (`<project>_default`):
+- **MLflow** Communicates with PostgreSQL using `postgre`.
+- **Prometheus** collect metrics from `node-exporter`.
+- **FastAPI** Sends metrics to MLflow with REST API.
+ 
 
-## Связь между контейнерами
-Все контейнеры находятся в одной сети Docker по умолчанию (`<project>_default`):
-- **MLflow** взаимодействует с PostgreSQL через `postgre`.
-- **Prometheus** собирает метрики с `node-exporter`.
-- **FastAPI** может отправлять метрики в MLflow через REST API.
-
-Контейнеры используют DNS-имена сервисов, определённые в `docker-compose.yml` (например, `mlflow`, `postgre`, `fastapi`).
-
-## Порты
-Порты проброшены для доступа к сервисам с хоста:
+## Ports
+By default containers map to the following ports:
 - **MLflow**: `5000:5000`
 - **Grafana**: `3000:3000`
 - **Prometheus**: `9090:9090`
@@ -34,8 +27,7 @@ Comprehensive Documentation: Detailed documentation is available to guide you th
 - **Jupyter Notebook**: `8888:8888`
 - **FastAPI**: `8000:8000`
 - **Minio**: `9001:9001`
-
-Убедитесь, что эти порты свободны. При необходимости их можно изменить в секции `ports` файла `docker-compose.yml`.
+  
 
 ## Настройка Minio (Обязательный пункт)
 - Зайти на http://localhost:9001 (логин: minio, пароль: Strong#Pass#2022)
@@ -45,46 +37,41 @@ Comprehensive Documentation: Detailed documentation is available to guide you th
 - Выставить там Public и нажать set
 ![Minio-mlflow-settings](outboxml/image.png)
 
-## Сетевые ограничения
-- Вся связь между контейнерами осуществляется через сеть Docker (bridge-сеть).
-- Контейнеры изолированы от внешнего мира, за исключением проброшенных портов.
-- Для дополнительной безопасности можно ограничить доступ к портам, используя брандмауэр или настройку Docker-сети.
+## Network restrictions and security concerts
+- The containers are isolated 
+- Use firewall on the host machine for extra security 
 
-## Дополнительные моменты
 1. **Jupyter Notebook**
-   - Открыт доступ без токена. Для сетевого окружения настройте пароль.
+   - By default open without password or token
 
-2. **FastAPI**
-   - Предоставляет API для интеграции с MLflow.
-
-3. **Prometheus и Grafana**
+2. **Prometheus и Grafana**
    - Grafana требует ручного подключения источника данных (Prometheus).
 
-## Как проверить
+## How to start
 1. Запустите проект:
    ```bash
    docker compose up
    ```
-   Для запуска в фоне (что бы можно было закрыть консоль)
+   or for backround lunch
    ```bash
    docker compose up -d
    ```
 
-2. Проверьте доступ к сервисам через браузер:
+2. Check availablity
    - MLflow: [http://localhost:5000](http://localhost:5000)
-   - Grafana: [http://localhost:3000](http://localhost:3000) (по умолчанию логин/пароль: `admin/admin`)
+   - Grafana: [http://localhost:3000](http://localhost:3000) (default login/password: `admin/admin`)
    - Prometheus: [http://localhost:9090](http://localhost:9090)
    - Jupyter Notebook: [http://localhost:8888](http://localhost:8888)
    - FastAPI: [http://localhost:8000](http://localhost:8000)
 
-3. Убедитесь, что все контейнеры работают:
+3. Ensure that all containters are up
    ```bash
    docker ps
    ```
+   
+4.For testing of FastAPI use Swagger docs: [http://localhost:8000/docs](http://localhost:8000/docs).
 
-4. Для тестирования FastAPI используйте Swagger-документацию: [http://localhost:8000/docs](http://localhost:8000/docs).
-
-## Возможные проблемы и решения
+## Possible issues and solutions 
 1. **Контейнеры не запускаются**:
    - Проверьте логи контейнеров:
      ```bash
