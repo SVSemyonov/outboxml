@@ -1,11 +1,10 @@
 from fastapi import FastAPI, HTTPException
 import requests
-import config
 
 app = FastAPI()
 
 MLFLOW_TRACKING_URI = "http://mlflow:5000"  # URL сервиса MLflow внутри Docker
-EXPERIMENT_NAME = config.mlflow_experiment
+EXPERIMENT_NAME = "fastapi_integration"
 
 # Инициализация эксперимента при старте приложения
 @app.on_event("startup")
