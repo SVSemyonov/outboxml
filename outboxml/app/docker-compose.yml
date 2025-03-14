@@ -83,7 +83,6 @@ services:
       JUPYTER_ENABLE_LAB: "yes"
     volumes:
       - ./jupyter-workspace:/home/jovyan/work
-      - ./pip.conf:/etc/pip.conf:ro
       - ./requirements.txt:/home/jovyan/work/requirements.txt:ro
     command: start-notebook.sh --NotebookApp.token=''
     networks:
@@ -97,8 +96,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./app:/app
-      - ./pip.conf:/etc/pip.conf:ro
+      - ./run.sh:/app/run.sh
+      - ./main.py:/app/main.py
     environment:
       - MODULE_NAME=main
       - VARIABLE_NAME=app
