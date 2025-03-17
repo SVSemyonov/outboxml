@@ -24,10 +24,12 @@ By default containers map to the following ports:
 - **Grafana**: `3000:3000`
 - **Prometheus**: `9090:9090`
 - **Node Exporter**: `9100:9100`
-- **Jupyter Notebook**: `8888:8888`
+- **Jupyter Notebook**: `8889:8888`
 - **FastAPI**: `8000:8000`
 - **Minio**: `9001:9001`
   
+## Начало работы
+- Обязательно запустить файл create-folder.bat перед началом всех действий
 
 ## Настройка Minio (Обязательный пункт)
 - Зайти на http://localhost:9001 (логин: minio, пароль: Strong#Pass#2022)
@@ -70,7 +72,7 @@ By default containers map to the following ports:
    - MLflow: [http://localhost:5000](http://localhost:5000)
    - Grafana: [http://localhost:3000](http://localhost:3000) (default login/password: `admin/admin`)
    - Prometheus: [http://localhost:9090](http://localhost:9090)
-   - Jupyter Notebook: [http://localhost:8888](http://localhost:8888)
+   - Jupyter Notebook: [http://localhost:8889](http://localhost:8889)
    - FastAPI: [http://localhost:8000](http://localhost:8000)
 
 3. Ensure that all containters are up
