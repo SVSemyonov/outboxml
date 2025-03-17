@@ -84,6 +84,7 @@ services:
     volumes:
       - ./jupyter-workspace:/home/jovyan/work
       - ./../../examples:/home/jovyan/work/examples
+      - ./../../outboxml:/home/jovyan/work/outboxml
       - ./requirements.txt:/home/jovyan/work/requirements.txt:ro
     command: start-notebook.sh --NotebookApp.token=''
     networks:
