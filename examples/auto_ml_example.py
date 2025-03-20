@@ -2,7 +2,7 @@ import time
 from typing import Callable
 
 import schedule
-import config
+from outboxml import config
 from examples.titanic_basic import titanic_example
 from outboxml.automl_utils import check_for_new_data
 from outboxml.automl_manager import AutoMLConfig
