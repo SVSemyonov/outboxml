@@ -21,3 +21,4 @@ GPy==1.10.0
 fastapi==0.115.6
 uvicorn==0.34.0
 ortools==9.9.3963
+schedule==1.2.2
