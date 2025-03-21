@@ -171,7 +171,7 @@ class ModelInferenceConfig(BaseModel):
     metric_growth_value: Dict[str, float]
     calculate_threshold: int = 0
     threshold: list = [0.8, 0.8]
-    prod_path: str = None
+    prod_path: Optional[str] = None
 
 
 

@@ -4,7 +4,6 @@ import pandas as pd
 import pickle
 from loguru import logger
 from sqlalchemy import create_engine
-from pyspark.sql import SparkSession
 import os
 import shutil
 import subprocess

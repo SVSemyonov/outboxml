@@ -23,7 +23,7 @@
                                                        "CompareBusinessMetric":  0.001},
                                 "threshold":  [0.8, 0.8],
                                 "calculate_threshold": 0,
-                                "prod_path": ""},
+                                "prod_path": null},
 
   "mlflow_experiment": "FrameworkTest",
   "grafana_table_name": "FrameworkTest",

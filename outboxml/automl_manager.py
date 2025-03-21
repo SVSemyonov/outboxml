@@ -34,7 +34,7 @@ class AutoMLResult:
 
     def __init__(self, group_name: str):
         self.group_name = group_name
-        self.start_run_time = datetime.utcnow()
+        self.start_run_time = datetime.now()
         self.run_time = {'start': self.start_run_time,
                          'retro': self.start_run_time,
                          'hp_tuning': self.start_run_time,
@@ -52,7 +52,7 @@ class AutoMLResult:
         self.result_pickle_name = 'No pickle'
         self.compare_metrics_df = pd.DataFrame()
         self.compare_business_metric = pd.DataFrame()
-        self.end_time_run = datetime.utcnow()
+        self.end_time_run = datetime.now()
         self.deployment = False
         self.all_models_config = None
 
