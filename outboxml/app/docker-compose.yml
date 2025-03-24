@@ -37,6 +37,7 @@ services:
       - internal
     volumes:
       - mlflow-db-data3:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
 
   minio:
     image: minio/minio
