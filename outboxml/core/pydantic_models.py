@@ -180,7 +180,7 @@ class AutoMLConfig(BaseModel):
     group_name: str
     feature_selection: FeatureSelectionConfig
     hp_tune: HPTuneConfig
-    model_inference_criteria: ModelInferenceConfig
+    inference_criteria: ModelInferenceConfig
     mlflow_experiment: str
     grafana_table_name: str
     dashboard_name: str
@@ -190,7 +190,7 @@ class AutoMLConfig(BaseModel):
 class MonitoringConfig(BaseModel):
     group_name: str
     prod_models_path: str
-    model_name: str
+    pickle_name: str
     grafana_table_name: str
     dashboard_name: str
     extrapolation_period: int = 12

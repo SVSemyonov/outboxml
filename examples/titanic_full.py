@@ -1,3 +1,5 @@
+from statistics import LinearRegression
+
 import pandas as pd
 
 from outboxml.automl_manager import AutoMLManager
@@ -8,7 +10,7 @@ from outboxml.metrics.base_metrics import BaseMetric
 from outboxml.metrics.business_metrics import BaseCompareBusinessMetric
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import mean_poisson_deviance
+from sklearn.metrics import mean_poisson_deviance, mean_absolute_error
 from sqlalchemy import create_engine
 
 import config
@@ -83,7 +85,7 @@ def parameters_for_optuna_all_models(trial):
 def main():
     lgr = LogisticRegression()
     rf = RandomForestRegressor()
-    models_dict = {'first': [lgr], 'second': [rf]}
+    models_dict = {'first': rf, 'second': lgr}
     auto_ml = AutoMLManager(auto_ml_config=auto_ml_config,
                             models_config=config_name,
                             business_metric=TitanicMetric(),
@@ -91,12 +93,13 @@ def main():
                             extractor=TitanicExampleExtractor(path_to_file=path_to_data),
                             compare_business_metric=BaseCompareBusinessMetric(calculate_threshold=True,
                                                                               use_exposure=False,
-                                                                              metric_function=mean_poisson_deviance,
+                                                                              metric_function=mean_absolute_error,
                                                                               direction='minimize'),
                             save_temp=False,
                             grafana_connection=grafana_db_connection,
-                            hp_tune=False,
-                            models_dict=models_dict
+                            hp_tune=True,
+                            models_dict=models_dict,
+                            retro=True
                             )
     auto_ml.update_models(send_mail=False, parameters_for_optuna={'first': parameters_for_optuna_all_models,
                                                                   'second': parameters_for_optuna_all_models})

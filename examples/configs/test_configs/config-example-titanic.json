@@ -22,7 +22,7 @@
       "name": "first",
       "column_target": "SURVIVED",
       "objective": "poisson",
-      "wrapper": "glm",
+      "wrapper": "catboost",
       "column_exposure": "",
       "relative_features": [],
       "features": [        
@@ -52,7 +52,7 @@
       "column_target": "SURVIVED",
       "column_exposure": "",
       "wrapper": "catboost",
-      "objective": "binary",
+      "objective": "poisson",
       "relative_features": [],
       "features": [        
         {

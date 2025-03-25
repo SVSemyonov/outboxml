@@ -126,14 +126,12 @@ class EMailDSResult(EMail):
             try:
                 df1 = res_export.metrics_df(model_name=key,
                                             train_test='train',
-                                            only_main=True,
                                             metrics_dict=
                                             self._ds_manager_result[key].metrics)
                 df1 = df1.reset_index()[['index', 'full']]
                 df1.columns = [ResultNames.metric, ResultNames.new_result_train]
                 df2 = ResultExport(ds_manager=ds).metrics_df(model_name=key,
                                                              train_test='test',
-                                                             only_main=True,
                                                              metrics_dict=
                                                              self._ds_manager_result[
                                                                  key].metrics)

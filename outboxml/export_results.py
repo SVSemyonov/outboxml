@@ -308,7 +308,7 @@ class ResultExport:
                    only_main: bool = False) -> pd.DataFrame:
         """Method for constricting dataframe with metrics. By default usinf ds_manager result.
          Also you can you external metrics_dict.
-         Use only_main option to get mae, gini and shift"""
+         """
         if metrics_dict is None:
             metrics_dict = self.result[model_name].metrics[train_test]
         else:

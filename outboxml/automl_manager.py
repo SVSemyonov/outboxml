@@ -199,7 +199,8 @@ class AutoMLManager(DataSetsManager):
                  grafana_connection=None,
                  models_dict: dict=None
                  ):
-        super().__init__(config_name=models_config, extractor=extractor, models_dict=models_dict)
+        super().__init__(config_name=models_config, extractor=extractor)
+        self.models_dict = models_dict
         if external_config is not None:
             self._external_config = external_config
         else:
@@ -256,7 +257,7 @@ class AutoMLManager(DataSetsManager):
                 self.status['HP tuning'] = True
                 self.automl_results.run_time['hp_tuning'] = datetime.utcnow()
 
-            results = self.fit_models()
+            results = self.fit_models(models_dict=self.models_dict)
             self.status['Fitting'] = True
             self.automl_results.run_time['fitting'] = datetime.utcnow()
 
@@ -425,7 +426,7 @@ class AutoMLManager(DataSetsManager):
             self.automl_results.compare_business_metric = self._compare_business_metric.calculate_metric(
                 result1=self._results,
                 result2=result_to_compare,
-                threshold=self._auto_ml_config.model_inference_criteria.threshold,
+                threshold=self._auto_ml_config.inference_criteria.threshold,
                 )
             logger.info(self.automl_results.compare_business_metric)
         logger.debug('Comparing models is completed')
@@ -434,7 +435,7 @@ class AutoMLManager(DataSetsManager):
 
     def deployment(self):
         self.automl_results.deployment = False
-        metrics = self._auto_ml_config.model_inference_criteria.metric_growth_value
+        metrics = self._auto_ml_config.inference_criteria.metric_growth_value
 
         for key in metrics.keys():
             self.automl_results.deployment = False
@@ -563,6 +564,7 @@ class AutoMLManager(DataSetsManager):
                                                               samples=100,
                                                               cohort_base='model1',
                                                               )
+            figures[key].show()
 
         return figures
 

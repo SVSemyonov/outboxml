@@ -8,7 +8,7 @@
         "cutoff_1_category":  0.99,
         "cutoff_nan": 0.7,
         "max_corr_value":0.8,
-        "metric_eval":  {"first": "accuracy", "second":  "accuracy"},
+        "metric_eval":  {"first": "neg_mean_absolute_error", "second":  "neg_mean_absolute_error"},
         "cv_diff_value":  0.1,
         "encoding_cat":  "WoE_cat_to_num",
         "encoding_num":  "WoE_num_to_num",
@@ -16,9 +16,9 @@
         "features_to_ignore":  ["general"]
   },
 
-  "hp_tune": {"metric_score": {"first": "accuracy",
-                               "second":  "accuracy"}},
-  "model_inference_criteria": {"prod_models_folder": "models",
+  "hp_tune": {"metric_score": {"first": "neg_mean_absolute_error",
+                               "second":  "neg_mean_absolute_error"}},
+  "inference_criteria": {"prod_models_folder": "models",
                                "metric_growth_value": {"impact" : 0.01,
                                                        "CompareBusinessMetric":  0.001},
                                 "threshold":  [0.8, 0.8],

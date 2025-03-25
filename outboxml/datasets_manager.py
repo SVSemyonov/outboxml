@@ -412,7 +412,7 @@ class DataSetsManager:
         if models_dict is not None:
             models = models_dict
             if need_fit:
-                fitted = True
+                fitted = False
             logger.info('User-defined models')
         else:
             if self._models_dict is None:
@@ -427,7 +427,7 @@ class DataSetsManager:
                 models = {chosen_model: models[model_name]}
             except KeyError:
                 logger.error('Wrong model name in input')
-        metrics_train = self.__getTrainResults(models=models, fitted=fitted, classification=classification)
+        metrics_train = self.__getTrainResults(models=models, fitted=fitted)
         try:
             metrics_test = self.__getTestResults(models=models)
         except:
@@ -597,19 +597,21 @@ class DataSetsManager:
             logger.debug('Model ' + model_name + ' || Data preparation finished')
         self.__test_train = True
 
-    def __getTrainResults(self, models: dict, fitted: bool = False, classification: bool=False):
+    def __getTrainResults(self, models: dict, fitted: bool = False):
 
-        i = 0
-        if fitted:
+
+        if not fitted:
             logger.info('Fitting')
-            for model in models.values():
+            fitted_models = {}
+            for model_name, model in models.items():
                 try:
                     model.fit()
                 except:
                     logger.debug('User-defined model needs X, Y for train. Using datasubsets')
-                    model.fit(self.data_subsets[i].X_train, self.data_subsets[i].y_train, )
-                i = i + 1
-        metrics = self.__prepare_metrics(models, 'train', classification=classification)
+                    model.fit(self.data_subsets[model_name].X_train, self.data_subsets[model_name].y_train, )
+                    logger.debug('Model '+ str(model_name) + ' is fitted')
+
+        metrics = self.__prepare_metrics(models, 'train')
         logger.info('Result metrics:' + str(metrics))
         return metrics
 
@@ -661,7 +663,7 @@ class DataSetsManager:
             logger.error('Unknown dstype')
         return y_trueDf, slicedDf
 
-    def __prepare_metrics(self, models: dict, dsType: str, classification: bool=False):
+    def __prepare_metrics(self, models: dict, dsType: str):
         dsNames = list(models.keys())
         dataSubsets = [x for x in self.data_subsets.values() if x.model_name in dsNames]
         y_trueDf, slicedDf = self.__prepare_y_df(dsType=dsType, data_subsets=dataSubsets)

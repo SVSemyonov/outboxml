@@ -364,8 +364,8 @@ class CompareModelsMetrics:
         df = df.fillna(0)
         fig = plt.figure()
         i = 0
-        for column in self.plot_columns:
-
+        for column in df.columns:
+            if column in ['Metric group', 'Model']: continue
             df[['Metric group', 'Model', column]].set_index('Metric group').groupby('Model')[column].plot(title=column,
                                                                                                           legend=True)
             if self.show: show()
