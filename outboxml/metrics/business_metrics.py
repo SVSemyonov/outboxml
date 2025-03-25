@@ -40,6 +40,7 @@ class BaseBusinessMetricConverter:
         y1 = y1.rename(columns={'y_prediction': 'first_model_prediction'})
         y2 = self._model_data(result2[model_name]).rename(columns={'y_prediction': 'second_model_prediction'})
         df = pd.concat([y1[['first_model_prediction', 'y_true']], y2['second_model_prediction']], axis=1)
+
         return df
 
 
@@ -47,7 +48,7 @@ class BaseCompareBusinessMetric(BaseMetric):
     def __init__(self,
                  metric_function: Callable = mean_absolute_error,
                  metric_converter: BaseBusinessMetricConverter = None,
-                 calculate_threshold=False,
+                 calculate_threshold=True,
                  use_exposure: bool=True,
                  direction: str='minimize'):
 
