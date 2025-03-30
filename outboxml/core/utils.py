@@ -139,7 +139,7 @@ class ResultPickle:
         models_list = [f for f in os.listdir(prod_models_path) if f.endswith(FilesNames.pickle)]
         if not models_list:
             raise FileNotFoundError(f"Directory {prod_models_path} is empty.")
-        print(self.config.prod_models_path)
+
         models_date_time = [self.get_date_time(pickle_name) for pickle_name in models_list]
         if max(models_date_time) == self.date_time_default:
             raise FileNotFoundError(f"There are no actual models in {prod_models_path}.")
