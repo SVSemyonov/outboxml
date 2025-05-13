@@ -76,7 +76,9 @@ services:
 
   # Jupyter Notebook
   jupyter:
-    image: jupyter/base-notebook:latest
+    build:
+      context: .
+      dockerfile: jupyter.dockerfile
     container_name: jupyter
     ports:
       - "8889:8888"
@@ -86,7 +88,6 @@ services:
       - ./jupyter-workspace:/home/jovyan/work
       - ./../../examples:/home/jovyan/work/examples
       - ./../../outboxml:/home/jovyan/work/outboxml
-      - ./requirements.txt:/home/jovyan/work/requirements.txt:ro
     command: start-notebook.sh --NotebookApp.token=''
     networks:
       - internal
