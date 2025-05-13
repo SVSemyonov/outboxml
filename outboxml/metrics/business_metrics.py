@@ -48,7 +48,7 @@ class BaseCompareBusinessMetric(BaseMetric):
     def __init__(self,
                  metric_function: Callable = mean_absolute_error,
                  metric_converter: BaseBusinessMetricConverter = None,
-                 calculate_threshold=True,
+                 calculate_threshold=False,
                  use_exposure: bool=True,
                  direction: str='minimize'):
 

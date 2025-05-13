@@ -21,7 +21,7 @@
   "inference_criteria": {"prod_models_folder": "models",
                                "metric_growth_value": {"impact" : 0.01,
                                                        "CompareBusinessMetric":  0.001},
-                                "threshold":  [0.8, 0.8],
+                                "threshold":  [0.6, 0.8],
                                 "calculate_threshold": 0,
                                 "prod_path": null},
 
