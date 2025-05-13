@@ -55,7 +55,7 @@ class AutoMLResult:
         self.end_time_run = datetime.now()
         self.deployment = False
         self.all_models_config = None
-
+        self.business_metric = {}
 
 class MLFlowWrapper:
     """Wrapper of MLFlow to perform loading artefacts"""
@@ -194,7 +194,7 @@ class AutoMLManager(DataSetsManager):
                  models_config,
                  extractor: Optional[Extractor] = None,
                  business_metric: BaseMetric = None,
-                 compare_business_metric: BaseCompareBusinessMetric = None,
+                 compare_business_metric: BaseCompareBusinessMetric=None,
                  external_config=None,
                  retro: bool = True,
                  hp_tune: bool = True,
@@ -214,6 +214,8 @@ class AutoMLManager(DataSetsManager):
         self._business_metric = business_metric
         self.__default_models_config = models_config
         self._compare_business_metric = compare_business_metric
+        if self._compare_business_metric is None:
+            self._compare_business_metric = BaseCompareBusinessMetric()
         self.__grafana_connection = grafana_connection
         self._async_mode = async_mode
         self._save_temp = save_temp
@@ -442,7 +444,7 @@ class AutoMLManager(DataSetsManager):
     def deployment(self):
         self.automl_results.deployment = False
         metrics = self._auto_ml_config.inference_criteria.metric_growth_value
-
+        res = []
         for key in metrics.keys():
             self.automl_results.deployment = False
             try:
@@ -451,19 +453,23 @@ class AutoMLManager(DataSetsManager):
                         logger.info('Current compare business metric value: ' + str(
                             self.automl_results.compare_business_metric['difference']))
                     if self.automl_results.compare_business_metric['difference'] > metrics[key]:
-                        self.automl_results.deployment = True
+                        res.append(True)
+                    else:
+                        res.append(False)
                 else:
                     logger.info(
                         'Current business metric value: ' + str(self.automl_results.compare_metrics_df[key].min()))
                     if metrics[key] < self.automl_results.compare_metrics_df[key].min():
-                        self.automl_results.deployment = True
+                        res.append(True)
                     else:
-                        self.automl_results.deployment = False
+                        res.append(False)
+                    self.automl_results.business_metric[key] = self.automl_results.compare_metrics_df[key].min()
 
             except KeyError:
                 logger.error('Business metric error to complete decision for deployment')
         logger.info('Deployment decision: ' + str(self.automl_results.deployment))
         self.status['Deployment decision'] = True
+        if all(res): self.automl_results.deployment = True
 
     def review(self, email: EMail, send_mail: bool, error: Exception = None):
         if send_mail:
