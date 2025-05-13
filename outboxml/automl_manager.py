@@ -62,6 +62,8 @@ class MLFlowWrapper:
 
     def __init__(self, experiment_name: str = 'FrameworkTest',
                  group_name: str = 'example',
+                 project: str = 'test_project',
+                 tags: dict = None,
                  results_path='results',
                  mlflow_tracking_uri="http://localhost:5000"):
         self.experiment_name = experiment_name
@@ -71,6 +73,8 @@ class MLFlowWrapper:
         mlflow.set_tracking_uri(self.mlflow_tracking_uri)
         mlflow.set_experiment(self.experiment_name)
         self.results_path = results_path
+        if tags is not None:
+            self.tags = tags
 
     def start_run(self, ):
         mlflow.start_run(run_name=self.group_name)
@@ -78,13 +82,14 @@ class MLFlowWrapper:
     def end_run(self):
         mlflow.end_run()
 
-    def log_results(self, automl_results: AutoMLResult):
+    def log_results(self, automl_results: AutoMLResult, *tags):
         logger.debug('Exporting results to MLFlow')
         with mlflow.start_run(run_name=self.group_name + str(automl_results.run_time['start']), ):
             log = os.path.join(self.results_path, "log.log")
             mlflow.log_artifact(log)
             mlflow.log_artifact(os.path.join(self.results_path, automl_results.result_pickle_name))
             mlflow.set_tag(key='Deployment decision', value=automl_results.deployment)
+            #mlflow.set_tags()
             try:
                 mlflow.log_artifact(os.path.join(self.results_path, automl_results.all_models_config))
             except:
@@ -223,7 +228,8 @@ class AutoMLManager(DataSetsManager):
         self.automl_results = AutoMLResult(group_name=self.group_name)
         self.mlflow = MLFlowWrapper(experiment_name=self._auto_ml_config.mlflow_experiment,
                                     group_name=self.group_name,
-                                    results_path=self._external_config.results_path)
+                                    results_path=self._external_config.results_path,
+                                    mlflow_tracking_uri=self._external_config.mlflow_tracking_uri)
         self.status = {'Loading dataset': False,
                        'Feature selection': False,
                        'HP tuning': False,
@@ -387,7 +393,7 @@ class AutoMLManager(DataSetsManager):
 
         # артефакты и метрики
         logger.debug('Saving pickle for service')
-        saving_start_time = datetime.utcnow()
+        saving_start_time = datetime.now()
         group_name = self.group_name
         ds_manager_for_save = DataSetsManager(config_name=self.__default_models_config)
         ds_manager_for_save.load_dataset(data=self.dataset)
@@ -408,7 +414,7 @@ class AutoMLManager(DataSetsManager):
         try:
             logger.debug('Loading metrcis to grafana')
             df = ResultExport(ds_manager=ds_manager_for_save).grafana_export(project_name=group_name,
-                                                                             date_time=datetime.utcnow())
+                                                                             date_time=datetime.now())
 
             GrafanaExport(df=df, table_name=self._auto_ml_config.grafana_table_name,
                           connection=self.__grafana_connection).load_data_to_db()

@@ -18,7 +18,7 @@ email_login = env_reader.str("email_login", "")
 email_pass = env_reader.str("email_pass", "")
 email_receivers = []
 
-mlflow_tracking_uri = "http://localhost:5000"
-mlflow_experiment = "TitanicExample"
+mlflow_tracking_uri = env_reader.str("mlflow_tracking_uri", "http://localhost:5000")
+mlflow_experiment = env_reader.str("mlflow_experiment", "FrameworkTest")
 
 connection_params = env_reader.str("connection", f"postgresql+psycopg2://mlflow:mlflowpassword@127.0.0.1:5433/mlflow")

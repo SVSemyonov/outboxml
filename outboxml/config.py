@@ -11,6 +11,8 @@ prod_models_folder = "examples/models_to_compare"
 prod_path = Path(__file__).resolve().parent.parent/ prod_models_folder
 prod_models_path = prod_path
 
+mlflow_tracking_uri = env_reader.str("mlflow_tracking_uri", "http://mlflow:5000")
+mlflow_experiment = env_reader.str("mlflow_experiment", "FrameworkTest")
 
 
 connection_params = env_reader.str("connection", f"postgresql+psycopg2://mlflow:mlflowpassword@127.0.0.1:5433/mlflow")
