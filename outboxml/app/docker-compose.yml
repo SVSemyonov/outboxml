@@ -107,7 +107,9 @@ services:
     networks:
       - internal
     depends_on:
+      - postgre
       - mlflow
+      - jupyter
 
 networks:
   internal:
