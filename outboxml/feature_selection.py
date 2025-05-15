@@ -163,7 +163,7 @@ class FeatureSelectionInterface(SelectionInterface):
                 try:
                     scoring = self.__choose_scoring_fun(model_name=data.model_config.name)
                     scores = cross_val_score(model, X, y_train, cv=3, scoring=scoring)
-
+                    logger.info('CV dif for feature||'+ str(np.max(scores)/np.min(scores)))
                     if (np.max(scores) / np.min(scores) - 1) > self._config.cv_diff_value:
                         logger.info('Dropping non-stable feature')
                         self.to_drop.append(feature)
@@ -417,16 +417,17 @@ class BaseFS:
                 result_features.append(selected_feature)
         logger.info('Selected features: ' + str(result_features))
         self.result_features = result_features
+        columns_to_drop = []
+
         for feature in data.data.columns:
             if feature not in result_features and feature not in self.old_data_list:
-                data.data = data.data.drop(columns=feature)
-                try:
-                    if feature in data.features_numerical:
-                        data.features_numerical.remove(feature)
-                    elif feature in data.features_categorical:
-                        data.features_categorical.remove(feature)
+                columns_to_drop.append(feature)
+        data.data.drop(columns=columns_to_drop, inplace=True, errors='ignore')
+        for feature in columns_to_drop:
 
-                except ValueError:
-                    logger.error('Cannot drop feature from list||'+ str(feature))
-                    pass
+            if feature in data.features_numerical:
+                data.features_numerical.remove(feature)
+            elif feature in data.features_categorical:
+                data.features_categorical.remove(feature)
+
         return data
