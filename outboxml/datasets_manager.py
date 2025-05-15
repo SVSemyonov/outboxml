@@ -309,7 +309,7 @@ class DataSetsManager:
         self.data_config: Optional[DataModelConfig] = None
         self._models_configs: List[ModelConfig] = []
 
-        self.__is_initialized: bool = False
+        self._is_initialized: bool = False
         self.__test_train: bool = False
         self.__train_test_indexes: bool = False
 
@@ -329,7 +329,7 @@ class DataSetsManager:
 
         return config_to_return
 
-    def __init_dsmanager(self):
+    def _init_dsmanager(self):
         logger.debug('Initializing DSManager')
         self.__load_all_models_config()
         self.__load_targets_names()
@@ -342,8 +342,8 @@ class DataSetsManager:
         """Load data from source due to config or user-defined extractor object. Use .env file or external config for extracor
         Also you can load dataset by parameter data"""
 
-        if not self.__is_initialized:
-            self.__init_dsmanager()
+        if not self._is_initialized:
+            self._init_dsmanager()
 
         logger.debug("Dataset loading")
         if data is not None:
@@ -362,7 +362,7 @@ class DataSetsManager:
         logger.debug('DataSet is extracted')
 
         logger.debug("Dataset is extracted")
-        self.__is_initialized = True
+        self._is_initialized = True
 
         return self.dataset
 
@@ -372,7 +372,7 @@ class DataSetsManager:
         For exposure or extra_columns data use ds_manager.data_subsets[model_name]"""
 
         if load_subsets_from_pickle:
-           self._load_subsets_from_pickle()
+           self._load_subsets_from_pickle(model_name)
         else:
             if not self.__test_train: self._make_test_train()
             if save_prepared_subsets:
@@ -389,7 +389,7 @@ class DataSetsManager:
         For exposure or extra_columns data use ds_manager.data_subsets[model_name]"""
 
         if load_subsets_from_pickle:
-           self._load_subsets_from_pickle()
+           self._load_subsets_from_pickle(model_name)
         else:
             if not self.__test_train: self._make_test_train()
             if save_prepared_subsets:
@@ -433,11 +433,15 @@ class DataSetsManager:
         except:
             logger.error('No data for test metrics')
         return metrics_train
-    def _load_subsets_from_pickle(self):
+    def _load_subsets_from_pickle(self, model_name: str=None):
         try:
             logger.debug('Loading saved subsets')
             with open(os.path.join(Path(__file__).parent.parent, 'prepared_subsets.pickle'), "rb") as f:
                 self.data_subsets = pickle.load(f)
+            if model_name is not None:
+                for key in list(self.data_subsets.keys()):
+                    if key != model_name:
+                        self.data_subsets.pop(key, None)
         except Exception as exc:
             logger.error('Loading subsets error||Using internal subsets' + str(exc))
             if not self.__test_train: self._make_test_train()

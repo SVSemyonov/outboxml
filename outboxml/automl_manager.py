@@ -249,6 +249,9 @@ class AutoMLManager(DataSetsManager):
             'Deployment decision': False,
             'Loading results to MLFLow': False,}
 
+        self.__saved_dataset = False
+        self.__saved_subsets = False
+
     def update_models(self, send_mail: bool = True, parameters_for_optuna: dict = None):
 
         logger.add(Path(str(self._external_config.results_path) + '/log.log'))
@@ -263,12 +266,12 @@ class AutoMLManager(DataSetsManager):
                 self.automl_results.new_hp = new_hp
                 self.__update_hyperparameters(new_hp)
                 self.status['HP tuning'] = True
-                self.automl_results.run_time['hp_tuning'] = datetime.utcnow()
+                self.automl_results.run_time['hp_tuning'] = datetime.now()
 
-            results = self.fit_models(models_dict=self.models_dict)
+            results = self.fit_models(models_dict=self.models_dict, load_subsets_from_pickle=self._save_temp)
             self.status['Fitting'] = True
-            self.automl_results.run_time['fitting'] = datetime.utcnow()
-
+            self.automl_results.run_time['fitting'] = datetime.now()
+            self._read_temp_files(dataset=True)
             self.save_results(self._results)
             self.compare_with_previous()
             self.deployment()
@@ -344,16 +347,10 @@ class AutoMLManager(DataSetsManager):
                     extra_columns=self.extra_columns
                 )
 
-            self.dataset = self.dataset.head()
-            if self._save_temp:
-                logger.info('Saving temp subsets')
-                with open('prepared_subsets.pickle', 'wb') as f:
-                    pickle.dump(self.data_subsets, f)
-                self.data_subsets = None
-
             logger.debug('Feature selection||Finished')
             self.status['Feature selection'] = True
-            self.automl_results.run_time['retro'] = datetime.utcnow()
+            self.automl_results.run_time['retro'] = datetime.now()
+            self._save_temp_files(dataset=True, subsets=True)
 
     def hp_tuning(self, parameters_for_optuna: dict = None):
         new_hp = {}
@@ -361,15 +358,17 @@ class AutoMLManager(DataSetsManager):
         for model in self._models_configs:
             new_hp[model.name] = {}
             try:
-                ds_manager_for_tune.load_dataset()
-                ds_manager_for_tune.get_TrainDfs(load_subsets_from_pickle=self._save_temp)
-                ds_manager_for_tune.dataset = ds_manager_for_tune.dataset.head()
+                self._read_temp_files(dataset=True, subsets=True)
+                ds_manager_for_tune.load_dataset(self.dataset)
+                ds_manager_for_tune.get_TrainDfs(load_subsets_from_pickle=self._save_temp, model_name=model.name)
+                self._save_temp_files(dataset=True)
+
                 parameters_for_optuna_func = None
                 if parameters_for_optuna is not None:
                     try:
                         parameters_for_optuna_func = parameters_for_optuna[model.name]
                     except KeyError:
-                        pass
+                        logger.warning('HP_Tune||No parameters for model')
                 new_hp[model.name] = HPTuning(ds_manager=ds_manager_for_tune,
                                               sampler=self._hp_tuning_config.sampling,
                                               scoring_fun=self._hp_tuning_config.metric_score[model.name],
@@ -382,8 +381,9 @@ class AutoMLManager(DataSetsManager):
                 logger.info(new_hp[model.name])
 
             except Exception as exc:
-                self.errors['HP Tune'] = exc
+                self.errors['HP tuning'] = exc
                 logger.info('Returning {}')
+        self._save_temp_files(dataset=True, subsets=True)
         return new_hp
 
     def save_results(self, results: dict):
@@ -502,6 +502,8 @@ class AutoMLManager(DataSetsManager):
         except ValidationError as e:
             logger.error("Config validation error" + str(e))
             raise ValidationError(e)
+        self._init_dsmanager()
+        self._is_initialized = True
         self.group_name = f"{self._auto_ml_config.group_name}"
         self._feature_selection_config = self._auto_ml_config.feature_selection
         self._hp_tuning_config = self._auto_ml_config.hp_tune  # use best model = False
@@ -515,7 +517,6 @@ class AutoMLManager(DataSetsManager):
 
     def _load_last_result(self) -> dict:
         model_to_compare = load_last_pickle_models_result(self._external_config)
-        data = self.load_dataset()
         result_to_compare = {}
         try:
             for key in model_to_compare.keys():
@@ -524,7 +525,7 @@ class AutoMLManager(DataSetsManager):
 
                 for model_result in models:
                     model_name = model_result['model_config']['name']
-                    result_to_compare[model_name] = self.model_predict(data=data,
+                    result_to_compare[model_name] = self.model_predict(data=self.dataset,
                                                                        model_name=model_name,
                                                                        model_result=model_result,
                                                                        train_ind=self.index_train,
@@ -532,7 +533,6 @@ class AutoMLManager(DataSetsManager):
         except Exception as exc:
             logger.error(exc)
             logger.info('Cannot get results for last model||' + str(exc))
-        self.dataset = self.dataset.head()
         return result_to_compare
 
     def _compare_base_metrics_df(self, result_to_compare: dict):
@@ -591,3 +591,31 @@ class AutoMLManager(DataSetsManager):
                         model.params_glm = new_hp[key]
                     else:
                         pass
+
+    def _read_temp_files(self, dataset: bool = False, subsets: bool = False):
+        if self._save_temp:
+            if dataset and self.__saved_dataset:
+                self.dataset = pd.read_parquet(str(self._external_config.base_path) + '/temp_dataset.gzip')
+            if subsets and self.__saved_subsets:
+                self._load_subsets_from_pickle()
+
+    def _save_temp_files(self, dataset: bool = False, subsets: bool = False):
+        if self._save_temp:
+            if dataset and not self.__saved_dataset:
+                logger.info('Saving dataset to parquet..')
+                try:
+                    self.dataset.to_parquet(str(self._external_config.base_path) + '/temp_dataset.gzip')
+                    self.__saved_dataset = True
+                except Exception as exc:
+                    logger.error(str(exc))
+                    return
+            self.dataset = None
+            logger.info('Dataset cleared')
+            if subsets and not self.__saved_subsets:
+                if self.data_subsets != {}:
+                    logger.info('Saving subsets to pickle...')
+                    with open(os.path.join(Path(__file__).parent.parent, 'prepared_subsets.pickle'), "wb") as f:
+                        pickle.dump(self.data_subsets, f)
+                    self.__saved_subsets = True
+                else:
+                    self.data_subsets = {}
