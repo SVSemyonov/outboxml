@@ -112,7 +112,7 @@ By default containers map to the following ports:
 5. Перезапустите сервис docker daemon :
     $ sudo systemctl restart docker
 ```
-5. 
+
 ## Contributing
 We welcome contributions from the community! If you'd like to contribute, please follow the contributing guidelines outlined in CONTRIBUTING.md.
 
