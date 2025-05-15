@@ -17,7 +17,6 @@ optuna==4.1.0
 openpyxl==3.1.5
 nbformat==5.10.4
 phik==0.12.4
-GPy==1.10.0
 fastapi==0.115.6
 uvicorn==0.34.0
 ortools==9.9.3963
