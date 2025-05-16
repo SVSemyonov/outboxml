@@ -91,15 +91,7 @@ class PrepareDataset(BasePrepareDataset):
             corr_threshold=self._corr_threshold,
             target=target
         )
-        model_config = prepare_dataset_result.model_config
-        model_config_to_save = deepcopy(model_config)
-        for i in range(len(model_config.features)):
-            if model_config.features[i].mapping is not None:
-                model_config_to_save.features[i].mapping = {}
-                for key in model_config.features[i].mapping.keys():
-                    new_key = str(key)
-                    model_config_to_save.features[i].mapping[new_key] = model_config.features[i].mapping[key]
-        prepare_dataset_result.model_config = model_config_to_save
+
         return prepare_dataset_result
 
 
