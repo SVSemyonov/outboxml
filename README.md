@@ -101,6 +101,18 @@ By default containers map to the following ports:
      ```bash
      curl http://mlflow:5000/api/2.0/mlflow/experiments/list
      ```
+4. Инструкция если не ставятся пакеты через pip install
+```
+1. Войдите под пользователем у которого есть права на sudo
+2. Откройте файл /etc/default/docker:
+    $ sudo nano /etc/default/docker
+3. Найдите и раскомментируйте или добавьте следующие строки:
+    DOCKER_OPTS="--dns 8.8.8.8"
+4. Сохраните и закройте файл.
+5. Перезапустите сервис docker daemon :
+    $ sudo systemctl restart docker
+```
+
 ## Contributing
 We welcome contributions from the community! If you'd like to contribute, please follow the contributing guidelines outlined in CONTRIBUTING.md.
 
