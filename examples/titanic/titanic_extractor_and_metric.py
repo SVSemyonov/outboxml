@@ -8,9 +8,9 @@ import config
 from outboxml.metrics.base_metrics import BaseMetric
 from outboxml.metrics.business_metrics import BaseCompareBusinessMetric
 
-config_name = './configs/test_configs/config-example-titanic.json'
-auto_ml_config = './configs/test_configs/automl-titanic.json'
-path_to_data = './dumps/test_data/titanic.csv'
+config_name = './configs/config-example-titanic.json'
+auto_ml_config = './configs/automl-titanic.json'
+path_to_data = 'data/titanic.csv'
 
 
 class TitanicExampleExtractor(Extractor):

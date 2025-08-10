@@ -25,8 +25,8 @@ from outboxml.metrics.base_metrics import BaseMetric
 from outboxml.monitoring_manager import MonitoringManager, MonitoringReport, MonitoringResult
 from outboxml.target_extrapolation import TargetModel
 
-test_configs_path = Path(__file__).resolve().parent.parent.parent / "examples"/"configs" / "test_configs"
-test_data_path = Path(__file__).resolve().parent.parent.parent /"examples"/ "dumps" / "test_data"
+test_configs_path = Path(__file__).resolve().parent.parent/ "examples"/"titanic"/"configs"
+test_data_path = Path(__file__).resolve().parent.parent /"examples"/"titanic"/ "data"
 config_name = test_configs_path / 'config-example-titanic.json'
 monitoring_config = test_configs_path / 'monitoring_test_config.json'
 

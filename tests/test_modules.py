@@ -17,8 +17,8 @@ from pathlib import Path
 from outboxml.extractors import BaseExtractor
 from outboxml.models import BaselineModels, ModelsWrapper
 
-test_configs_path = Path(__file__).resolve().parent.parent.parent / "examples"/"configs" / "test_configs"
-test_data_path = Path(__file__).resolve().parent.parent.parent /"examples"/ "dumps" / "test_data"
+test_configs_path = Path(__file__).resolve().parent.parent / "examples"/"titanic"/"configs"
+test_data_path = Path(__file__).resolve().parent.parent /"examples"/ "titanic"/"data"
 
 config_name = str(test_configs_path / 'config-example-titanic.json')
 

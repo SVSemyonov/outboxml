@@ -66,16 +66,16 @@ class FeatureSelectionInterface(SelectionInterface):
         res = pd.DataFrame([summary['eliminated_features_names'] + summary['selected_features_names'],
                             summary['loss_graph']['loss_values']]).T  # .plot()
         rank = self._config.top_feautures_to_select
-        logger.info('Choosing top ' + str(rank) + str(' features'))
         self.last = list(res[res.index >= (res.index.max() - rank)][0].values)
+        logger.info('Choosing top ' + str(rank) + str(' features') + '||' + str(self.last))
         self.to_drop = self.calculate_correlation(X=data_subset.X,
                                                   threshold=self._config.max_corr_value,
                                                   features_numerical=data_subset.features_numerical,
                                                   features_categorical=data_subset.features_categorical)
         logger.info('Features to drop||' + str(self.to_drop))
-        # сохранять промежуточные данные
+
         selected_features = []
-        self.calculate_stability(data_subset, features=new_features_list, params=params)
+     #   self.calculate_stability(data_subset, features=new_features_list, params=params)
         for feature in self.last:
             if feature not in self.to_drop: selected_features.append(feature)
         return selected_features
@@ -415,7 +415,6 @@ class BaseFS:
                 data_subset.features_numerical.remove(feature)
             elif feature in data_subset.features_categorical:
                 data_subset.features_categorical.remove(feature)
-        logger.info(data_subset.features_numerical)
         logger.info('Features for model||' + str(data_subset.X_train.columns.to_list()))
         self._data_preprocessor._prepare_datasets[data_subset.model_name]._model_config = self.get_updated_model_config(
             self._data_prepare_interface._new_model_config, columns_to_drop)
@@ -425,6 +424,7 @@ class BaseFS:
     def get_updated_model_config(model_config: ModelConfig, features_to_drop: list) -> ModelConfig:
 
         model_config_to_return = deepcopy(model_config)
-        model_config_to_return.features = [obj for obj in model_config_to_return.features if
-                                           obj.name not in features_to_drop]
+        if model_config_to_return.features is not None:
+            model_config_to_return.features = [obj for obj in model_config_to_return.features if
+                                               obj.name not in features_to_drop]
         return model_config_to_return

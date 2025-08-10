@@ -12,8 +12,8 @@ from outboxml.datasets_manager import DataSetsManager
 
 from pathlib import Path
 
-test_configs_path = Path(__file__).resolve().parent.parent.parent / "examples"/"configs" / "test_configs"
-test_data_path = Path(__file__).resolve().parent.parent.parent /"examples"/ "dumps" / "test_data"
+test_configs_path = Path(__file__).resolve().parent.parent/ "examples"/"titanic" / "configs"
+test_data_path = Path(__file__).resolve().parent.parent/ "examples"/ "titanic" / "data"
 
 config_name = str(test_configs_path / 'config-example-titanic.json')
 
@@ -83,62 +83,62 @@ class TestPlotExport(TestCase):
         self.assertEqual(df.shape, (3, 6))
 
     def test_metics_plot(self):
-        metrics = self.result1.plots(model_name='first', plot_type=0, use_exposure=False, show=False)
+        metrics = self.result1.plots(model_name='first', plot_type=0, use_exposure=False,  )
 
-        metrics = self.result1.plots(model_name='first', plot_type=0, use_exposure=True, show=False)
+        metrics = self.result1.plots(model_name='first', plot_type=0, use_exposure=True,  )
 
         metrics = self.result1.plots(model_name='second', plot_type=0, features=["AGE"],
                                      use_exposure=False,
                                      bins_for_numerical_features=2,
-                                     show=False)
+                                      )
         self.assertEqual(metrics.shape, (4, 3))
 
 
     def test_factors_plot(self):
-        self.result1.plots(model_name='first', plot_type=1, use_exposure=True, show=False)
+        self.result1.plots(model_name='first', plot_type=1, use_exposure=True,  )
         self.result1.plots(model_name='second', plot_type=1, features=["AGE", 'SEX'],
-                           use_exposure=True, show=False)
+                           use_exposure=True,  )
 
     def test_cohort_plot(self):
         self.result1.plots(model_name='first', plot_type=2, cohort_base='fact',
-                           use_exposure=False, show=False)
+                           use_exposure=False,  )
         self.result1.plots(model_name='second', plot_type=2,
-                           show=False)
+                           )
 
         self.result1.plots(model_name='first', plot_type=2,
-                           use_exposure=False, show=False, cut_min_value=0.1, cut_max_value=0.8, samples=100)
+                           use_exposure=False,  cut_min_value=0.1, cut_max_value=0.8, samples=100)
 
 
 
     def test_compare_models_factors(self):
         df5 = self.result2.compare_metrics(model_name='first', )
-        df = self.result2.compare_models_plot(model_name='first', show=False, plot_type=1)
-        df2 = self.result2.compare_models_plot(model_name='first', show=False)
+        df = self.result2.compare_models_plot(model_name='first',  plot_type=1)
+        df2 = self.result2.compare_models_plot(model_name='first')
 
-        df3 = self.result2.compare_models_plot(model_name='first', features=['AGE'], show=False,
+        df3 = self.result2.compare_models_plot(model_name='first', features=['AGE'],
                                                bins_for_numerical_features=2)
 
 
     def test_compare_models_cohorts(self):
         df1 = self.result2.compare_models_plot(model_name='first', plot_type=2, cohort_base='fact',
-                                               show=False)
+                                               )
         df2 = self.result2.compare_models_plot(model_name='first', plot_type=2,
-                                               use_exposure=True, show=False, cut_min_value=0.1, cut_max_value=0.9,
+                                               use_exposure=True,  cut_min_value=0.1, cut_max_value=0.9,
                                                samples=10)
 
         df3 = self.result2.compare_models_plot(model_name='second', plot_type=2,
-                                               use_exposure=True, show=False, cut_min_value=0.001, cut_max_value=1,
+                                               use_exposure=True, cut_min_value=0.001, cut_max_value=1,
                                                samples=200, cohort_base='fact')
 
     def test_compare_models_relative(self):
         df1 = self.result2.compare_models_plot(model_name='first', plot_type=3, samples=1,
-                                               show=False)
+                                              )
         df2 = self.result2.compare_models_plot(model_name='second', plot_type=3,
-                                               use_exposure=True, show=False, cut_min_value=0.1, cut_max_value=0.9,
+                                               use_exposure=True, cut_min_value=0.1, cut_max_value=0.9,
                                                samples=0.01)
 
         df3 = self.result2.compare_models_plot(model_name='second', plot_type=3,
-                                               use_exposure=False, show=False, cut_min_value=0.001, cut_max_value=1,
+                                               use_exposure=False,  cut_min_value=0.001, cut_max_value=1,
                                                samples=200, cohort_base='fact')
 
 

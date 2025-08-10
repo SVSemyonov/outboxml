@@ -119,7 +119,7 @@ class DataPreprocessor:
                                                                                       )
         self.temp_subset: Optional[ModelDataSubset] = None
         self._data_columns = []
-        self._retro: bool = retro
+        self._retro = retro
 
     @property
     def dataset(self):
