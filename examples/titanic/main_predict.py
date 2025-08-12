@@ -55,7 +55,7 @@ async def predict_route(service_request: ServiceRequest):
 
 
 if __name__ == "__main__":
-    MLFLowRelease(config=config).load_model_to_source_from_mlflow()
+    MLFLowRelease(config=config).load_model_to_source_from_mlflow(group_name='example')
     uvicorn.run(app, host="0.0.0.0", port=8080)
     request = requests.post(
         "http://0.0.0.0:8080/api/predict",
