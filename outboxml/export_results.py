@@ -222,7 +222,7 @@ class ResultExport:
                             cohort_base: str = 'model1',
                             ds_manager_result: dict = None,
                             plotly_params=None,
-                            only_test: bool = False):
+                            only_test: bool = True):
         """Return figures with y fact, yPredict for two models and selected features
 
              model_name: target for plotting
@@ -296,7 +296,7 @@ class ResultExport:
         return df_for_grafana
     @staticmethod
     def df_for_graphs(result: DSManagerResult, features: list = None, use_exposure: bool = False,
-                      only_test: bool = False) -> \
+                      only_test: bool = True) -> \
             (pd.DataFrame, list, list):
         """
         method for constructing dataframe with results, and lists of features names (features, y_true and y_prediction, exposure)
@@ -333,7 +333,7 @@ class ResultExport:
               cut_max_value: float = 0.9,
               samples: int = 100,
               cohort_base: str = 'model',
-              only_test: bool = False,
+              only_test: bool = True,
               plotly_params: dict = None,
               ):
         """Plot results for chosen model and features

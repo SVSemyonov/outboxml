@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 import pandas as pd
 from loguru import logger
@@ -370,3 +371,96 @@ class EMailMonitoring(EMail):
             alarm_df = df.loc[df['PSI'] > 0.3]
             df_to_send = alarm_df[['model_name', 'col', 'PSI', 'KL', 'JS', 'model_version']].sort_values(by='PSI', ascending=False)
             return df_to_send
+
+
+class HTMLReport:
+    def __init__(self,  config):
+        self.config = config
+        self.html_content = []
+        self.report_path = os.path.join(config.results_path, "automl_report.html")
+
+    def _add_section(self, title=None, text=None, n_line_breaks=1):
+        """Add a section to the HTML report"""
+        if title:
+            self.html_content.append(f"<h2>{title}</h2>")
+        if text:
+            self.html_content.append(f"<p>{text}</p>")
+        self.html_content.extend(["<br/>"] * n_line_breaks)
+
+    def _add_table(self, df):
+        """Add a Pandas DataFrame table to the report"""
+        self.html_content.append(df.to_html(classes='dataframe', border=0,
+                                            justify='right', index=False))
+
+    def _add_plot(self, figure, plot_name):
+        """Add a Plotly figure to the report"""
+        if figure:
+            plot_path = os.path.join(self.config.results_path, f"{plot_name}.html")
+            figure.write_html(plot_path)
+            self.html_content.append(f'<iframe src="{plot_path}" width="800" height="500"></iframe>')
+
+    def save_report(self):
+        """Save the compiled report to an HTML file"""
+        full_html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>AutoML Report</title>
+                <style>
+                    body {{ font-family: sans-serif; margin: 20px; }}
+                    .dataframe {{ margin: 10px 0; }}
+                    iframe {{ margin: 15px 0; border: 1px solid #ddd; }}
+                </style>
+            </head>
+            <body>
+                <h1>AutoML Report - {datetime.now().strftime('%Y-%m-%d %H:%M')}</h1>
+                {"".join(self.html_content)}
+            </body>
+            </html>
+            """
+
+        with open(self.report_path, "w", encoding="utf-8") as f:
+            f.write(full_html)
+        print(f"Report saved to: {self.report_path}")
+
+    def success_report(self, auto_ml_result):
+        """Generate a success report"""
+        self._add_section(title=f'AutoML {auto_ml_result.group_name}',
+                          text='Automated training run report')
+
+        self._add_section(text='Features checked: ' + str(list(auto_ml_result.new_features.items())))
+
+        self._decision_info(auto_ml_result.deployment)
+        self._add_section(text='Results published to MLFlow')
+
+        self._metrics_description(auto_ml_result.compare_metrics_df)
+        self._plots(auto_ml_result.figures)
+        self._add_table(pd.DataFrame(auto_ml_result.run_time, columns=["Run Time"]))
+
+        self.save_report()
+
+    def error_report(self, group_name: str, error, status: dict):
+        """Generate an error report"""
+        self._add_section(title=f'AutoML {group_name} Error',
+                          text=str(error))
+
+        self._add_section(text='Task status:')
+        self._add_table(pd.DataFrame.from_dict(status, orient='index').reset_index())
+
+        self.save_report()
+
+    def _decision_info(self, decision):
+        if decision:
+            self._add_section(text="Model deployed to production.")
+        else:
+            self._add_section(text="Model didn't meet the required quality criteria.")
+
+    def _metrics_description(self, compare_metrics_df):
+        self._add_section(text="Model metrics comparison:")
+        self._add_table(compare_metrics_df)
+
+    def _plots(self, figures):
+        if figures:
+            self._add_section(text='Model visualizations:')
+            for key, fig in figures.items():
+                self._add_plot(fig, key)

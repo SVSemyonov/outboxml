@@ -32,13 +32,16 @@ class TitanicMetric(BaseMetric):
     def __init__(self):
         pass
 
-    def calculate_metric(self, result1: dict, result2: dict) -> dict:
+    def calculate_metric(self, result1: dict, result2: dict=None) -> dict:
         y1 = (result1['first'].y_pred + result1['second'].y_pred) / 2
         y = result1['first'].y
         score1 = (y - y1).sum()
-        y2 = (result2['first'].y_pred + result2['second'].y_pred) / 2
-        score2 = (y - y2).sum()
-        return {'impact': score2 - score1}
+        score2 = 0
+        if result2 is not None:
+            y2 = (result2['first'].y_pred + result2['second'].y_pred) / 2
+            score2 = (y - y2).sum()
+        return {'impact': score1-score2}
+
 
 
 def main():
@@ -50,6 +53,7 @@ def main():
                             compare_business_metric=BaseCompareBusinessMetric(),
                             save_temp=False,
                             hp_tune=False,
+                            retro=False
                             )
     auto_ml.update_models(send_mail=False)
 
