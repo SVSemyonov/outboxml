@@ -563,7 +563,7 @@ class AutoMLManager(DataSetsManager):
                                                                   cut_max_value=0.9,
                                                                   samples=100,
                                                                   cohort_base='model')
-            figures[key].show()
+
 
         return figures
 
