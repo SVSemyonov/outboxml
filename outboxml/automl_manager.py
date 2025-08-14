@@ -473,7 +473,7 @@ class AutoMLManager(DataSetsManager):
             raise ValidationError(e)
         self._init_dsmanager()
         self._is_initialized = True
-        self.group_name = f"{self._auto_ml_config.group_name}"
+        self.group_name = f"{self._auto_ml_config.group_name}_{self._auto_ml_config.project}"
         self._feature_selection_config = self._auto_ml_config.feature_selection
         self._hp_tuning_config = self._auto_ml_config.hp_tune  # use best model = False
         if self._retro:

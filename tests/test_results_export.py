@@ -12,8 +12,8 @@ from outboxml.datasets_manager import DataSetsManager
 
 from pathlib import Path
 
-test_configs_path = Path(__file__).resolve().parent.parent/ "examples"/"titanic" / "configs"
-test_data_path = Path(__file__).resolve().parent.parent/ "examples"/ "titanic" / "data"
+test_configs_path = Path(__file__).resolve().parent/ "test_configs"
+test_data_path = Path(__file__).resolve().parent/"test_data"
 
 config_name = str(test_configs_path / 'config-example-titanic.json')
 

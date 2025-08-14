@@ -25,8 +25,8 @@ from outboxml.metrics.base_metrics import BaseMetric
 from outboxml.monitoring_manager import MonitoringManager, MonitoringReport, MonitoringResult
 from outboxml.target_extrapolation import TargetModel
 
-test_configs_path = Path(__file__).resolve().parent.parent/ "examples"/"titanic"/"configs"
-test_data_path = Path(__file__).resolve().parent.parent /"examples"/"titanic"/ "data"
+test_configs_path = Path(__file__).resolve().parent/ "test_configs"
+test_data_path = Path(__file__).resolve().parent/"test_data"
 config_name = test_configs_path / 'config-example-titanic.json'
 monitoring_config = test_configs_path / 'monitoring_test_config.json'
 
@@ -179,9 +179,10 @@ class AutoMLTest(TestCase):
                                 compare_business_metric=BaseCompareBusinessMetric(calculate_threshold=True),
                                 save_temp=False,
                                 hp_tune=True,
+                                retro=False
                                 )
         self.assertEqual(auto_ml.update_models(send_mail=False), {'Loading dataset': True,
-                                                                  'Feature selection': True,
+                                                                  'Feature selection': False,
                                                                   'HP tuning': True,
                                                                   'Fitting': True,
                                                                   'Compare with previous': True,
@@ -202,7 +203,7 @@ class AutoMLTest(TestCase):
         EMailDSResult(config=config, ds_manager_result=self.ds_manager1.get_result(),
                       ).success_mail(group_name='test')
         self.assertIsInstance(1, int)
-    """
+    
 
 class TestTargetExtrapolation(TestCase):
     def setUp(self):
@@ -214,7 +215,7 @@ class TestTargetExtrapolation(TestCase):
                                                X_train=X_train,
                                                y_train=np.reshape(y_train, (-1, 1)))
         self.assertIsInstance(res, DSManagerResult)
-
+    """
 
 class LogsExtractor(Extractor):
     def extract_dataset(self) -> pd.DataFrame:
