@@ -353,6 +353,7 @@ class AutoMLManager(DataSetsManager):
         ds_manager_for_save = DataSetsManager(config_name=self.__default_models_config, external_config=self._external_config)
         ds_manager_for_save.load_dataset(data=self.dataset)
         ds_manager_for_save._results = self._results
+        ds_manager_for_save.group_name = group_name
         ResultExport(ds_manager=ds_manager_for_save, config=self._external_config).save(to_mlflow=False,
                                                                                         path_to_save=self._external_config.results_path,
                                                                                         to_pickle=True)

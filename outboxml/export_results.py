@@ -170,7 +170,7 @@ class ResultExport:
 
             save_results(config=self.config,
                          min_max_scaler=min_max_scaler,
-                         group_name=self._ds_manager.config.group_name,
+                         group_name=self._ds_manager.group_name,
                          model_config=res_dict.model_config,
                          features_numerical=res_dict.data_subset.features_numerical,
                          features_categorical=res_dict.data_subset.features_categorical,
