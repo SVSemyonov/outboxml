@@ -5,7 +5,6 @@
   "data_config": {
     "source": "csv",
     "local_name_source": "data/ENB2012_data.csv",
-    "table_name_source": "public.'EnergyEfficiency'",
     "separation" : {
         "kind": "random", 
         "random_state": 1
