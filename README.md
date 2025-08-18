@@ -68,7 +68,6 @@ By default containers map to the following ports:
 - Click "Create Bucket" with name "mlflow"
 - Open the bucket and edit "Access Policy:"
 - Set Access Policy to Public and click set
-![Minio-mlflow-settings](outboxml/image.png)
 
 ## Network restrictions and security concerts
 - The containers are isolated 
