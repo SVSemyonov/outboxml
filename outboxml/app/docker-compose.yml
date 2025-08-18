@@ -70,7 +70,7 @@ services:
     image: prom/node-exporter:latest
     container_name: node-exporter
     ports:
-      - "9100:9100"
+      - "9101:9100"
     networks:
       - internal
 
@@ -94,7 +94,7 @@ services:
 
   # FastAPI
   fastapi:
-    image: tiangolo/uvicorn-gunicorn-fastapi:python3.9
+    image: tiangolo/uvicorn-gunicorn-fastapi:python3.11
     container_name: fastapi
     command: ["sh", "-c", "pip install requests environs && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"]
     ports:
