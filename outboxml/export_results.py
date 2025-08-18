@@ -437,7 +437,7 @@ class GrafanaExport:
     def __init__(self,
                  df: pd.DataFrame,
                  table_name: str = 'FrameworkTest',
-                 schema: str = '',
+                 schema: str = 'public',
                  connection=None):
         self.df = df
         if self.df.empty:
