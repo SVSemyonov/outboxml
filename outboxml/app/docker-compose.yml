@@ -70,7 +70,7 @@ services:
     image: prom/node-exporter:latest
     container_name: node-exporter
     ports:
-      - "9100:9100"
+      - "9101:9100"
     networks:
       - internal
 
