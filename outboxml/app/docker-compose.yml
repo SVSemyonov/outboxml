@@ -94,7 +94,7 @@ services:
 
   # FastAPI
   fastapi:
-    image: tiangolo/uvicorn-gunicorn-fastapi:python3.9
+    image: tiangolo/uvicorn-gunicorn-fastapi:python3.11
     container_name: fastapi
     command: ["sh", "-c", "pip install requests environs && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"]
     ports:
