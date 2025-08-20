@@ -24,9 +24,9 @@
                                 "calculate_threshold": 0,
                                 "prod_path": null},
 
-  "mlflow_experiment": "FrameworkTest",
-  "grafana_table_name": "FrameworkTest",
-  "dashboard_name": "FrameworkTest",
-  "trigger": {"table_name":  "public.'TitanicData'", "field":  "PASSANGERID"}
+  "mlflow_experiment": "TitanicExample",
+  "grafana_table_name": "TitanicExample",
+  "dashboard_name": "TitanicExample",
+  "trigger": {"table_name":  "public.'TitanicExample'", "field":  "PASSANGERID"}
 }
 

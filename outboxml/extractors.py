@@ -1,5 +1,7 @@
 import abc
 from abc import ABC
+from pathlib import Path
+
 import pandas as pd
 import pickle
 from loguru import logger
@@ -47,6 +49,15 @@ class BaseExtractor(Extractor):
 
         if source in (FilesNames.csv, FilesNames.pickle, FilesNames.parquet):
             dataset = load_dataset_from_local(data_config=self.__data_config)
+            table_name = self.__data_config.table_name_source if self.__data_config.table_name_source is not None else "public." + str(
+                Path(self.__data_config.local_name_source).stem)
+            try:
+                dataset.to_sql(table_name,
+                               con=config.connection_params,
+                               if_exists='replace')
+                self.__data_config.source = FilesNames.database
+            except Exception as exc:
+                logger.error('Loading local file to db error||' + str(exc))
 
         elif source in (FilesNames.database, FilesNames.hadoop):
             dataset = load_dataset_from_db(data_config=self.__data_config)

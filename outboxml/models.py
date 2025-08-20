@@ -391,7 +391,7 @@ class StatsmodelsModel(BaseWrapperModel):
         elif self.wrapper == ModelsParams.glm_without_scaler:
             exposure = None
             freq_weights = self.exposure_train
-            y_train = self.y_train / self.exposure_train
+            y_train = self.y_train / self.exposure_train if self.exposure_train is not None else self.y_train
             y_train.name = self.y_train.name
 
         if self.objective == ModelsParams.poisson:
@@ -436,7 +436,6 @@ class StatsmodelsModel(BaseWrapperModel):
                 .fit(**self.__stats_models_params)
             )
 
-        # Без этой замены после сохранения модели и чтения пикла может урезаться model_sm._results.model.data.design_info
         for feature in features_categorical:
             unique_values = X_train_sm[feature].unique()
             model_sm._results.model.data.frame[feature].iloc[:len(unique_values)] = unique_values
