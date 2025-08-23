@@ -27,6 +27,6 @@
   "mlflow_experiment": "TitanicExample",
   "grafana_table_name": "TitanicExample",
   "dashboard_name": "TitanicExample",
-  "trigger": {"table_name":  "public.'TitanicExample'", "field":  "PASSANGERID"}
+  "trigger": {"table_name":  "public.'TitanicExample'", "field":  "PASSENGERID"}
 }
 

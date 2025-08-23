@@ -1,14 +1,13 @@
 import os
 import pickle
 import shutil
-from datetime import datetime
 from typing import Callable
 
 import mlflow
 from loguru import logger
 from sqlalchemy import create_engine
+import select
 
-from outboxml.core.pydantic_models import AutoMLConfig
 from outboxml.core.utils import ResultPickle
 from outboxml.datasets_manager import DataSetsManager
 
@@ -83,33 +82,30 @@ def load_model_to_source_from_mlflow(group_name: str, config=None) -> None:
 
     shutil.copyfile(f"./artifacts/{group_name}.pickle", source_path / f"{group_name}.pickle")
 
-last_seen_id = 0
-def check_for_new_data(auto_ml_config: AutoMLConfig, script: Callable, config=None):
+def check_postgre_transaction(script: Callable, config=None, waiting_time=300):
     global last_seen_id
 
-    # Подключение к базе данных
-
+    # Connecting to the database
     params = config.connection_params
+    engine = create_engine(params)
+    raw_conn = engine.raw_connection()  # Get raw psycopg2 connection
     try:
-        # Устанавливаем соединение с базой данных
-        engine = create_engine(params)
+        raw_conn.set_isolation_level(0)  # AUTOCOMMIT
+        cur = raw_conn.cursor()
+        cur.execute("LISTEN table_changes;")
 
-        with engine.connect() as connection:
-            trigger = auto_ml_config.trigger
-            ID = trigger['field']
-            table_name = trigger['table_name']
-
-            result = connection.execute(f"SELECT {ID} FROM {table_name} ORDER BY id DESC LIMIT 1;")
-            new_id = result.fetchone()  # Получаем первую строку результата
-
-            # Проверяем, есть ли новые данные
-            if new_id is not None:
-                new_id = new_id[0]  # Получаем значение из кортежа
-                if new_id > last_seen_id:
-                    print(f"New data with: {new_id}")
-                    last_seen_id = new_id
-                    # Вызов скрипта Auto ML
-                    script()
+        logger.debug(f"Waiting for notifications for {waiting_time} seconds...")
+        if select.select([raw_conn], [], [], waiting_time) == ([], [], []):
+            logger.debug("No notifications received")
+        else:
+            raw_conn.poll()
+            while raw_conn.notifies:
+                notify = raw_conn.notifies.pop(0)
+                logger.debug(f"Notification received: {notify.payload}")
+                script()
 
     except Exception as e:
         print(f"Произошла ошибка: {e}")
+
+    finally:
+        raw_conn.close()
