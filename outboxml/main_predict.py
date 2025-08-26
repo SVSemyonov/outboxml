@@ -141,8 +141,4 @@ async def predict_route(service_request: ServiceRequest):
 
     return JSONResponse(content=jsonable_encoder(response), status_code=status_code)
 
-def main(host="0.0.0.0", port=8000):
-    uvicorn.run(app, host=host, port=port)
 
-if __name__ == "__main__":
-    main()
