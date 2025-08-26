@@ -424,7 +424,10 @@ class BaseFS:
     def get_updated_model_config(model_config: ModelConfig, features_to_drop: list) -> ModelConfig:
 
         model_config_to_return = deepcopy(model_config)
-        if model_config_to_return.features is not None:
-            model_config_to_return.features = [obj for obj in model_config_to_return.features if
-                                               obj.name not in features_to_drop]
+        if model_config_to_return is not None:
+            if model_config_to_return.features is not None:
+                model_config_to_return.features = [obj for obj in model_config_to_return.features if
+                                                   obj.name not in features_to_drop]
+        else:
+            logger.error('Results with feature selection already exist||Change version in config for new analysis or delete temp files of subsets')
         return model_config_to_return
