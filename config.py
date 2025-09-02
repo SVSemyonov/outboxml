@@ -7,8 +7,8 @@ env_reader.read_env()
 base_path = Path(__file__).resolve().parent
 results_path = base_path / "results"
 prod_path = base_path
-prod_models_folder = "prod_models_from_mlflow"
-prod_models_path = base_path /"examples"/ "models_to_compare"
+prod_models_folder = env_reader.str("prod_models_folder", "prod_models_from_mlflow")
+prod_models_path = base_path / prod_models_folder
 
 email_smtp_server = env_reader.str("email_smtp_server", "")
 email_port = env_reader.str("email_port", "")

@@ -32,7 +32,6 @@ def main(auto_ml_script: Callable, config: Any, waiting_time: float):
         check_postgre_transaction(**params)
         time.sleep(1)
 
-
 if __name__ == "__main__":
     main(auto_ml_script=titanic_example,
          config=config,
