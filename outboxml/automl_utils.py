@@ -82,8 +82,7 @@ def load_model_to_source_from_mlflow(group_name: str, config=None) -> None:
 
     shutil.copyfile(f"./artifacts/{group_name}.pickle", source_path / f"{group_name}.pickle")
 
-def check_postgre_transaction(script: Callable, config=None, waiting_time=300):
-    global last_seen_id
+def check_postgre_transaction(script: Callable, config, waiting_time=300):
 
     # Connecting to the database
     params = config.connection_params

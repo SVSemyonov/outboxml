@@ -1,5 +1,9 @@
+import sys
 import time
 from typing import Callable, Any
+
+sys.path.append("/home")
+sys.path.append("/home/jovyan")
 
 from outboxml import config
 from examples.titanic.titanic_basic import titanic_example
@@ -8,6 +12,8 @@ from outboxml.automl_manager import AutoMLConfig
 from sqlalchemy import create_engine, text
 import json
 import pandas as pd
+
+from outboxml.main_release import MLFLowRelease
 
 
 def add_to_db(auto_ml_config):
@@ -30,7 +36,8 @@ def main(auto_ml_script: Callable, config: Any, waiting_time: float):
 
     while True:
         check_postgre_transaction(**params)
-        time.sleep(1)
+        MLFLowRelease(config=config).load_model_to_source_from_mlflow(group_name='example_titanic')
+        time.sleep(waiting_time)
 
 if __name__ == "__main__":
     main(auto_ml_script=titanic_example,

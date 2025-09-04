@@ -8,7 +8,6 @@ import pandas as pd
 import pickle
 import traceback
 from typing import Dict, List, Optional, Union
-import uvicorn
 
 from outboxml import config
 from outboxml.core.predict import ensemble_predict
