@@ -5,7 +5,7 @@ from typing import Callable, Any
 sys.path.append("/home")
 sys.path.append("/home/jovyan")
 
-from outboxml import config
+import config
 from examples.titanic.titanic_basic import titanic_example
 from outboxml.automl_utils import check_postgre_transaction
 from outboxml.automl_manager import AutoMLConfig
@@ -16,7 +16,7 @@ import pandas as pd
 from outboxml.main_release import MLFLowRelease
 
 
-def add_to_db(auto_ml_config):
+def add_to_db(auto_ml_config='examples/titanic/configs/automl-titanic.json'):
     with open(auto_ml_config, encoding='utf-8') as f:
         auto_ml_config = AutoMLConfig.model_validate(json.load(f))
     engine = create_engine(config.connection_params)
@@ -40,7 +40,7 @@ def main(auto_ml_script: Callable, config: Any, waiting_time: float):
         time.sleep(waiting_time)
 
 if __name__ == "__main__":
-    main(auto_ml_script=titanic_example,
+    main(auto_ml_script=titanic_example(retro=False),
          config=config,
          waiting_time=2 * 60,
          )
