@@ -90,7 +90,7 @@ class MLFlowWrapper:
             log = os.path.join(self.results_path, "log.log")
             mlflow.log_artifact(log)
             mlflow.log_artifact(os.path.join(self.results_path, automl_results.result_pickle_name))
-            mlflow.set_tag(key='Deployment decision', value=automl_results.deployment)
+            mlflow.set_tag(key='Deployment_decision', value=automl_results.deployment)
             #mlflow.set_tags()
             try:
                 mlflow.log_artifact(os.path.join(self.results_path, automl_results.all_models_config))

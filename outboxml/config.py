@@ -7,9 +7,10 @@ env_reader.read_env()
 base_path = Path(__file__).resolve().parent.parent
 results_path = base_path / "results"
 
-prod_models_folder = "examples/models_to_compare"
+prod_models_folder = env_reader.str("prod_models_folder", "prod_models_from_mlflow")
+prod_models_path = base_path / prod_models_folder
 prod_path = Path(__file__).resolve().parent.parent/ prod_models_folder
-prod_models_path = prod_path
+
 
 mlflow_tracking_uri = env_reader.str("mlflow_tracking_uri", "http://mlflow:5000")
 mlflow_experiment = env_reader.str("mlflow_experiment", "FrameworkTest")

@@ -8,7 +8,6 @@ import pandas as pd
 import pickle
 import traceback
 from typing import Dict, List, Optional, Union
-import uvicorn
 
 from outboxml import config
 from outboxml.core.predict import ensemble_predict
@@ -141,5 +140,4 @@ async def predict_route(service_request: ServiceRequest):
 
     return JSONResponse(content=jsonable_encoder(response), status_code=status_code)
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=5100)
+
