@@ -34,10 +34,13 @@ class DataDrift:
                 LE.fit(X_train)
                 X_train = LE.transform(X_train)
                 X_test = LE.transform(X_test)
-            psi = self._calculate_psi(X_train, X_test, self.n_bins)
-            kl_divergence = self._calculate_kl_divirgence(X_train, X_test, self.n_bins)
-            js_divergence = self._calculate_js_divirgence(X_train, X_test, self.n_bins)
-            result[column] = [psi, kl_divergence, js_divergence]
+            try:
+                psi = self._calculate_psi(X_train, X_test, self.n_bins)
+                kl_divergence = self._calculate_kl_divirgence(X_train, X_test, self.n_bins)
+                js_divergence = self._calculate_js_divirgence(X_train, X_test, self.n_bins)
+                result[column] = [psi, kl_divergence, js_divergence]
+            except Exception as exc:
+                logger.error('No results for '+ column + '||' + str(exc))
         result.index = pd.Index(['PSI', 'KL', 'JS'])
         if self.full_calc:
             full_result = self._full_calculation(base_data, control_data)

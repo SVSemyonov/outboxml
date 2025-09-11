@@ -148,7 +148,7 @@ class MonitoringManager:
         for model in self._ds_manager._models_configs:
             try:
                 logger.debug('Calculating datadrift|| ' + model.name)
-                X_train, _ = self._ds_manager.get_TrainDfs(model_name=model.name)
+                data_subset = self._ds_manager.get_subset(model_name=model.name)
                 X_test = prepare_dataset(group_name=self._ds_manager.group_name,
                                          data=self.logs.copy(),
                                          train_ind=self.logs.index,
@@ -156,7 +156,7 @@ class MonitoringManager:
                                          model_config=model,
                                          ).data
 
-                self.result.datadrift[model.name] = self._datadrift_report(X_train, X_test)
+                self.result.datadrift[model.name] = self._datadrift_report(data_subset.X_train, X_test)
                 logger.debug('Finished datadrift|| ' + model.name)
             except Exception as exc:
                 logger.error(exc)

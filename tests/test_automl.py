@@ -179,7 +179,7 @@ class AutoMLTest(TestCase):
                                 compare_business_metric=BaseCompareBusinessMetric(calculate_threshold=True),
                                 save_temp=False,
                                 hp_tune=True,
-                                retro=False
+                                retro=True
                                 )
         self.assertEqual(auto_ml.update_models(send_mail=False), {'Loading dataset': True,
                                                                   'Feature selection': False,

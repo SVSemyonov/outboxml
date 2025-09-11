@@ -4,7 +4,7 @@
   "version": "1",
   "data_config": {
     "source": "csv",
-    "local_name_source": "tests/test_data/titanic.csv",
+    "local_name_source": "../tests/test_data/titanic.csv",
     "table_name_source": "public.'TitanicExample'",
     "separation" : {
         "kind": "random", 
