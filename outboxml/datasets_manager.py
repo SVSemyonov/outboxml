@@ -598,11 +598,21 @@ class DataSetsManager:
         except ValidationError as e:
             logger.error("Config validation error")
             raise ValidationError(e)
-
-        self.version = self._all_models_config.version
-        self.group_name = f"{self._all_models_config.project}_{self._all_models_config.version}"
         self.data_config = self._all_models_config.data_config
         self._models_configs = self._all_models_config.models_configs
+        self.version = self._all_models_config.version
+        for model in self._models_configs:
+
+            file_path = os.path.join(self._external_config.results_path, model.name + '_v' + self.version + '_subset.pickle')
+            if os.path.exists(file_path):
+                if not self._retro:
+                    logger.warning(f'{model.name}||File {file_path} already exists. Change version in config file to for new data prepare')
+                else:
+                    logger.warning(
+                        f'{model.name}||File {file_path} already exists. Changing version in config file for A/B test')
+                    self.version = self.version + '_new'
+        self.group_name = f"{self._all_models_config.project}_{self._all_models_config.version}"
+
         logger.info("Config is loaded")
 
     def __load_targets_names(self):
