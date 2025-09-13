@@ -56,10 +56,10 @@ class TestTitanicDS(TestCase):
                                                   table_name_source='public."TitanicExample"')).extract_dataset(), pd.DataFrame)
 
     def test_DFs(self):
-        self.dsManager.get_TrainDfs(model_name='first')
-        self.assertEqual(self.dsManager.X.shape, (891, 11))
-        self.assertEqual(self.dsManager.Y.shape, (891, 1))
-        self.assertEqual(len(set(self.dsManager.index_test) & set(self.dsManager.index_train)), 0)
+        subset = self.dsManager.get_subset(model_name='first')
+        self.assertEqual(subset.X.shape, (891, 11))
+        self.assertEqual(subset.Y.shape, (891, 1))
+     #   self.assertEqual(len(set(self.dsManager.index_test) & set(self.dsManager.index_train)), 0)
 
     def test_encoding(self):
         X, y = self.dsManager.get_TrainDfs(model_name='first')

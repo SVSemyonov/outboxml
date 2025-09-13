@@ -1,9 +1,10 @@
 import os
 import pickle
+from abc import abstractmethod, ABC
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Dict, Union, Callable
+from typing import Optional, List, Dict, Union, Callable, Literal
 import multiprocessing as mp
 
 import pandas as pd
@@ -11,7 +12,8 @@ from loguru import logger
 
 from outboxml import config
 from outboxml.core.data_prepare import prepare_dataset
-from outboxml.core.prepared_datasets import PrepareDataset
+from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes
+from outboxml.core.pydantic_models import DataConfig, DataModelConfig, SeparationModelConfig
 from outboxml.extractors import Extractor
 
 
@@ -59,7 +61,6 @@ class ModelDataSubset:
             column_target: Optional[str] = None,
             extra_columns: Optional[pd.DataFrame] = None,
     ):
-
         X_train = X[X.index.isin(X.index.intersection(index_train))]
         Y_train = Y[Y.index.isin(Y.index.intersection(index_train))]
 
@@ -93,23 +94,22 @@ class ModelDataSubset:
 class DataPreprocessor:
     def __init__(self,
                  prepare_dataset_interface_dict: Dict[str, PrepareDataset],
-                 dataset: Union[pd.DataFrame, Extractor]=None,
-                 train_ind: pd.Index=None,
+                 dataset: Union[pd.DataFrame, Extractor],
+                 data_config: DataModelConfig,
                  version: str = '1',
-                 extra_columns: list = None,
-                 test_ind: pd.Index = None,
+                 prepare_engine: Literal['pandas', 'polars'] = 'pandas',
                  external_config=None,
-                 use_saved_files: bool=False,
-                 retro: bool=False):
+                 use_saved_files: bool = False,
+                 retro: bool = False):
+
+        self._prepare_engine = prepare_engine
         self._version = version
         self._prepare_datasets = prepare_dataset_interface_dict
-        self._dataset = dataset.copy()
+        self._data_config = data_config
+        self._dataset = dataset
         self._use_saved_files = use_saved_files
-        self.index_train = train_ind
-        self.index_test = test_ind
         self.config = external_config
-        self._extra_columns = extra_columns
-        self._extra_columns_data: Optional[pd.DataFrame] = None
+        self._extra_columns = self._data_config.extra_columns
         if external_config is None:
             self.config = config
         self._prepared_subsets = {}
@@ -119,7 +119,7 @@ class DataPreprocessor:
                                                 prepare_datasets=self._prepare_datasets)
         self._parquet_dataset = ParquetDataset(config=self.config,
                                                parquet_name='temp_dataset_v' + self._version
-                                                                                      )
+                                               )
         self.temp_subset: Optional[ModelDataSubset] = None
         self._data_columns = []
         self._retro = retro
@@ -134,24 +134,23 @@ class DataPreprocessor:
             else:
                 data_to_save = self._dataset
             self._parquet_dataset.save_parquet(data_to_save)
-            self._extra_columns_data = self._dataset[self._extra_columns].copy() if self._extra_columns is not None else None
-       #     self._dataset = None
+            return data_to_save
 
         elif isinstance(self._dataset, Extractor):
             data = self._dataset.extract_dataset()
             if not self._retro:
                 self._collect_features_list()
-                data_to_save = self._dataset[self._data_columns]
+                data_to_save = data[self._data_columns]
             else:
-                data_to_save = self._dataset
+                data_to_save = data
             self._parquet_dataset.save_parquet(data_to_save)
             logger.info('Saving data to parquet')
-            self._extra_columns_data = data[self._extra_columns].copy() if self._extra_columns is not None else None
-         #   self._dataset = None
+            return data_to_save
+        #   self._dataset = None
         logger.info('Reading data from parquet')
         return self._parquet_dataset.read_parquet()
 
-    def save_subset_to_pickle(self, model_name: str, data_subset: ModelDataSubset, rewrite: bool=False):
+    def save_subset_to_pickle(self, model_name: str, data_subset: ModelDataSubset, rewrite: bool = False):
         self._pickle_subset.save_subset_to_pickle(model_name, data_subset, rewrite)
 
     def get_subset(self, model_name: str = None, from_pickle: bool = True, prepare_func: Callable = None,
@@ -179,36 +178,24 @@ class DataPreprocessor:
 
     def _prepare_subset(self, model_name, to_pickle: bool = True, prepare_func: Callable = None,
                         args_dict: dict = None):
-        logger.debug('Model ' + model_name + ' || Data preparation started')
         if not to_pickle:
             data = self._dataset
         else:
             data = self.dataset
-        X, y, target = self._filter_data_by_exposure(model_name=model_name, dataset=data)
-        model_config = self._prepare_datasets[model_name].get_model_config()
-        if prepare_func is not None:
-            prepare_dataset_result = prepare_func(X, self.index_train, self.index_test, target,
-                                                  **args_dict)
-        else:
-            prepare_dataset_result = self._prepare_datasets[model_name].prepare_dataset(
-                data=X,
-                train_ind=self.index_train,
-                test_ind=self.index_test,
-                target=target
-            )
-        X = prepare_dataset_result.data
-        self._prepare_datasets[model_name]._model_config = deepcopy(prepare_dataset_result.model_config)
-        data_subset = ModelDataSubset.load_subset(
-            model_name=model_name,
-            X=X,
-            Y=y,
-            index_train=self.index_train,
-            index_test=self.index_test,
-            features_numerical=prepare_dataset_result.features_numerical if model_config is not None else [],
-            features_categorical=prepare_dataset_result.features_categorical if model_config is not None else [],
-            column_exposure=model_config.column_exposure if model_config.column_exposure else None,
-            column_target=model_config.column_target if model_config.column_target else None,
-            extra_columns=self._extra_columns_data if self._extra_columns_data is not None else None)
+        logger.debug('Model ' + model_name + ' || Data preparation started')
+        if self._prepare_engine == 'pandas':
+            data_subset = PandasInterface(data=data,
+                                          prepare_interface=self._prepare_datasets[model_name],
+                                          separation_config=self._data_config.separation,
+                                          extra_columns=self._extra_columns).prepared_subset(prepare_func, args_dict)
+
+
+        elif self._prepare_engine == 'polars':
+            data_subset = PolarsInterface(data=self.dataset, #передаем эксраткор или пуьб к паркету для lasy
+                                          prepare_interface=self._prepare_datasets[model_name],
+                                          separation_config=self._data_config.separation,
+                                          extra_columns=self._extra_columns).prepared_subset(prepare_func, args_dict)
+
         logger.debug('Model ' + model_name + ' || Data preparation finished')
         if to_pickle:
             self._pickle_subset.save_subset_to_pickle(model_name, data_subset, True)
@@ -216,28 +203,6 @@ class DataPreprocessor:
         else:
             self.temp_subset = data_subset
 
-    def _filter_data_by_exposure(self, model_name: str, dataset: pd.DataFrame):
-        exposure = {model_name: None}
-        model_config = self._prepare_datasets[model_name].get_model_config()
-        target = pd.Series()
-        if model_config.column_target:
-            y = dataset[model_config.column_target]
-            target = y
-        else:
-            target = pd.Series()
-            y = pd.Series()
-        if model_config.column_exposure:
-            exposure[model_name] = dataset[model_config.column_exposure]
-            X = dataset.loc[exposure[model_name] > 0]
-            y = y.loc[y.index.isin(X.index)]
-            target = y / exposure[model_name]
-            y = pd.concat([pd.Series(y, name=model_config.column_target),
-                           pd.Series(exposure[model_name].loc[exposure[model_name].index.isin(X.index)], name=model_config.column_exposure)],axis=1)
-
-        else:
-            X = dataset
-            y = pd.DataFrame(y)
-        return X, y, target
 
     def _check_prepared_subset(self, model_name):
         file_path = os.path.join(self.config.results_path, model_name + '_v' + self._version + '_subset.pickle')
@@ -303,9 +268,10 @@ class PickleModelSubset:
         subset.exposure_test = subset.exposure_test.copy() if subset.exposure_test is not None else None
         return subset
 
-    def save_subset_to_pickle(self, model_name, subset: ModelDataSubset,  rewrite: bool=False):
-        file_path = os.path.join(self.results_path, model_name + '_v'+ self.version + '_subset.pickle')
-        file_path_prepare_dataset = os.path.join(self.results_path, model_name + '_v'+ self.version + '_prepare_interface.pickle')
+    def save_subset_to_pickle(self, model_name, subset: ModelDataSubset, rewrite: bool = False):
+        file_path = os.path.join(self.results_path, model_name + '_v' + self.version + '_subset.pickle')
+        file_path_prepare_dataset = os.path.join(self.results_path,
+                                                 model_name + '_v' + self.version + '_prepare_interface.pickle')
         if os.path.exists(file_path) and not rewrite:
             logger.warning(f'{model_name}||File {file_path} already exists.')
         else:
@@ -321,13 +287,113 @@ class ParquetDataset:
         self._parquet_name = parquet_name
         self.results_path = config.results_path
 
-    def save_parquet(self, data: pd.DataFrame, rewrite: bool=True):
+    def save_parquet(self, data: pd.DataFrame, rewrite: bool = True):
         file_path = os.path.join(self.results_path, self._parquet_name + '.parquet')
         if os.path.exists(file_path) and not rewrite:
             logger.warning(f'||File {file_path} already exists.')
         logger.info('||Saving dataset to parquet')
         data.to_parquet(file_path)
 
-    def read_parquet(self)-> pd.DataFrame:
+    def read_parquet(self) -> pd.DataFrame:
         file_path = os.path.join(self.results_path, self._parquet_name + '.parquet')
         return pd.read_parquet(file_path)
+
+
+
+
+class PrepareEngine(ABC):
+
+    @abstractmethod
+    def prepared_subset(self, *params):
+        pass
+
+class PandasInterface(PrepareEngine):
+
+    def __init__(self,
+                 data: pd.DataFrame,
+                 prepare_interface: PrepareDataset,
+                 separation_config: SeparationModelConfig,
+                 extra_columns: list=None
+                 ):
+        self.dataset = data
+        self._prepare_interface = prepare_interface
+        self.separation_config = separation_config
+        self._extra_columns = extra_columns
+        self._extra_columns_data = None
+
+
+    def prepared_subset(self,  prepare_func: Callable = None,
+                        args_dict: dict = None):
+        index_train, index_test = TrainTestIndexes(X=self.dataset,
+                                                   separation_config=self.separation_config).train_test_indexes()
+
+        model_config = self._prepare_interface.get_model_config()
+        model_name = model_config.name
+        X, y, target = self._filter_data_by_exposure(model_name=model_name, dataset=self.dataset)
+
+        if prepare_func is not None:
+            prepare_dataset_result = prepare_func(X, index_train, index_test, target,
+                                                  **args_dict)
+        else:
+            prepare_dataset_result = self._prepare_interface.prepare_dataset(
+                data=X,
+                train_ind=index_train,
+                test_ind=index_test,
+                target=target
+            )
+        X = prepare_dataset_result.data
+        self._prepare_interface._model_config = deepcopy(prepare_dataset_result.model_config)
+        self._extra_columns_data = self.dataset[self._extra_columns] if self._extra_columns is not None else None
+        data_subset = ModelDataSubset.load_subset(
+            model_name=model_name,
+            X=X,
+            Y=y,
+            index_train=index_train,
+            index_test=index_test,
+            features_numerical=prepare_dataset_result.features_numerical if model_config is not None else [],
+            features_categorical=prepare_dataset_result.features_categorical if model_config is not None else [],
+            column_exposure=model_config.column_exposure if model_config.column_exposure else None,
+            column_target=model_config.column_target if model_config.column_target else None,
+            extra_columns=self._extra_columns_data if self._extra_columns_data is not None else None)
+        logger.debug('Model ' + model_name + ' || Data preparation finished')
+
+
+    def _filter_data_by_exposure(self, model_name: str, dataset: pd.DataFrame):
+        exposure = {model_name: None}
+        model_config = self._prepare_interface.get_model_config()
+        target = pd.Series()
+        if model_config.column_target:
+            y = dataset[model_config.column_target]
+            target = y
+        else:
+            target = pd.Series()
+            y = pd.Series()
+        if model_config.column_exposure:
+            exposure[model_name] = dataset[model_config.column_exposure]
+            X = dataset.loc[exposure[model_name] > 0]
+            y = y.loc[y.index.isin(X.index)]
+            target = y / exposure[model_name]
+            y = pd.concat([pd.Series(y, name=model_config.column_target),
+                           pd.Series(exposure[model_name].loc[exposure[model_name].index.isin(X.index)], name=model_config.column_exposure)],axis=1)
+
+        else:
+            X = dataset
+            y = pd.DataFrame(y)
+        return X, y, target
+
+class PolarsInterface(PrepareEngine):
+    def __init__(self,
+                 data: pd.DataFrame,
+                 prepare_interface: PrepareDataset,
+                 separation_config: SeparationModelConfig,
+                 extra_columns: list=None
+                 ):
+        self.dataset = data
+        self._prepare_interface = prepare_interface
+        self.separation_config = separation_config
+        self._extra_columns = extra_columns
+        self._extra_columns_data = None
+
+    def prepared_subset(self,  prepare_func: Callable = None,
+                        args_dict: dict = None):
+        pass

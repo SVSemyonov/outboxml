@@ -39,6 +39,15 @@ class Extractor(ABC):
         pass
 
 
+class SimpleExtractor(Extractor):
+    def __init__(self, data: pd.DataFrame, *params):
+        super().__init__(*params)
+        self.data = data
+
+    def extract_dataset(self) -> pd.DataFrame:
+        return self.data
+
+
 class BaseExtractor(Extractor):
 
     def __init__(self, data_config: DataModelConfig):

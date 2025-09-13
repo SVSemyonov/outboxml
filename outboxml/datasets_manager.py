@@ -19,7 +19,7 @@ from outboxml.dataset_retro import RetroDataset
 from outboxml.datadrift import DataDrift
 from outboxml.core.data_prepare import prepare_dataset
 from outboxml.core.pydantic_models import AllModelsConfig, DataModelConfig, ModelConfig
-from outboxml.extractors import Extractor, BaseExtractor
+from outboxml.extractors import Extractor, BaseExtractor, SimpleExtractor
 from outboxml.metrics.base_metrics import BaseMetric, BaseMetrics
 from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes
 from outboxml.metrics.processor import ModelMetrics
@@ -257,9 +257,6 @@ class DataSetsManager:
         self._retro = False
         self.business_metric_value = {}
 
-        self.__test_train: bool = False
-        self.__train_test_indexes: bool = False
-
         self._retro_changes = retro_changes
         self._retro_dataset = None
 
@@ -286,31 +283,18 @@ class DataSetsManager:
 
         logger.debug("Dataset loading")
         if data is not None:
-            self.dataset = data
-
-        elif self._extractor is not None:
-            logger.info("Load data from user extractor")
-            if self._extractor.load_config_from_env:
-                logger.info("Reading config from env")
-                self._extractor.load_config(connection_config=config)
-            self.dataset = self._extractor.extract_dataset()
-
-        else:
-            self.dataset = BaseExtractor(data_config=self.data_config).extract_dataset()
+            self._extractor = SimpleExtractor(data=data)
+        self.dataset = self._extractor.extract_dataset()
         logger.debug('DataSet is extracted')
-
         return self.dataset
 
     def get_subset(self, model_name):
-        if not self.__test_train:
-            self._make_test_train()
         if model_name is None: model_name = self._default_name
         logger.debug('Model ' + model_name + ' || Subset export')
         return self._data_preprocessor.get_subset(model_name)
 
     @property
     def data_subsets(self, ):
-
         return self._data_preprocessor.data_subsets()
 
     def fit_models(self, models_dict: dict = None, need_fit: bool = False, model_name: str = None,
@@ -370,9 +354,8 @@ class DataSetsManager:
 
     def check_datadrift(self, model_name: str) -> pd.DataFrame:
         """Method for checking datadrift between train and test. Using DataDrift library"""
-        X_train, y_train = self.get_TrainDfs(model_name)
-        X_test, y_test = self.get_TestDfs(model_name=model_name)
-        report = DataDrift().report(train_data=X_train, test_data=X_test, )
+        subset = self.get_subset(model_name)
+        report = DataDrift().report(train_data=subset.X_train, test_data=subset.X_test, )
 
         return report
 
@@ -415,8 +398,8 @@ class DataSetsManager:
                                                    check_prepared=False,
                                                    )},
                                        dataset=data_to_predict,
-                                       train_ind=train_ind,
-                                       test_ind=test_ind).get_subset(model_name, from_pickle=False)
+                                       data_config=self.data_config,
+                                       prepare_engine='pandas',).get_subset(model_name, from_pickle=False)
 
         output_model = model
         prediction = model.predict(data_subset.X[chain(features_numerical, features_categorical)])
@@ -441,64 +424,6 @@ class DataSetsManager:
 
         logger.debug('Prediction for external data finished')
         return res
-
-    def _separateTestTrain(self, retro_changes: RetroDataset = None):
-
-        if self.dataset is None:
-            self.load_dataset()
-        logger.debug("Separation started")
-        if not self.targets_columns_names:
-            logger.info('No target for clustering||Adding temp field')
-            self.targets_columns_names = ['TEMP_TARGET']
-            self.dataset['TEMP_TARGET'] = 1
-        try:
-            self.Y = self.dataset[self.targets_columns_names]
-
-        except KeyError as e:
-            logger.error("No target columns in dataset")
-            raise KeyError(f"No target columns in dataset: {e}")
-
-        self.X = self.dataset.drop(columns=self.targets_columns_names)
-
-        logger.info(f"X shape: {str(self.X.shape)}, Y shape: {str(self.Y.shape)}")
-        logger.info(f"Y: {self.Y.columns.values}")
-
-        if self.data_config.extra_columns:
-            self.extra_columns = self.dataset[self.data_config.extra_columns]
-            logger.info(f"Extra columns: {str(self.extra_columns.columns.values)}")
-
-        if retro_changes:
-            logger.debug("Retro changes")
-            X_extra = self._retro_dataset
-            Y_extra = self._retro_dataset[self.targets_columns_names]
-
-            if not (all(X_extra.index == self.X.index) and all(Y_extra.index == self.Y.index)):
-                raise Exception(f"Wrong indexes for extra and retro data")
-            self.X = X_extra
-            self.Y = Y_extra
-        #Нужен столбец с индексами для polars
-        self.index_train, self.index_test = TrainTestIndexes(
-            X=self.X,
-            separation_config=self.data_config.separation,
-        ).train_test_indexes()
-        self._data_preprocessor = DataPreprocessor(prepare_dataset_interface_dict=self._prepare_datasets,
-                                                   dataset=self.dataset,
-                                                   train_ind=self.index_train,
-                                                   test_ind=self.index_test,
-                                                   external_config=self._external_config,
-                                                   version=self.version,
-                                                   use_saved_files=self._use_temp_files,
-                                                   extra_columns=self.data_config.extra_columns,
-                                                   retro=self._retro
-                                                   )
-        self.__train_test_indexes = True
-        logger.debug('Separation finished')
-
-    def _make_test_train(self):
-
-        if not self.__train_test_indexes:
-            self._separateTestTrain(retro_changes=self._retro_changes)
-        self.__test_train = True
 
     def __get_fitted_models(self, models: dict, fitted: bool = False) -> dict:
         if not fitted:
@@ -627,5 +552,22 @@ class DataSetsManager:
         if self._retro_changes is not None:
             self.__init_retro()
         self.__load_prepare_datasets()
+
+        if self._extractor is not None:
+            logger.info("Reading user extractor")
+            if self._extractor.load_config_from_env:
+                logger.info("Reading config from env")
+                self._extractor.load_config(connection_config=config)
+
+
+        else:
+            self._extractor = BaseExtractor(data_config=self.data_config)
         logger.debug('Initializing completed')
-        self._data_preprocessor = DataPreprocessor(prepare_dataset_interface_dict=self._prepare_datasets)
+        self._data_preprocessor = DataPreprocessor(prepare_dataset_interface_dict=self._prepare_datasets,
+                                                   dataset=self._extractor,
+                                                   external_config=self._external_config,
+                                                   version=self.version,
+                                                   use_saved_files=self._use_temp_files,
+                                                   data_config=self.data_config,
+                                                   retro=self._retro
+                                                   )
