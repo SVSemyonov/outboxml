@@ -256,7 +256,7 @@ class DataSetsManager:
         self._models_configs: List[ModelConfig] = []
         self._retro = False
         self.business_metric_value = {}
-        self._is_initialized: bool = False
+
         self.__test_train: bool = False
         self.__train_test_indexes: bool = False
 
@@ -264,6 +264,7 @@ class DataSetsManager:
         self._retro_dataset = None
 
         self._default_name = None
+        self._init_dsmanager()
 
     @property
     def config(self):
@@ -283,9 +284,6 @@ class DataSetsManager:
         """Load data from source due to config or user-defined extractor object. Use .env file or external config for extracor
         Also you can load dataset by parameter data"""
 
-        if not self._is_initialized:
-            self._init_dsmanager()
-
         logger.debug("Dataset loading")
         if data is not None:
             self.dataset = data
@@ -301,36 +299,7 @@ class DataSetsManager:
             self.dataset = BaseExtractor(data_config=self.data_config).extract_dataset()
         logger.debug('DataSet is extracted')
 
-        self._is_initialized = True
-
         return self.dataset
-
-    def get_TrainDfs(self, model_name: str = None, save_prepared_subsets: bool = False,
-                     load_subsets_from_pickle: bool = False):
-        """Returns dataset for training user-defined models.
-        Use save_prepared_subsets parameter for saving in enviroment
-        For exposure or extra_columns data use ds_manager.data_subsets[model_name]"""
-
-        if not self.__test_train:
-            self._make_test_train()
-        if model_name is None:
-            model_name = self._default_name
-        data_subset = self.get_subset(model_name)
-
-        logger.debug('Model ' + model_name + ' || Train subset export')
-        return data_subset.X_train, data_subset.y_train.copy()
-
-    def get_TestDfs(self, model_name: str = None, save_prepared_subsets: bool = False,
-                    load_subsets_from_pickle: bool = False):
-        """Returns dataset for training user-defined models
-        Use save_prepared_subsets parameter for saving in enviroment
-        For exposure or extra_columns data use ds_manager.data_subsets[model_name]"""
-        if not self.__test_train:
-            self._make_test_train()
-        if model_name is None: model_name = self._default_name
-        logger.debug('Model ' + model_name + ' || Test subset export')
-        data_subset = self.get_subset(model_name)
-        return data_subset.X_test, data_subset.y_test.copy()
 
     def get_subset(self, model_name):
         if not self.__test_train:
@@ -507,7 +476,7 @@ class DataSetsManager:
                 raise Exception(f"Wrong indexes for extra and retro data")
             self.X = X_extra
             self.Y = Y_extra
-
+        #Нужен столбец с индексами для polars
         self.index_train, self.index_test = TrainTestIndexes(
             X=self.X,
             separation_config=self.data_config.separation,
@@ -659,3 +628,4 @@ class DataSetsManager:
             self.__init_retro()
         self.__load_prepare_datasets()
         logger.debug('Initializing completed')
+        self._data_preprocessor = DataPreprocessor(prepare_dataset_interface_dict=self._prepare_datasets)

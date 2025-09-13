@@ -93,8 +93,8 @@ class ModelDataSubset:
 class DataPreprocessor:
     def __init__(self,
                  prepare_dataset_interface_dict: Dict[str, PrepareDataset],
-                 dataset: Union[pd.DataFrame, Extractor],
-                 train_ind: pd.Index,
+                 dataset: Union[pd.DataFrame, Extractor]=None,
+                 train_ind: pd.Index=None,
                  version: str = '1',
                  extra_columns: list = None,
                  test_ind: pd.Index = None,
@@ -114,8 +114,11 @@ class DataPreprocessor:
             self.config = config
         self._prepared_subsets = {}
         self.model_names = list(self._prepare_datasets.keys())
-        self._pickle_subset = PickleModelSubset(config=self.config, version=self._version)
-        self._parquet_dataset = ParquetDataset(config=self.config, parquet_name='temp_dataset_v' + self._version
+        self._pickle_subset = PickleModelSubset(config=self.config,
+                                                version=self._version,
+                                                prepare_datasets=self._prepare_datasets)
+        self._parquet_dataset = ParquetDataset(config=self.config,
+                                               parquet_name='temp_dataset_v' + self._version
                                                                                       )
         self.temp_subset: Optional[ModelDataSubset] = None
         self._data_columns = []
@@ -280,7 +283,8 @@ class DataPreprocessor:
 
 
 class PickleModelSubset:
-    def __init__(self, config, version):
+    def __init__(self, config, version, prepare_datasets):
+        self.prepare_datasets = prepare_datasets
         self.results_path = config.results_path
         self.version = version
 
@@ -301,13 +305,15 @@ class PickleModelSubset:
 
     def save_subset_to_pickle(self, model_name, subset: ModelDataSubset,  rewrite: bool=False):
         file_path = os.path.join(self.results_path, model_name + '_v'+ self.version + '_subset.pickle')
-
+        file_path_prepare_dataset = os.path.join(self.results_path, model_name + '_v'+ self.version + '_prepare_interface.pickle')
         if os.path.exists(file_path) and not rewrite:
             logger.warning(f'{model_name}||File {file_path} already exists.')
         else:
             logger.info(model_name + '||Saving subset to pickle')
             with open(file_path, "wb") as f:
                 pickle.dump(subset, f)
+            with open(file_path_prepare_dataset, "wb") as f:
+                pickle.dump(self.prepare_datasets[model_name], f)
 
 
 class ParquetDataset:
@@ -315,9 +321,10 @@ class ParquetDataset:
         self._parquet_name = parquet_name
         self.results_path = config.results_path
 
-    def save_parquet(self, data: pd.DataFrame):
+    def save_parquet(self, data: pd.DataFrame, rewrite: bool=True):
         file_path = os.path.join(self.results_path, self._parquet_name + '.parquet')
-
+        if os.path.exists(file_path) and not rewrite:
+            logger.warning(f'||File {file_path} already exists.')
         logger.info('||Saving dataset to parquet')
         data.to_parquet(file_path)
 

@@ -367,7 +367,7 @@ class AutoMLManager(DataSetsManager):
         self._save_model_json()
 
         try:
-            logger.debug('Loading metrcis to grafana')
+            logger.debug('Loading metrics to grafana')
             df = ResultExport(ds_manager=ds_manager_for_save).grafana_export(project_name=group_name,
                                                                              date_time=datetime.now())
 
@@ -599,4 +599,3 @@ class AutoMLManager(DataSetsManager):
             os.rename(log_path, log_path.parent / new_name)
 
         logger.add(Path(str(self._external_config.results_path) + '/log.log'))
-
