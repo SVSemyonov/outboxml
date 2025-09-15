@@ -301,7 +301,7 @@ class DataSetsManager:
                   ) -> dict:
         """Fitting and calculating metrics for models. If 'need_fit' option then fit methods are calling for models
         Uf load_subsets_from_pickle option then loading previously saved datasubsets in enviroment"""
-        if not self.__test_train: self._make_test_train()
+
         fitted = False
         logger.debug('Fitting model started')
         if models_dict is not None:

@@ -187,7 +187,8 @@ class DataPreprocessor:
             data_subset = PandasInterface(data=data,
                                           prepare_interface=self._prepare_datasets[model_name],
                                           separation_config=self._data_config.separation,
-                                          extra_columns=self._extra_columns).prepared_subset(prepare_func, args_dict)
+                                          extra_columns=self._extra_columns,
+                                          train_test=to_pickle).prepared_subset(prepare_func, args_dict)
 
 
         elif self._prepare_engine == 'polars':
@@ -196,7 +197,7 @@ class DataPreprocessor:
                                           separation_config=self._data_config.separation,
                                           extra_columns=self._extra_columns).prepared_subset(prepare_func, args_dict)
 
-        logger.debug('Model ' + model_name + ' || Data preparation finished')
+
         if to_pickle:
             self._pickle_subset.save_subset_to_pickle(model_name, data_subset, True)
             self._prepared_subsets[model_name] = True
@@ -278,8 +279,11 @@ class PickleModelSubset:
             logger.info(model_name + '||Saving subset to pickle')
             with open(file_path, "wb") as f:
                 pickle.dump(subset, f)
-            with open(file_path_prepare_dataset, "wb") as f:
-                pickle.dump(self.prepare_datasets[model_name], f)
+            try:
+                with open(file_path_prepare_dataset, "wb") as f:
+                    pickle.dump(self.prepare_datasets[model_name], f)
+            except AttributeError:
+                logger.error('Cannot write user prepare_interface as local object')
 
 
 class ParquetDataset:
@@ -356,6 +360,7 @@ class PandasInterface(PrepareEngine):
             column_target=model_config.column_target if model_config.column_target else None,
             extra_columns=self._extra_columns_data if self._extra_columns_data is not None else None)
         logger.debug('Model ' + model_name + ' || Data preparation finished')
+        return data_subset
 
 
     def _filter_data_by_exposure(self, model_name: str, dataset: pd.DataFrame):
@@ -381,6 +386,7 @@ class PandasInterface(PrepareEngine):
             y = pd.DataFrame(y)
         return X, y, target
 
+
 class PolarsInterface(PrepareEngine):
     def __init__(self,
                  data: pd.DataFrame,
@@ -397,3 +403,4 @@ class PolarsInterface(PrepareEngine):
     def prepared_subset(self,  prepare_func: Callable = None,
                         args_dict: dict = None):
         pass
+
