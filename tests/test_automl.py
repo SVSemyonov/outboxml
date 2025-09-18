@@ -193,7 +193,7 @@ class AutoMLTest(TestCase):
                                 compare_business_metric=BaseCompareBusinessMetric(calculate_threshold=True),
                                 save_temp=False,
                                 hp_tune=True,
-                                retro=False
+                                retro=True
                                 )
         auto_ml.update_models(send_mail=False, parameters_for_optuna={'first': parameters_for_optuna,
                                                                       'second': parameters_for_optuna}

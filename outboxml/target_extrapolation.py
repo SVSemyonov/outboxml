@@ -35,7 +35,7 @@ class TargetModel(BaseWrapperModel):
        # logger.info(f'Training MAE: {mean_absolute_error(y_train, y_train_pred)}')
         return DSManagerResult(model_name=model_name,
                                model=self.model,
-                               datasubset=ModelDataSubset(model_name=model_name,
+                               data_subset=ModelDataSubset(model_name=model_name,
                                                           X_train=X_train,
                                                           y_train=y_train,
                                                           y_test=y_train_pred,
