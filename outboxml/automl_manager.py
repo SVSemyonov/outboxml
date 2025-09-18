@@ -497,9 +497,7 @@ class AutoMLManager(DataSetsManager):
                     model_name = model_result['model_config']['name']
                     result_to_compare[model_name] = self.model_predict(data=self.dataset,
                                                                        model_name=model_name,
-                                                                       model_result=model_result,
-                                                                       train_ind=self.index_train,
-                                                                       test_ind=self.index_test)
+                                                                       model_result=model_result)
         except Exception as exc:
             logger.error(exc)
             logger.info('Cannot get results for last model||' + str(exc))

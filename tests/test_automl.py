@@ -103,7 +103,7 @@ class HPTune(TestCase):
     def setUp(self):
         self.ds_manager = DataSetsManager(config_name=str(config_name)
                                           )
-        self.ds_manager.get_TrainDfs()
+        self.ds_manager.get_subset(model_name='first')
 
     def test_hp_tune_catboost(self):
         self.ds_manager._prepare_datasets['first']._model_config.objective = 'poisson'
@@ -151,7 +151,7 @@ class AutoMLTest(TestCase):
         self.ds_manager1.fit_models()
         self.ds_manager2 = DataSetsManager(config_name=str(config_name)
                                            )
-        self.ds_manager2._separateTestTrain()
+
         self.ds_manager2._results = deepcopy(self.ds_manager1.get_result())
 
         for key in self.ds_manager2._results:

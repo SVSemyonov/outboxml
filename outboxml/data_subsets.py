@@ -123,7 +123,8 @@ class DataPreprocessor:
         self.temp_subset: Optional[ModelDataSubset] = None
         self._data_columns = []
         self._retro = retro
-
+        self.index_train = pd.Index([])
+        self.index_test = pd.Index([])
     @property
     def dataset(self):
         if isinstance(self._dataset, pd.DataFrame):
@@ -184,20 +185,22 @@ class DataPreprocessor:
             data = self.dataset
         logger.debug('Model ' + model_name + ' || Data preparation started')
         if self._prepare_engine == 'pandas':
-            data_subset = PandasInterface(data=data,
+            prepare_engine = PandasInterface(data=data,
                                           prepare_interface=self._prepare_datasets[model_name],
                                           separation_config=self._data_config.separation,
                                           extra_columns=self._extra_columns,
-                                          train_test=to_pickle).prepared_subset(prepare_func, args_dict)
-
+                                          )
+            data_subset = prepare_engine.prepared_subset(prepare_func, args_dict)
 
         elif self._prepare_engine == 'polars':
-            data_subset = PolarsInterface(data=self.dataset, #передаем эксраткор или пуьб к паркету для lasy
+            prepare_engine =PolarsInterface(data=self.dataset, #передаем эксраткор или пуьб к паркету для lasy
                                           prepare_interface=self._prepare_datasets[model_name],
                                           separation_config=self._data_config.separation,
-                                          extra_columns=self._extra_columns).prepared_subset(prepare_func, args_dict)
-
-
+                                          extra_columns=self._extra_columns)
+            data_subset = prepare_engine.prepared_subset(prepare_func, args_dict)
+        else:
+            raise f'Unknow engine for data preparation'
+        self.index_train, self.index_test = prepare_engine.get_train_test_indexes()
         if to_pickle:
             self._pickle_subset.save_subset_to_pickle(model_name, data_subset, True)
             self._prepared_subsets[model_name] = True
@@ -257,9 +260,12 @@ class PickleModelSubset:
     def load_subsets_from_pickle(self, model_name: str, version: str = '1') -> ModelDataSubset:
         logger.info(model_name + '||Loading subset from pickle')
         file_path = os.path.join(self.results_path, model_name + '_v' + self.version + '_subset.pickle')
+        file_path_prepare_dataset_model_config = os.path.join(self.results_path,
+                                                              model_name + '_v' + self.version + '_prepare_model_config.pickle')
         with open(file_path, "rb") as f:
             subset = pickle.load(f)
-
+        with open(file_path_prepare_dataset_model_config, "rb") as f:
+            self.prepare_datasets[model_name]._model_config = pd.read_pickle(f)
         # avoiding cannot set WRITEABLE flag to True of this array error
         subset.X_train = subset.X_train.copy() if subset.X_train is not None else None
         subset.X_test = subset.X_test.copy() if subset.X_test is not None else None
@@ -271,19 +277,18 @@ class PickleModelSubset:
 
     def save_subset_to_pickle(self, model_name, subset: ModelDataSubset, rewrite: bool = False):
         file_path = os.path.join(self.results_path, model_name + '_v' + self.version + '_subset.pickle')
-        file_path_prepare_dataset = os.path.join(self.results_path,
-                                                 model_name + '_v' + self.version + '_prepare_interface.pickle')
+        file_path_prepare_dataset_model_config = os.path.join(self.results_path,
+                                                 model_name + '_v' + self.version + '_prepare_model_config.pickle')
         if os.path.exists(file_path) and not rewrite:
             logger.warning(f'{model_name}||File {file_path} already exists.')
         else:
             logger.info(model_name + '||Saving subset to pickle')
             with open(file_path, "wb") as f:
                 pickle.dump(subset, f)
-            try:
-                with open(file_path_prepare_dataset, "wb") as f:
-                    pickle.dump(self.prepare_datasets[model_name], f)
-            except AttributeError:
-                logger.error('Cannot write user prepare_interface as local object')
+
+            with open(file_path_prepare_dataset_model_config, "wb") as f:
+                pickle.dump(self.prepare_datasets[model_name].get_model_config(), f)
+
 
 
 class ParquetDataset:
@@ -306,31 +311,36 @@ class ParquetDataset:
 
 
 class PrepareEngine(ABC):
+    def __init__(self, dataset,
+                        separation_config: SeparationModelConfig):
+        self.separation_config = separation_config
+        self.dataset = dataset
 
     @abstractmethod
     def prepared_subset(self, *params):
         pass
 
+    def get_train_test_indexes(self):
+        index_train, index_test = TrainTestIndexes(X=self.dataset,
+                                                   separation_config=self.separation_config).train_test_indexes()
+        return index_train, index_test
+
 class PandasInterface(PrepareEngine):
 
-    def __init__(self,
-                 data: pd.DataFrame,
+    def __init__(self, data: pd.DataFrame,
                  prepare_interface: PrepareDataset,
                  separation_config: SeparationModelConfig,
-                 extra_columns: list=None
-                 ):
-        self.dataset = data
+                 extra_columns: list = None):
+        super().__init__(data, separation_config)
         self._prepare_interface = prepare_interface
         self.separation_config = separation_config
         self._extra_columns = extra_columns
         self._extra_columns_data = None
 
-
     def prepared_subset(self,  prepare_func: Callable = None,
                         args_dict: dict = None):
-        index_train, index_test = TrainTestIndexes(X=self.dataset,
-                                                   separation_config=self.separation_config).train_test_indexes()
 
+        index_train, index_test = self.get_train_test_indexes()
         model_config = self._prepare_interface.get_model_config()
         model_name = model_config.name
         X, y, target = self._filter_data_by_exposure(model_name=model_name, dataset=self.dataset)
@@ -374,6 +384,7 @@ class PandasInterface(PrepareEngine):
             target = pd.Series()
             y = pd.Series()
         if model_config.column_exposure:
+            logger.info('Pandas Engine||Weighting target on exposure')
             exposure[model_name] = dataset[model_config.column_exposure]
             X = dataset.loc[exposure[model_name] > 0]
             y = y.loc[y.index.isin(X.index)]
@@ -388,19 +399,15 @@ class PandasInterface(PrepareEngine):
 
 
 class PolarsInterface(PrepareEngine):
-    def __init__(self,
-                 data: pd.DataFrame,
-                 prepare_interface: PrepareDataset,
-                 separation_config: SeparationModelConfig,
-                 extra_columns: list=None
-                 ):
-        self.dataset = data
+    def __init__(self, data: pd.DataFrame, prepare_interface: PrepareDataset, separation_config: SeparationModelConfig,
+                 extra_columns: list = None):
+        super().__init__(data, separation_config)
         self._prepare_interface = prepare_interface
         self.separation_config = separation_config
         self._extra_columns = extra_columns
         self._extra_columns_data = None
 
     def prepared_subset(self,  prepare_func: Callable = None,
-                        args_dict: dict = None):
+                        args_dict: dict = None)->ModelDataSubset:
         pass
 

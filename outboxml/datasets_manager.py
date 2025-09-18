@@ -242,7 +242,6 @@ class DataSetsManager:
         self._models_dict: Optional[Dict] = models_dict
         self._use_baseline_model = use_baseline_model
         self._business_metric: Optional[BaseMetric] = business_metric
-        self.dataset: Optional[pd.DataFrame] = None
         self._data_preprocessor: Optional[DataPreprocessor] = None
         self.X: Optional[pd.DataFrame] = None
         self.Y: Optional[pd.DataFrame] = None
@@ -262,6 +261,10 @@ class DataSetsManager:
 
         self._default_name = None
         self._init_dsmanager()
+
+    @property
+    def dataset(self):
+        return self._data_preprocessor.dataset
 
     @property
     def config(self):
@@ -284,9 +287,9 @@ class DataSetsManager:
         logger.debug("Dataset loading")
         if data is not None:
             self._extractor = SimpleExtractor(data=data)
-        self.dataset = self._extractor.extract_dataset()
+        data = self._extractor.extract_dataset()
         logger.debug('DataSet is extracted')
-        return self.dataset
+        return data
 
     def get_subset(self, model_name):
         if model_name is None: model_name = self._default_name
@@ -363,16 +366,12 @@ class DataSetsManager:
                       data: pd.DataFrame,
                       model_name: str,
                       model_result=None,
-                      train_ind: pd.Index = pd.Index([]),
-                      test_ind: pd.Index = None,
                       full_output: bool = True,
                       ) -> DSManagerResult:
         """Method for constructing DSManagerResult for external model or data.
         Use model_result as dict from service or DSManagerResult
         Use full_output option to get only prediction vector of full output"""
         logger.debug('Prediction for external data||' + model_name)
-        if test_ind is None:
-            test_ind = data.index
         if model_result is None:
             logger.info('No external model||Using inner results')
             result = self.get_result()
@@ -392,24 +391,27 @@ class DataSetsManager:
         features_numerical = model_result.data_subset.features_numerical
         features_categorical = model_result.data_subset.features_categorical
         data_to_predict = data.copy()
-        Y = data[model_config.column_target] if model_config.column_target else pd.DataFrame()
-        data_subset = DataPreprocessor(prepare_dataset_interface_dict={model_name:
+
+        preproc = DataPreprocessor(prepare_dataset_interface_dict={model_name:
                                                                            PrepareDataset(model_config=model_config,
                                                    check_prepared=False,
                                                    )},
                                        dataset=data_to_predict,
                                        data_config=self.data_config,
-                                       prepare_engine='pandas',).get_subset(model_name, from_pickle=False)
-
+                                       prepare_engine='pandas',)
+        data_subset = preproc.get_subset(model_name, from_pickle=False)
+        data
         output_model = model
         prediction = model.predict(data_subset.X[chain(features_numerical, features_categorical)])
         if isinstance(prediction, np.ndarray):
             prediction = pd.Series(prediction, index=data_subset.X.index)
+        print(prediction)
+
         metrics = ModelMetrics(model_config=model_config,
                                data_subset=data_subset,
                                data_config=None).result_dict(
-            predictions={'train': prediction[prediction.index.isin(train_ind)],
-                         'test': prediction[prediction.index.isin(test_ind)]},
+            predictions={'train': prediction[prediction.index.isin(preproc.index_train)],
+                         'test': prediction[prediction.index.isin(preproc.index_test)]},
         )
 
         res = DSManagerResult(model_name=model_name,
@@ -417,8 +419,8 @@ class DataSetsManager:
                               model=output_model,
                               data_subset=data_subset,
                               model_config=model_config,
-                              predictions={'train': prediction.loc[prediction.index.isin(train_ind)],
-                                           'test': prediction.loc[prediction.index.isin(test_ind)]},
+                              predictions={'train': prediction.loc[prediction.index.isin(preproc.index_train)],
+                                           'test': prediction.loc[prediction.index.isin(preproc.index_test)]},
                               metrics=metrics,
                               )
 
