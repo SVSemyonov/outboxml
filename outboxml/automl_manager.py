@@ -273,18 +273,12 @@ class AutoMLManager(DataSetsManager):
     def feature_selection(self):
         if self._retro:
             logger.debug('Feature selection||Started')
-            self._separateTestTrain()
-            extra_columns = None
-            if self.extra_columns is not None:
-                if isinstance(self.extra_columns, pd.Series):
-                    extra_columns = pd.DataFrame(self.extra_columns)
-                else:
-                    extra_columns = self.extra_columns
-            features_for_research = RetroFS(retro_columns=self.dataset.columns
-                                            ).features_for_reserch(data_column_names=self.X.columns,
-                                                                   target_columns_names=self.Y.columns,
+            data = self.dataset
+            features_for_research = RetroFS(retro_columns=data.columns
+                                            ).features_for_reserch(data_column_names=data.columns,
+                                                                   target_columns_names=self.targets_columns_names,
                                                                    models_config=self._models_configs,
-                                                                   extra_columns=extra_columns,
+                                                                   extra_columns=self._data_preprocessor._extra_columns,
                                                                    features_list_to_exclude=self.features_list_to_exclude,
                                                                    )
             self.automl_results.features_for_research = features_for_research

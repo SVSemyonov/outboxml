@@ -116,7 +116,7 @@ class BaseExtractor(Extractor):
                                con=config.connection_params,
                                if_exists='replace')
                 self._create_db_trigger_postgre(table_name)
-                self.__data_config.source = FilesNames.database
+
             except Exception as exc:
                 logger.error('Loading local file to db error||' + str(exc))
 

@@ -49,7 +49,7 @@ class TestTitanicDS(TestCase):
     def test_config_extractor(self):
         self.dsManager.load_dataset()
         self.assertIsNotNone(self.dsManager.dataset)
-        self.assertEqual(self.dsManager.dataset.shape, (891, 12))
+        self.assertEqual(self.dsManager.dataset.shape, (891, 7))
 
     def test_db_extractor(self):
         self.assertIsInstance(BaseExtractor(data_config=DataModelConfig(source='database',
@@ -121,8 +121,8 @@ class TestTitanicDS(TestCase):
         result = self.dsManager.get_result()
         model_res = self.dsManager.model_predict(data, model_result=result, model_name='second')
         self.assertIsInstance(model_res, DSManagerResult)
-        self.assertEqual(len(model_res.predictions['test']), 891)
-        self.assertEqual(model_res.data_subset.X_test.shape, ( 891, 4))
+        self.assertEqual(len(model_res.predictions['train']), 712)
+        self.assertEqual(model_res.data_subset.X_train.shape, (712, 4))
         self.assertEqual(len(model_res.data_subset.features_categorical), 0)
         self.assertEqual(len(model_res.data_subset.features_numerical), 4)
 

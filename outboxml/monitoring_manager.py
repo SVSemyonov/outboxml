@@ -144,11 +144,12 @@ class MonitoringManager:
         if self.logs is None:
             self.logs = self._logs_extractor.extract_dataset()
             logger.debug('Logs are loaded')
-        self._ds_manager._separateTestTrain()
+
         for model in self._ds_manager._models_configs:
             try:
                 logger.debug('Calculating datadrift|| ' + model.name)
-                X_train, _ = self._ds_manager.get_TrainDfs(model_name=model.name)
+                X_train = self._ds_manager.get_subset(model_name=model.name).X_train
+
                 X_test = prepare_dataset(group_name=self._ds_manager.group_name,
                                          data=self.logs.copy(),
                                          train_ind=self.logs.index,

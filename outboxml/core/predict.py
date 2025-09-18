@@ -7,7 +7,7 @@ from outboxml.core.prepared_datasets import PrepareDataset
 from outboxml.data_subsets import DataPreprocessor
 from outboxml.datasets_manager import DSManagerResult
 from outboxml.ensemble import EnsembleResult
-from outboxml.core.pydantic_models import ModelConfig
+from outboxml.core.pydantic_models import ModelConfig, DataModelConfig, SeparationModelConfig
 from outboxml.core.data_prepare import prepare_dataset
 
 
@@ -161,14 +161,13 @@ def one_model_predict(
 
     else:
         raise TypeError("Wrong input model_result")
-
+    data_config=DataModelConfig(separation=SeparationModelConfig(kind='none'), source='csv')
     dataset = DataPreprocessor(prepare_dataset_interface_dict={'default_predict':
                                                                        PrepareDataset(model_config=model_config,
                                                                                       check_prepared=False,
                                                                                       )},
                                    dataset=features_values,
-                                   train_ind=pd.Index([]),
-                                   test_ind=features_values.index).get_subset('default_predict', from_pickle=False).X_test
+                               data_config=data_config).get_subset('default_predict', from_pickle=False).X_train
 
     prediction = model.predict(dataset[chain(features_numerical, features_categorical)])
 

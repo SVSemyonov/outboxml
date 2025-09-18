@@ -1,5 +1,4 @@
 import pandas as pd
-import polars as pl
 from pandas.api.types import is_integer_dtype, is_float_dtype
 import numpy as np
 from typing import Tuple, List, Dict, Optional, Union
@@ -389,7 +388,7 @@ def to_str(v):
     else:
         v = v.upper()
     return v
-
+"""
 def replace_categorical_values_pl(self,
         feature_data: pl.LazyFrame,
         feature: FeatureModelConfig,
@@ -405,6 +404,7 @@ def replace_categorical_values_pl(self,
         )
     )
     return feature_data
+"""
 
 def prepare_categorical_feature_series(
         feature_data: pd.Series,

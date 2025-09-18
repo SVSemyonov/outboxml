@@ -128,7 +128,6 @@ class DataPreprocessor:
     @property
     def dataset(self):
         if isinstance(self._dataset, pd.DataFrame):
-            logger.info('Saving data to parquet')
             if not self._retro:
                 self._collect_features_list()
                 data_to_save = self._dataset[self._data_columns]
@@ -145,7 +144,6 @@ class DataPreprocessor:
             else:
                 data_to_save = data
             self._parquet_dataset.save_parquet(data_to_save)
-            logger.info('Saving data to parquet')
             return data_to_save
         #   self._dataset = None
         logger.info('Reading data from parquet')
@@ -409,5 +407,18 @@ class PolarsInterface(PrepareEngine):
 
     def prepared_subset(self,  prepare_func: Callable = None,
                         args_dict: dict = None)->ModelDataSubset:
+        """
+        data_subset = ModelDataSubset.load_subset(
+            model_name=model_name,
+            X=X,
+            Y=y,
+            index_train=index_train,
+            index_test=index_test,
+            features_numerical=prepare_dataset_result.features_numerical if model_config is not None else [],
+            features_categorical=prepare_dataset_result.features_categorical if model_config is not None else [],
+            column_exposure=model_config.column_exposure if model_config.column_exposure else None,
+            column_target=model_config.column_target if model_config.column_target else None,
+            extra_columns=self._extra_columns_data if self._extra_columns_data is not None else None)
+        """
         pass
 
