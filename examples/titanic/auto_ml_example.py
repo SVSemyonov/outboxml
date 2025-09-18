@@ -35,12 +35,12 @@ def main(auto_ml_script: Callable, config: Any, waiting_time: float):
     params = {'script': auto_ml_script, 'config': config, 'waiting_time': waiting_time}
 
     while True:
-        check_postgre_transaction(**params)
+    #    check_postgre_transaction(**params)
         MLFLowRelease(config=config).load_model_to_source_from_mlflow(group_name='example_titanic')
         time.sleep(waiting_time)
 
 if __name__ == "__main__":
-    main(auto_ml_script=titanic_example(retro=False),
+    main(auto_ml_script=titanic_example,
          config=config,
          waiting_time=2 * 60,
          )

@@ -41,9 +41,7 @@ async def main_predict(
 
     predict_tasks = []
 
-    if not group_name:
-        group_name = ResultPickle(config).get_last_group_name()
-
+    group_name = ResultPickle(config).get_last_group_name(group_name)
     group = all_groups.get(group_name)
     if not group:
         logger.info("Loading pickle || " + group_name)

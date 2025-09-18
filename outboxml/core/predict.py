@@ -161,13 +161,20 @@ def one_model_predict(
 
     else:
         raise TypeError("Wrong input model_result")
-    data_config=DataModelConfig(separation=SeparationModelConfig(kind='none'), source='csv')
-    dataset = DataPreprocessor(prepare_dataset_interface_dict={'default_predict':
-                                                                       PrepareDataset(model_config=model_config,
-                                                                                      check_prepared=False,
-                                                                                      )},
-                                   dataset=features_values,
-                               data_config=data_config).get_subset('default_predict', from_pickle=False).X_train
+    prepared_dataset = prepare_dataset(
+        group_name=group_name,
+        data=features_values,
+        train_ind=None,
+        test_ind=None,
+        model_config=model_config,
+        check_prepared=False,
+        calc_corr=False,
+        save_data=False,
+        log=log,
+        modify_dtypes=modify_dtypes,
+        raise_on_encoding_error=raise_on_encoding_error,
+    )
+    dataset = prepared_dataset.data
 
     prediction = model.predict(dataset[chain(features_numerical, features_categorical)])
 
