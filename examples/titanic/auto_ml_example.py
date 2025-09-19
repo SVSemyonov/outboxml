@@ -6,6 +6,7 @@ sys.path.append("/home")
 sys.path.append("/home/jovyan")
 
 import config
+import external_config_for_titanic_example
 from examples.titanic.titanic_basic import titanic_example
 from outboxml.automl_utils import check_postgre_transaction
 from outboxml.automl_manager import AutoMLConfig
@@ -16,10 +17,12 @@ import pandas as pd
 from outboxml.main_release import MLFLowRelease
 
 
-def add_to_db(auto_ml_config='examples/titanic/configs/automl-titanic.json'):
+def add_to_db(auto_ml_config='examples/titanic/configs/automl-titanic.json', external_config=None):
+    if external_config is None:
+        external_config = config
     with open(auto_ml_config, encoding='utf-8') as f:
         auto_ml_config = AutoMLConfig.model_validate(json.load(f))
-    engine = create_engine(config.connection_params)
+    engine = create_engine(external_config.connection_params)
     trigger = auto_ml_config.trigger
     table_name = trigger['table_name']
     ID = trigger['field']
@@ -27,20 +30,21 @@ def add_to_db(auto_ml_config='examples/titanic/configs/automl-titanic.json'):
     df = pd.read_sql(query, engine)
     max_id = df[ID].max()
     row_to_add = df.tail(1).replace({ID: max_id}, max_id + 1)
-    row_to_add.to_sql(table_name, con=config.connection_params, if_exists='append', index=False)
+    row_to_add.to_sql(table_name, con=external_config.connection_params, if_exists='append', index=False)
     print('Row successfully added')
 
 
-def main(auto_ml_script: Callable, config: Any, waiting_time: float):
+def main(auto_ml_script: Callable, config: Any, waiting_time: float, group_name: str = None):
     params = {'script': auto_ml_script, 'config': config, 'waiting_time': waiting_time}
 
     while True:
         check_postgre_transaction(**params)
-        MLFLowRelease(config=config).load_model_to_source_from_mlflow(group_name='example_titanic')
+        MLFLowRelease(config=config).load_model_to_source_from_mlflow(group_name=group_name)
         time.sleep(waiting_time)
 
 if __name__ == "__main__":
-    main(auto_ml_script=titanic_example(retro=False),
-         config=config,
+    main(auto_ml_script=titanic_example,
+         config=external_config_for_titanic_example,
          waiting_time=2 * 60,
+         group_name='example_titanic'
          )

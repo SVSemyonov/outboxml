@@ -39,9 +39,9 @@ class ResultExportSaveTest(TestCase):
 
         dsManager = DataSetsManager(config_name=str(config_name),
                                     prepared_datasets={
-                                        'survived1': PrepareDataset(group_name='survived1',
+                                        'first': PrepareDataset(group_name='survived1',
                                                                     data_post_prep_func=data_post_prep_func),
-                                        'survived2': PrepareDataset(group_name='survived2',
+                                        'second': PrepareDataset(group_name='survived2',
                                                                     )
                                     },
 

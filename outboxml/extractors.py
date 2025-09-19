@@ -39,6 +39,15 @@ class Extractor(ABC):
         pass
 
 
+class SimpleExtractor(Extractor):
+    def __init__(self, data: pd.DataFrame, *params):
+        super().__init__(*params)
+        self.data = data
+
+    def extract_dataset(self) -> pd.DataFrame:
+        return self.data
+
+
 class BaseExtractor(Extractor):
 
     def __init__(self, data_config: DataModelConfig):
@@ -107,7 +116,7 @@ class BaseExtractor(Extractor):
                                con=config.connection_params,
                                if_exists='replace')
                 self._create_db_trigger_postgre(table_name)
-                self.__data_config.source = FilesNames.database
+
             except Exception as exc:
                 logger.error('Loading local file to db error||' + str(exc))
 

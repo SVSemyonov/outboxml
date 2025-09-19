@@ -48,9 +48,7 @@ def calculate_previous_models(ds_manager: DataSetsManager,
 
             ds_result_to_compare[model_name] = ds_manager.model_predict(data=ds_manager.dataset,
                                                                         model_name=model_name,
-                                                                        model_result=model_result,
-                                                                        train_ind=ds_manager.index_train,
-                                                                        test_ind=ds_manager.index_test)
+                                                                        model_result=model_result)
     return ds_result_to_compare
 
 

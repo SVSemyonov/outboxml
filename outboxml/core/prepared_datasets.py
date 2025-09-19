@@ -10,8 +10,9 @@ import pandas as pd
 from typing import Optional, Callable
 
 from outboxml.core.enums import SeparationParams, FeatureTypesForSelection
-from outboxml.core.pydantic_models import ModelConfig, SeparationModelConfig, FeatureModelConfig
+from outboxml.core.pydantic_models import ModelConfig, SeparationModelConfig, FeatureModelConfig, DataConfig
 from outboxml.core.data_prepare import PrepareDatasetResult
+from outboxml.extractors import Extractor
 
 
 class BasePrepareDataset(ABC):
@@ -208,3 +209,11 @@ class UserSeparation(BaseSeparation):
     def train_test_indexes(self):
         pass
 
+
+
+# dataset
+# targets_columns_names
+# self.X
+# self,Y
+# self.extra_columns
+# self.index_train_

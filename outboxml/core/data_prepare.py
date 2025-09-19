@@ -388,7 +388,23 @@ def to_str(v):
     else:
         v = v.upper()
     return v
-
+"""
+def replace_categorical_values_pl(self,
+        feature_data: pl.LazyFrame,
+        feature: FeatureModelConfig,
+) -> pl.LazyFrame:
+    dict_replace_temp = dict_replace(feature=feature, dtype=FeaturesTypes.categorical)
+    feature_data = (
+        feature_data
+        .with_columns(
+            pl.when(~pl.col(feature.name).is_in(dict_replace_temp) & pl.col(feature.name).is_not_null())
+            .then(pl.lit(feature.default))
+            .otherwise(pl.col(feature.name).replace(dict_replace_temp))
+            .alias(feature.name)
+        )
+    )
+    return feature_data
+"""
 
 def prepare_categorical_feature_series(
         feature_data: pd.Series,

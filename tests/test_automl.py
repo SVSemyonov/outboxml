@@ -40,13 +40,16 @@ class TitanicMetric(BaseMetric):
     def __init__(self):
         pass
 
-    def calculate_metric(self, result1: dict, result2: dict) -> dict:
+    def calculate_metric(self, result1: dict, result2: dict=None) -> dict:
         y1 = (result1['first'].y_pred + result1['second'].y_pred) / 2
         y = result1['first'].y
         score1 = (y - y1).sum()
-        y2 = (result2['first'].y_pred + result2['second'].y_pred) / 2
-        score2 = (y - y2).sum()
-        return {'impact': score2 - score1}
+        y2 = 0
+        score2 = 0
+        if result2 is not None:
+            y2 = (result2['first'].y_pred + result2['second'].y_pred) / 2
+            score2 = (y - y2).sum()
+        return {'impact': score1-score2}
 
 
 class FeatureSelection(TestCase):
@@ -57,8 +60,6 @@ class FeatureSelection(TestCase):
         self.dsManager = DataSetsManager(config_name=str(config_name)
                                          )
         self.dsManager._retro = True
-        self.dsManager.load_dataset(self.data,)
-        self.dsManager._make_test_train()
         self.feature_for_research = ['PCLASS', 'NAME', 'TICKET', 'CABIN', 'EMBARKED']
         self._fs_config = FeatureSelectionConfig(
             metric_eval={"first": "accuracy", "second": "accuracy"},
@@ -73,18 +74,20 @@ class FeatureSelection(TestCase):
         )
 
     def test_new_features_list(self):
+        data = self.dsManager.dataset
         features_for_research = RetroFS(retro_columns=self.data.columns,
-                                        ).features_for_reserch(data_column_names=self.dsManager.X.columns,
-                                                               target_columns_names=self.dsManager.Y.columns,
+                                        ).features_for_reserch(data_column_names=self.data.columns,
+                                                               target_columns_names=['SURVIVED'],
                                                                models_config=self.dsManager._models_configs,
                                                                extra_columns=self.dsManager.extra_columns,
                                                                features_list_to_exclude=['SEX', 'SIBSP', 'AGE', 'PARCH',
-                                                                                         'FARE']
+                                                                                         'FARE', 'PASSENGERID']
                                                                )
         self.assertIsInstance(features_for_research, list)
         self.assertEqual(features_for_research, self.feature_for_research)
 
     def test_BaseFS(self):
+        self.dsManager._data_preprocessor._retro = True
         data = BaseFS( new_features_list=self.feature_for_research,
                       parameters=self._fs_config,
                         data_preprocessor=self.dsManager._data_preprocessor,
@@ -103,7 +106,7 @@ class HPTune(TestCase):
     def setUp(self):
         self.ds_manager = DataSetsManager(config_name=str(config_name)
                                           )
-        self.ds_manager.get_TrainDfs()
+        self.ds_manager.get_subset(model_name='first')
 
     def test_hp_tune_catboost(self):
         self.ds_manager._prepare_datasets['first']._model_config.objective = 'poisson'
@@ -151,7 +154,7 @@ class AutoMLTest(TestCase):
         self.ds_manager1.fit_models()
         self.ds_manager2 = DataSetsManager(config_name=str(config_name)
                                            )
-        self.ds_manager2._separateTestTrain()
+
         self.ds_manager2._results = deepcopy(self.ds_manager1.get_result())
 
         for key in self.ds_manager2._results:
@@ -173,6 +176,17 @@ class AutoMLTest(TestCase):
         self.assertAlmostEqual(value, 0.002, 2)
 
     def test_titanic_example(self):
+        def parameters_for_optuna(trial):
+            return {
+                'iterations': trial.suggest_int('iterations', 10, 12, step=1),
+                'depth': trial.suggest_int('depth', 1, 15, step=2),
+                'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1, log=True),
+                'l2_leaf_reg': trial.suggest_float("l2_leaf_reg", 1e-5, 100.0, log=True),
+                'subsample': trial.suggest_float("subsample", 0.05, 1.0),
+                'colsample_bylevel': trial.suggest_float("colsample_bylevel", 0.05, 1.0),
+                'min_data_in_leaf': trial.suggest_int("min_data_in_leaf", 1, 101, step=10),
+            }
+
         auto_ml = AutoMLManager(auto_ml_config=str(auto_ml_config),
                                 models_config=str(config_name),
                                 business_metric=TitanicMetric(),
@@ -181,7 +195,11 @@ class AutoMLTest(TestCase):
                                 hp_tune=True,
                                 retro=True
                                 )
-        self.assertEqual(auto_ml.update_models(send_mail=False), {'Loading dataset': True,
+        auto_ml.update_models(send_mail=False, parameters_for_optuna={'first': parameters_for_optuna,
+                                                                      'second': parameters_for_optuna}
+                              )
+        self.assertEqual(auto_ml.status
+                         , {'Loading dataset': True,
                                                                   'Feature selection': False,
                                                                   'HP tuning': True,
                                                                   'Fitting': True,

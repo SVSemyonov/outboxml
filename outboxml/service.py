@@ -1,6 +1,3 @@
-import sys
-sys.path.append("/home/jovyan")
-sys.path.append("/home/jovyan/work")
 
 from outboxml.main_predict import app
 import uvicorn
