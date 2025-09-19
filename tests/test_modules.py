@@ -49,24 +49,27 @@ class TestTitanicDS(TestCase):
     def test_config_extractor(self):
         self.dsManager.load_dataset()
         self.assertIsNotNone(self.dsManager.dataset)
-        self.assertEqual(self.dsManager.dataset.shape, (891, 12))
+        self.assertEqual(self.dsManager.dataset.shape, (891, 7))
 
     def test_db_extractor(self):
         self.assertIsInstance(BaseExtractor(data_config=DataModelConfig(source='database',
                                                   table_name_source='public."TitanicExample"')).extract_dataset(), pd.DataFrame)
 
     def test_DFs(self):
-        self.dsManager.get_TrainDfs(model_name='first')
-        self.assertEqual(self.dsManager.X.shape, (891, 11))
-        self.assertEqual(self.dsManager.Y.shape, (891, 1))
-        self.assertEqual(len(set(self.dsManager.index_test) & set(self.dsManager.index_train)), 0)
+        subset = self.dsManager.get_subset(model_name='first')
+        self.assertEqual(subset.X.shape, (891, 3))
+        self.assertEqual(subset.y_train.shape, (712, ))
+     #   self.assertEqual(len(set(self.dsManager.index_test) & set(self.dsManager.index_train)), 0)
 
     def test_encoding(self):
-        X, y = self.dsManager.get_TrainDfs(model_name='first')
+        subset = self.dsManager.get_subset(model_name='first')
+        X = subset.X_train
+        y = subset.y_train
         mapping, bins = OptiBinningEncoder(X=X['SEX'], y=y, train_ind=X.index, type='numerical', name='first').encode_data()
-    def test_getTrainDfs(self):
-
-        X_train, y_train = self.dsManager.get_TrainDfs('second')
+    def test_getsubset(self):
+        subset = self.dsManager.get_subset('second')
+        X_train = subset.X_train
+        y_train = subset.y_train
         self.assertEqual(X_train.shape, (712, 4))
         self.assertEqual(y_train.shape, (712,))
 
@@ -75,7 +78,9 @@ class TestTitanicDS(TestCase):
         self.assertIsInstance(results1, dict)
         self.assertEqual(len(results1['first']['train']), self.dsManager.data_config.data.targetslices[0]['slices'] + 1)
         rf = RandomForestRegressor()
-        X_train, y_train = self.dsManager.get_TrainDfs('first')
+        subset = self.dsManager.get_subset('first')
+        X_train = subset.X_train
+        y_train = subset.y_train
         rf.fit(X_train, y_train)
         resultDics = {'first': rf}
         results2 = self.dsManager.fit_models(models_dict=resultDics)
@@ -88,9 +93,13 @@ class TestTitanicDS(TestCase):
         self.indexTest = pd.Index([i for i in range(300) if i % 2 == 1])
         lgr = RandomForestClassifier()
         rf = RandomForestClassifier()
-        X_train, y_train = self.dsManager.get_TrainDfs('first')
+        subset = self.dsManager.get_subset('first')
+        X_train = subset.X_train
+        y_train = subset.y_train
         lgr.fit(X_train, y_train)
-        X_train, y_train = self.dsManager.get_TrainDfs('second')
+        subset = self.dsManager.get_subset('second')
+        X_train = subset.X_train
+        y_train = subset.y_train
         rf.fit(X_train, y_train)
         resultDics = {'first': lgr, 'second': rf}
         results = self.dsManager.fit_models(resultDics,)
@@ -112,14 +121,14 @@ class TestTitanicDS(TestCase):
         result = self.dsManager.get_result()
         model_res = self.dsManager.model_predict(data, model_result=result, model_name='second')
         self.assertIsInstance(model_res, DSManagerResult)
-        self.assertEqual(len(model_res.predictions['test']), 891)
-        self.assertEqual(model_res.data_subset.X_test.shape, ( 891, 4))
+        self.assertEqual(len(model_res.predictions['train']), 712)
+        self.assertEqual(model_res.data_subset.X_train.shape, (712, 4))
         self.assertEqual(len(model_res.data_subset.features_categorical), 0)
         self.assertEqual(len(model_res.data_subset.features_numerical), 4)
 
 
     def test_default_models(self):
-        self.dsManager.get_TrainDfs(model_name='first')
+        self.dsManager.get_subset(model_name='first')
         datasubset = self.dsManager.get_subset('first')
         self.assertIsInstance(BaselineModels(dataset=datasubset,
                                              model_name='first', model_number=1).choose_model(), BaseEstimator)

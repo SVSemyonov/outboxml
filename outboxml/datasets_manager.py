@@ -19,7 +19,7 @@ from outboxml.dataset_retro import RetroDataset
 from outboxml.datadrift import DataDrift
 from outboxml.core.data_prepare import prepare_dataset
 from outboxml.core.pydantic_models import AllModelsConfig, DataModelConfig, ModelConfig
-from outboxml.extractors import Extractor, BaseExtractor
+from outboxml.extractors import Extractor, BaseExtractor, SimpleExtractor
 from outboxml.metrics.base_metrics import BaseMetric, BaseMetrics
 from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes
 from outboxml.metrics.processor import ModelMetrics
@@ -242,7 +242,6 @@ class DataSetsManager:
         self._models_dict: Optional[Dict] = models_dict
         self._use_baseline_model = use_baseline_model
         self._business_metric: Optional[BaseMetric] = business_metric
-        self.dataset: Optional[pd.DataFrame] = None
         self._data_preprocessor: Optional[DataPreprocessor] = None
         self.X: Optional[pd.DataFrame] = None
         self.Y: Optional[pd.DataFrame] = None
@@ -256,14 +255,16 @@ class DataSetsManager:
         self._models_configs: List[ModelConfig] = []
         self._retro = False
         self.business_metric_value = {}
-        self._is_initialized: bool = False
-        self.__test_train: bool = False
-        self.__train_test_indexes: bool = False
 
         self._retro_changes = retro_changes
         self._retro_dataset = None
 
         self._default_name = None
+        self._init_dsmanager()
+
+    @property
+    def dataset(self):
+        return self._data_preprocessor.dataset
 
     @property
     def config(self):
@@ -283,72 +284,27 @@ class DataSetsManager:
         """Load data from source due to config or user-defined extractor object. Use .env file or external config for extracor
         Also you can load dataset by parameter data"""
 
-        if not self._is_initialized:
-            self._init_dsmanager()
-
         logger.debug("Dataset loading")
         if data is not None:
-            self.dataset = data
-
-        elif self._extractor is not None:
-            logger.info("Load data from user extractor")
-            if self._extractor.load_config_from_env:
-                logger.info("Reading config from env")
-                self._extractor.load_config(connection_config=config)
-            self.dataset = self._extractor.extract_dataset()
-
-        else:
-            self.dataset = BaseExtractor(data_config=self.data_config).extract_dataset()
+            self._extractor = SimpleExtractor(data=data)
+        data = self._extractor.extract_dataset()
         logger.debug('DataSet is extracted')
-
-        self._is_initialized = True
-
-        return self.dataset
-
-    def get_TrainDfs(self, model_name: str = None, save_prepared_subsets: bool = False,
-                     load_subsets_from_pickle: bool = False):
-        """Returns dataset for training user-defined models.
-        Use save_prepared_subsets parameter for saving in enviroment
-        For exposure or extra_columns data use ds_manager.data_subsets[model_name]"""
-
-        if not self.__test_train:
-            self._make_test_train()
-        if model_name is None:
-            model_name = self._default_name
-        data_subset = self.get_subset(model_name)
-
-        logger.debug('Model ' + model_name + ' || Train subset export')
-        return data_subset.X_train, data_subset.y_train.copy()
-
-    def get_TestDfs(self, model_name: str = None, save_prepared_subsets: bool = False,
-                    load_subsets_from_pickle: bool = False):
-        """Returns dataset for training user-defined models
-        Use save_prepared_subsets parameter for saving in enviroment
-        For exposure or extra_columns data use ds_manager.data_subsets[model_name]"""
-        if not self.__test_train:
-            self._make_test_train()
-        if model_name is None: model_name = self._default_name
-        logger.debug('Model ' + model_name + ' || Test subset export')
-        data_subset = self.get_subset(model_name)
-        return data_subset.X_test, data_subset.y_test.copy()
+        return data
 
     def get_subset(self, model_name):
-        if not self.__test_train:
-            self._make_test_train()
         if model_name is None: model_name = self._default_name
         logger.debug('Model ' + model_name + ' || Subset export')
         return self._data_preprocessor.get_subset(model_name)
 
     @property
     def data_subsets(self, ):
-
         return self._data_preprocessor.data_subsets()
 
     def fit_models(self, models_dict: dict = None, need_fit: bool = False, model_name: str = None,
                   ) -> dict:
         """Fitting and calculating metrics for models. If 'need_fit' option then fit methods are calling for models
         Uf load_subsets_from_pickle option then loading previously saved datasubsets in enviroment"""
-        if not self.__test_train: self._make_test_train()
+
         fitted = False
         logger.debug('Fitting model started')
         if models_dict is not None:
@@ -401,9 +357,8 @@ class DataSetsManager:
 
     def check_datadrift(self, model_name: str) -> pd.DataFrame:
         """Method for checking datadrift between train and test. Using DataDrift library"""
-        X_train, y_train = self.get_TrainDfs(model_name)
-        X_test, y_test = self.get_TestDfs(model_name=model_name)
-        report = DataDrift().report(train_data=X_train, test_data=X_test, )
+        subset = self.get_subset(model_name)
+        report = DataDrift().report(train_data=subset.X_train, test_data=subset.X_test, )
 
         return report
 
@@ -411,16 +366,12 @@ class DataSetsManager:
                       data: pd.DataFrame,
                       model_name: str,
                       model_result=None,
-                      train_ind: pd.Index = pd.Index([]),
-                      test_ind: pd.Index = None,
                       full_output: bool = True,
                       ) -> DSManagerResult:
         """Method for constructing DSManagerResult for external model or data.
         Use model_result as dict from service or DSManagerResult
         Use full_output option to get only prediction vector of full output"""
         logger.debug('Prediction for external data||' + model_name)
-        if test_ind is None:
-            test_ind = data.index
         if model_result is None:
             logger.info('No external model||Using inner results')
             result = self.get_result()
@@ -440,24 +391,27 @@ class DataSetsManager:
         features_numerical = model_result.data_subset.features_numerical
         features_categorical = model_result.data_subset.features_categorical
         data_to_predict = data.copy()
-        Y = data[model_config.column_target] if model_config.column_target else pd.DataFrame()
-        data_subset = DataPreprocessor(prepare_dataset_interface_dict={model_name:
+
+        preproc = DataPreprocessor(prepare_dataset_interface_dict={model_name:
                                                                            PrepareDataset(model_config=model_config,
                                                    check_prepared=False,
                                                    )},
                                        dataset=data_to_predict,
-                                       train_ind=train_ind,
-                                       test_ind=test_ind).get_subset(model_name, from_pickle=False)
-
+                                       data_config=self.data_config,
+                                       prepare_engine='pandas',)
+        data_subset = preproc.get_subset(model_name, from_pickle=False)
+        data
         output_model = model
         prediction = model.predict(data_subset.X[chain(features_numerical, features_categorical)])
         if isinstance(prediction, np.ndarray):
             prediction = pd.Series(prediction, index=data_subset.X.index)
+        print(prediction)
+
         metrics = ModelMetrics(model_config=model_config,
                                data_subset=data_subset,
                                data_config=None).result_dict(
-            predictions={'train': prediction[prediction.index.isin(train_ind)],
-                         'test': prediction[prediction.index.isin(test_ind)]},
+            predictions={'train': prediction[prediction.index.isin(preproc.index_train)],
+                         'test': prediction[prediction.index.isin(preproc.index_test)]},
         )
 
         res = DSManagerResult(model_name=model_name,
@@ -465,71 +419,13 @@ class DataSetsManager:
                               model=output_model,
                               data_subset=data_subset,
                               model_config=model_config,
-                              predictions={'train': prediction.loc[prediction.index.isin(train_ind)],
-                                           'test': prediction.loc[prediction.index.isin(test_ind)]},
+                              predictions={'train': prediction.loc[prediction.index.isin(preproc.index_train)],
+                                           'test': prediction.loc[prediction.index.isin(preproc.index_test)]},
                               metrics=metrics,
                               )
 
         logger.debug('Prediction for external data finished')
         return res
-
-    def _separateTestTrain(self, retro_changes: RetroDataset = None):
-
-        if self.dataset is None:
-            self.load_dataset()
-        logger.debug("Separation started")
-        if not self.targets_columns_names:
-            logger.info('No target for clustering||Adding temp field')
-            self.targets_columns_names = ['TEMP_TARGET']
-            self.dataset['TEMP_TARGET'] = 1
-        try:
-            self.Y = self.dataset[self.targets_columns_names]
-
-        except KeyError as e:
-            logger.error("No target columns in dataset")
-            raise KeyError(f"No target columns in dataset: {e}")
-
-        self.X = self.dataset.drop(columns=self.targets_columns_names)
-
-        logger.info(f"X shape: {str(self.X.shape)}, Y shape: {str(self.Y.shape)}")
-        logger.info(f"Y: {self.Y.columns.values}")
-
-        if self.data_config.extra_columns:
-            self.extra_columns = self.dataset[self.data_config.extra_columns]
-            logger.info(f"Extra columns: {str(self.extra_columns.columns.values)}")
-
-        if retro_changes:
-            logger.debug("Retro changes")
-            X_extra = self._retro_dataset
-            Y_extra = self._retro_dataset[self.targets_columns_names]
-
-            if not (all(X_extra.index == self.X.index) and all(Y_extra.index == self.Y.index)):
-                raise Exception(f"Wrong indexes for extra and retro data")
-            self.X = X_extra
-            self.Y = Y_extra
-
-        self.index_train, self.index_test = TrainTestIndexes(
-            X=self.X,
-            separation_config=self.data_config.separation,
-        ).train_test_indexes()
-        self._data_preprocessor = DataPreprocessor(prepare_dataset_interface_dict=self._prepare_datasets,
-                                                   dataset=self.dataset,
-                                                   train_ind=self.index_train,
-                                                   test_ind=self.index_test,
-                                                   external_config=self._external_config,
-                                                   version=self.version,
-                                                   use_saved_files=self._use_temp_files,
-                                                   extra_columns=self.data_config.extra_columns,
-                                                   retro=self._retro
-                                                   )
-        self.__train_test_indexes = True
-        logger.debug('Separation finished')
-
-    def _make_test_train(self):
-
-        if not self.__train_test_indexes:
-            self._separateTestTrain(retro_changes=self._retro_changes)
-        self.__test_train = True
 
     def __get_fitted_models(self, models: dict, fitted: bool = False) -> dict:
         if not fitted:
@@ -668,4 +564,22 @@ class DataSetsManager:
         if self._retro_changes is not None:
             self.__init_retro()
         self.__load_prepare_datasets()
+
+        if self._extractor is not None:
+            logger.info("Reading user extractor")
+            if self._extractor.load_config_from_env:
+                logger.info("Reading config from env")
+                self._extractor.load_config(connection_config=config)
+
+
+        else:
+            self._extractor = BaseExtractor(data_config=self.data_config)
         logger.debug('Initializing completed')
+        self._data_preprocessor = DataPreprocessor(prepare_dataset_interface_dict=self._prepare_datasets,
+                                                   dataset=self._extractor,
+                                                   external_config=self._external_config,
+                                                   version=self.version,
+                                                   use_saved_files=self._use_temp_files,
+                                                   data_config=self.data_config,
+                                                   retro=self._retro
+                                                   )

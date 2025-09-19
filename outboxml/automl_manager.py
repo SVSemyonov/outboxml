@@ -273,18 +273,12 @@ class AutoMLManager(DataSetsManager):
     def feature_selection(self):
         if self._retro:
             logger.debug('Feature selection||Started')
-            self._separateTestTrain()
-            extra_columns = None
-            if self.extra_columns is not None:
-                if isinstance(self.extra_columns, pd.Series):
-                    extra_columns = pd.DataFrame(self.extra_columns)
-                else:
-                    extra_columns = self.extra_columns
-            features_for_research = RetroFS(retro_columns=self.dataset.columns
-                                            ).features_for_reserch(data_column_names=self.X.columns,
-                                                                   target_columns_names=self.Y.columns,
+            data = self.dataset
+            features_for_research = RetroFS(retro_columns=data.columns
+                                            ).features_for_reserch(data_column_names=data.columns,
+                                                                   target_columns_names=self.targets_columns_names,
                                                                    models_config=self._models_configs,
-                                                                   extra_columns=extra_columns,
+                                                                   extra_columns=self._data_preprocessor._extra_columns,
                                                                    features_list_to_exclude=self.features_list_to_exclude,
                                                                    )
             self.automl_results.features_for_research = features_for_research
@@ -367,7 +361,7 @@ class AutoMLManager(DataSetsManager):
         self._save_model_json()
 
         try:
-            logger.debug('Loading metrcis to grafana')
+            logger.debug('Loading metrics to grafana')
             df = ResultExport(ds_manager=ds_manager_for_save).grafana_export(project_name=group_name,
                                                                              date_time=datetime.now())
 
@@ -497,9 +491,7 @@ class AutoMLManager(DataSetsManager):
                     model_name = model_result['model_config']['name']
                     result_to_compare[model_name] = self.model_predict(data=self.dataset,
                                                                        model_name=model_name,
-                                                                       model_result=model_result,
-                                                                       train_ind=self.index_train,
-                                                                       test_ind=self.index_test)
+                                                                       model_result=model_result)
         except Exception as exc:
             logger.error(exc)
             logger.info('Cannot get results for last model||' + str(exc))
@@ -599,4 +591,3 @@ class AutoMLManager(DataSetsManager):
             os.rename(log_path, log_path.parent / new_name)
 
         logger.add(Path(str(self._external_config.results_path) + '/log.log'))
-
