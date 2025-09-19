@@ -9,7 +9,7 @@ results_path = base_path / "results"
 
 prod_models_folder =  "prod_models_from_mlflow"
 prod_models_path = base_path / prod_models_folder
-prod_path = base_path/ prod_models_folder
+prod_path = base_path 
 
 
 mlflow_tracking_uri =  "http://mlflow:5000"
