@@ -536,7 +536,7 @@ class CompareModelsPlot:
 
 
         elif cohort_base == 'fact':
-            y = self.__compare_cohort_model_base(df1=df1, df2=df2, samples=samples, cut_min_value=cut_min_value,
+            y = self.__compare_cohort_fact_base(df1=df1, df2=df2, samples=samples, cut_min_value=cut_min_value,
                                                  cut_max_value=cut_max_value)
             names = ['model1', 'fact', 'model2', 'exposure']
 

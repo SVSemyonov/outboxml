@@ -212,10 +212,12 @@ class DataPreprocessor:
             if self._use_saved_files:
                 logger.info(f'File {file_path} already exists.')
                 self._prepared_subsets[model_name] = True
+                return True
+            elif model_name in self._prepared_subsets.keys():
+                return self._prepared_subsets[model_name]
             else:
                 self._prepared_subsets[model_name] = False
-        if model_name in self._prepared_subsets.keys():
-            return self._prepared_subsets[model_name]
+
         else:
             return False
 
