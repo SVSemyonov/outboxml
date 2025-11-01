@@ -386,7 +386,8 @@ class DataSetsManager:
                     model_result = DSManagerResult.from_pickle_model_result(model_result=model_result,
                                                                             all_model_config=self._all_models_config)
 
-        model_config = model_result.model_config
+        model_config = deepcopy(model_result.model_config)
+        model_config.column_exposure = None
         model = model_result.model
         features_numerical = model_result.data_subset.features_numerical
         features_categorical = model_result.data_subset.features_categorical
@@ -400,7 +401,6 @@ class DataSetsManager:
                                        data_config=self.data_config,
                                        prepare_engine='pandas',)
         data_subset = preproc.get_subset(model_name, from_pickle=False)
-        data
         output_model = model
         prediction = model.predict(data_subset.X[chain(features_numerical, features_categorical)])
         if isinstance(prediction, np.ndarray):

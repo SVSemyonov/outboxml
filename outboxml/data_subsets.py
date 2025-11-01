@@ -300,8 +300,10 @@ class ParquetDataset:
         file_path = os.path.join(self.results_path, self._parquet_name + '.parquet')
         if os.path.exists(file_path) and not rewrite:
             logger.warning(f'||File {file_path} already exists.')
-        logger.info('||Saving dataset to parquet')
-        data.to_parquet(file_path)
+
+        else:
+            logger.info('||Saving dataset to parquet')
+            data.to_parquet(file_path)
 
     def read_parquet(self) -> pd.DataFrame:
         file_path = os.path.join(self.results_path, self._parquet_name + '.parquet')
