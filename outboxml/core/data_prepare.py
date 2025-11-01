@@ -1,5 +1,6 @@
 import pandas as pd
 from pandas.api.types import is_integer_dtype, is_float_dtype
+import polars as pl
 import numpy as np
 from typing import Tuple, List, Dict, Optional, Union
 from typing_extensions import Literal
@@ -388,23 +389,7 @@ def to_str(v):
     else:
         v = v.upper()
     return v
-"""
-def replace_categorical_values_pl(self,
-        feature_data: pl.LazyFrame,
-        feature: FeatureModelConfig,
-) -> pl.LazyFrame:
-    dict_replace_temp = dict_replace(feature=feature, dtype=FeaturesTypes.categorical)
-    feature_data = (
-        feature_data
-        .with_columns(
-            pl.when(~pl.col(feature.name).is_in(dict_replace_temp) & pl.col(feature.name).is_not_null())
-            .then(pl.lit(feature.default))
-            .otherwise(pl.col(feature.name).replace(dict_replace_temp))
-            .alias(feature.name)
-        )
-    )
-    return feature_data
-"""
+
 
 def prepare_categorical_feature_series(
         feature_data: pd.Series,
@@ -434,6 +419,41 @@ def prepare_categorical_feature_series(
             feature_data.fillna(feature.fillna, inplace=True)
         else:
             feature_data.fillna(feature.default, inplace=True)
+
+    return feature_data
+
+
+def prepare_categorical_feature_pl(
+        feature_data: pl.LazyFrame,
+        feature: FeatureModelConfig,
+        data_dtypes: Dict[str, pl.DataType],
+) -> pl.LazyFrame:
+
+    dict_replace_temp = dict_replace(feature=feature, dtype=FeaturesTypes.categorical)
+    fill_null_value = feature.fillna if feature.fillna else feature.default
+
+    feature_data = (
+        feature_data
+        .with_columns(
+            pl.when(
+                ~pl.col(feature.name).is_in(dict_replace_temp)
+                & pl.col(feature.name).is_not_null()
+                & pl.col(feature.name).is_not_nan()
+            )
+            .then(pl.lit(feature.default))
+            .when(
+                (pl.col(feature.name).is_null())
+                | (pl.col(feature.name).is_nan())
+            )
+            .then(pl.lit(fill_null_value))
+            .when(
+                data_dtypes[feature.name] in pl_numeric_dtypes
+            )
+            .then(pl.col(feature.name).cast(pl.String).replace(dict_replace_temp))
+            .otherwise(pl.col(feature.name).str.to_uppercase().replace(dict_replace_temp))
+            .alias(feature.name)
+        )
+    )
 
     return feature_data
 

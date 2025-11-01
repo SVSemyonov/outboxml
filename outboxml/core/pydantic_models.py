@@ -85,6 +85,24 @@ class FeatureModelConfig(BaseModel):
 
         return self
 
+    @model_validator(mode="after")
+    def check_default(self):
+        # Numerical
+        if self.replace.get(FeatureEngineering.feature_type) == FeatureEngineering.numerical:
+            if not isinstance(self.default, (float, int)):
+                raise ConfigError(f"{self.name}: invalid default value for numerical feature")
+            if not (isinstance(self.fillna, (float, int)) | self.fillna is None):
+                raise ConfigError(f"{self.name}: invalid fillna value for numerical feature")
+
+        # Categorical
+        else:
+            if not isinstance(self.default, (str, int)):
+                raise ConfigError(f"{self.name}: invalid default value for categorical feature")
+            if not (isinstance(self.fillna, (str, int)) | self.fillna is None):
+                raise ConfigError(f"{self.name}: invalid fillna value for categorical feature")
+
+        return self
+
 
 class IntersectionModelConfig(BaseModel):
     name: str
