@@ -23,6 +23,22 @@ from outboxml.core.errors import ConfigError
 from outboxml.core.enums import EncodingNames
 
 
+pl_numeric_dtypes = [
+    pl.dtypes.Decimal,
+    pl.dtypes.Float32,
+    pl.dtypes.Float64,
+    pl.dtypes.Int8,
+    pl.dtypes.Int16,
+    pl.dtypes.Int32,
+    pl.dtypes.Int64,
+    pl.dtypes.Int128,
+    pl.dtypes.UInt8,
+    pl.dtypes.UInt16,
+    pl.dtypes.UInt32,
+    pl.dtypes.UInt64,
+]
+
+
 class OptiBinningEncoder:
     def __init__(self,
                  X: pd.Series,
@@ -104,12 +120,11 @@ class PrepareDatasetResult:
         self.encoding_map = encoding_map
 
 
-def map_num(v: Union[int, float], bins: List[float], mapping: Dict[pd.IntervalIndex, str]) -> Optional[str]:
-    for i, j in zip(bins[:-1], bins[1:]):
-        if (i < v) and (v <= j):
-            for k, m in mapping.items():
-                if k.left == i:
-                    return m
+def map_num(v: Union[int, float], mapping: Dict[pd.IntervalIndex, str]) -> Optional[str]:
+    for k, m in mapping.items():
+        if (k.left < v) and (v <= k.right):
+            return m
+    logger.warning(f"Value {v} is not in mapping.")
     return None
 
 
