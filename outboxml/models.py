@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 import patsy
 from catboost import CatBoostClassifier, CatBoostRegressor, Pool
+from xgboost import XGBRegressor, XGBClassifier
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.ensemble import RandomForestRegressor
 import statsmodels.api as sm
@@ -342,6 +343,9 @@ class ModelsWrapper(BaseWrapperModel):
         elif wrapper == ModelsParams.catboost:
             model = CatboostModel(data_subset=data_subset, model_config=model_config).fit()
             result_model = model
+        elif wrapper == ModelsParams.xgboost:
+            result_model = XgboostModel(data_subset=data_subset, model_config=model_config)
+            result_model.fit()
         # CatboostOverGlm
         if wrapper == ModelsParams.catboost_over_glm:
             result_model = CatboostOverGLMModel(data_subset=data_subset, model_config=model_config, sm_model=model)
@@ -534,6 +538,72 @@ class CatboostModel(BaseWrapperModel):
                                        features_categorical=features_categorical,
                                        )
 
+class XgboostModel(BaseWrapperModel):
+    def __init__(self, data_subset, model_config: ModelConfig):
+        self.model_name: str = data_subset.model_name
+        self.objective: Literal[ModelsParams.poisson, ModelsParams.gamma, ModelsParams.binary] = model_config.objective
+        logger.info('Model objective||' + str(self.objective))
+        self.wrapper: Literal[ModelsParams.xgboost] = model_config.wrapper
+        self.X_train: pd.DataFrame = data_subset.X_train
+        self.y_train: pd.Series = data_subset.y_train
+        self.features_numerical: Optional[List[str]] = data_subset.features_numerical
+        self.features_categorical: Optional[List[str]] = data_subset.features_categorical
+        self.exposure_train: Optional[pd.Series] = data_subset.exposure_train
+        self.params_xgb: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = model_config.params_xgb
+        self.model_xgb = None
+
+    def fit(self):
+        features = list(chain(self.features_numerical, self.features_categorical))
+        if self.wrapper == ModelsParams.xgboost and self.objective == ModelsParams.poisson:
+            xgboost_wrapper = XGBRegressor
+            xgboost_objective = "count:poisson"
+            try:
+                y_train_xgb = self.y_train / self.exposure_train
+            except:
+                logger.warning('Error with y_train/exposure||Exposure = 1 is set')
+                y_train_xgb = self.y_train
+        elif self.wrapper == ModelsParams.xgboost and self.objective == ModelsParams.gamma:
+            xgboost_wrapper = XGBRegressor
+            xgboost_objective = "reg:gamma"
+            try:
+                y_train_xgb = self.y_train / self.exposure_train
+            except:
+                logger.warning('Error with y_train/exposure||Exposure = 1 is set')
+                y_train_xgb = self.y_train
+        elif self.wrapper == ModelsParams.xgboost and self.objective == ModelsParams.binary:
+            xgboost_wrapper = XGBClassifier
+            xgboost_objective = "binary:logistic"
+            y_train_xgb = self.y_train
+        else:
+            xgboost_wrapper = XGBRegressor
+            xgboost_objective = "reg:squarederror"
+            try:
+                y_train_xgb = self.y_train / self.exposure_train
+            except:
+                logger.warning('Error with y_train/exposure||Exposure = 1 is set')
+                y_train_xgb = self.y_train
+
+        model_xgb = xgboost_wrapper(
+            objective=xgboost_objective,
+            enable_categorical=True,
+            **self.params_xgb if self.params_xgb else {},
+        )
+
+        model_xgb.fit(self.X_train[features], y_train_xgb)
+
+        self.model_xgb = model_xgb
+
+    def predict(self, X: pd.DataFrame) -> pd.Series:
+        features = list(chain(self.features_numerical, self.features_categorical))
+        if isinstance(self.model_xgb, XGBRegressor):
+            prediction = self.model_xgb.predict(X[features])
+        elif isinstance(self.model, XGBClassifier):
+            prediction = self.model.predict_proba(X[features])[:, 1]
+
+        if isinstance(prediction, np.ndarray):
+            prediction = pd.Series(prediction, index=X.index)
+
+        return prediction
 
 class StatsModelsEstimator(RegressorMixin, BaseEstimator):
     def __init__(self,
