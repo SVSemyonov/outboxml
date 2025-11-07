@@ -7,6 +7,7 @@ from sklearn.model_selection import train_test_split
 from outboxml.core.config_builders import FeatureBuilder
 from outboxml.core.data_prepare import prepare_dataset
 import pandas as pd
+import polars as pl
 from typing import Optional, Callable
 
 from outboxml.core.enums import SeparationParams, FeatureTypesForSelection
@@ -169,6 +170,43 @@ class TrainTestIndexes:
         return train_ind, test_ind
 
 
+class TrainTestIndexesPl:
+
+    def __init__(self, X: pl.LazyFrame, separation_config: SeparationModelConfig):
+        self.X: pl.LazyFrame = X
+        self._separation_config = separation_config
+
+    def train_test_split(self) -> pl.LazyFrame:
+
+        if self._separation_config.kind == SeparationParams.rand:
+            logger.info("Random separation polars")
+            self.X = RandomSeparationPl(self._separation_config).train_test_indexes(self.X)
+
+        elif self._separation_config.kind == SeparationParams.period:
+            logger.info("Date separation polars")
+            self.X = DateSeparationPl(self._separation_config).train_test_indexes(self.X)
+
+        elif self._separation_config.kind == SeparationParams.null:
+            logger.info("Null separation polars")
+            self.X = (
+                self.X
+                .with_columns(
+                    pl.lit(1).cast(pl.Int32).alias("is_train")
+                )
+            )
+
+        else:
+            logger.info("No separation polars")
+            self.X = (
+                self.X
+                .with_columns(
+                    pl.lit(1).cast(pl.Int32).alias("is_train")
+                )
+            )
+
+        return self.X
+
+
 class BaseSeparation(ABC):
     @abstractmethod
     def train_test_indexes(self, *params):
@@ -192,6 +230,24 @@ class RandomSeparation(BaseSeparation):
         return train_ind, test_ind
 
 
+class RandomSeparationPl(BaseSeparation):
+
+    def __init__(self, separation_config: SeparationModelConfig):
+        self._separation_config = separation_config
+
+    def train_test_indexes(self, X: pl.LazyFrame) -> pl.LazyFrame:
+        return (
+            X
+            .with_columns(
+                pl.int_range(pl.len(), dtype=pl.Int32)
+                .shuffle(seed=self._separation_config.random_state)
+                .gt(pl.len() * self._separation_config.test_train_proportion)
+                .cast(pl.Int32)
+                .alias("is_train")
+            )
+        )
+
+
 class DateSeparation(BaseSeparation):
 
     def __init__(self, separation_config: SeparationModelConfig):
@@ -203,6 +259,27 @@ class DateSeparation(BaseSeparation):
         test_ind = X.loc[X[column_period].between(*self._separation_config.test_period)].index
 
         return train_ind, test_ind
+
+
+class DateSeparationPl(BaseSeparation):
+
+    def __init__(self, separation_config: SeparationModelConfig):
+        self._separation_config = separation_config
+
+    def train_test_indexes(self, X: pl.LazyFrame) -> pl.LazyFrame:
+        column_period = self._separation_config.period_column[0]
+
+        return (
+            X
+            .with_columns(
+                pl.when(pl.col(column_period).is_between(*self._separation_config.train_period))
+                .then(pl.lit(1).cast(pl.Int32))
+                .when(pl.col(column_period).is_between(*self._separation_config.test_period))
+                .then(pl.lit(0).cast(pl.Int32))
+                .otherwise(pl.lit(None))
+                .alias("is_train")
+            )
+        )
 
 
 class UserSeparation(BaseSeparation):

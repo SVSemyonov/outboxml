@@ -10,7 +10,7 @@ from sklearn.base import is_classifier
 import pandas as pd
 import numpy as np
 from loguru import logger
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, Literal
 from sklearn.preprocessing import LabelEncoder
 
 from outboxml.core.enums import ModelsParams
@@ -226,14 +226,16 @@ class DataSetsManager:
             business_metric: Optional[BaseMetric] = None,
             use_baseline_model: int = 0,
             retro_changes: Optional[RetroDataset] = None,
-            external_config=None,
-            use_temp_files: bool=False,
+            external_config = None,
+            use_temp_files: bool = False,
+            prepare_engine: Literal['pandas', 'polars'] = 'pandas',
     ):
         if external_config is None:
             self._external_config = config
         else:
             self._external_config = external_config
         self._use_temp_files = use_temp_files
+        self._prepare_engine = prepare_engine
         self._exposure = {}
         self._all_models_config_name: Union[str, Dict] = config_name
         self._results: Dict[str, DSManagerResult] = {}
@@ -579,6 +581,7 @@ class DataSetsManager:
                                                    dataset=self._extractor,
                                                    external_config=self._external_config,
                                                    version=self.version,
+                                                   prepare_engine=self._prepare_engine,
                                                    use_saved_files=self._use_temp_files,
                                                    data_config=self.data_config,
                                                    retro=self._retro

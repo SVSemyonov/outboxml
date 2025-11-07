@@ -8,11 +8,12 @@ from typing import Optional, List, Dict, Union, Callable, Literal
 import multiprocessing as mp
 
 import pandas as pd
+import polars as pl
 from loguru import logger
 
 from outboxml import config
 from outboxml.core.data_prepare import prepare_dataset
-from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes
+from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes, TrainTestIndexesPl
 from outboxml.core.pydantic_models import DataConfig, DataModelConfig, SeparationModelConfig
 from outboxml.extractors import Extractor
 
@@ -189,16 +190,19 @@ class DataPreprocessor:
                                           extra_columns=self._extra_columns,
                                           )
             data_subset = prepare_engine.prepared_subset(prepare_func, args_dict)
+            self.index_train, self.index_test = prepare_engine.get_train_test_indexes()
 
         elif self._prepare_engine == 'polars':
-            prepare_engine =PolarsInterface(data=self.dataset, #передаем эксраткор или пуьб к паркету для lasy
+            prepare_engine = PolarsInterface(data=self.dataset,
                                           prepare_interface=self._prepare_datasets[model_name],
                                           separation_config=self._data_config.separation,
                                           extra_columns=self._extra_columns)
             data_subset = prepare_engine.prepared_subset(prepare_func, args_dict)
+            prepare_engine.get_train_test_indexes()
+
         else:
             raise f'Unknow engine for data preparation'
-        self.index_train, self.index_test = prepare_engine.get_train_test_indexes()
+
         if to_pickle:
             self._pickle_subset.save_subset_to_pickle(model_name, data_subset, True)
             self._prepared_subsets[model_name] = True
@@ -294,12 +298,18 @@ class ParquetDataset:
         self._parquet_name = parquet_name
         self.results_path = config.results_path
 
-    def save_parquet(self, data: pd.DataFrame, rewrite: bool = True):
+    def save_parquet(self, data: pd.DataFrame | pl.DataFrame, rewrite: bool = True):
         file_path = os.path.join(self.results_path, self._parquet_name + '.parquet')
         if os.path.exists(file_path) and not rewrite:
             logger.warning(f'||File {file_path} already exists.')
         logger.info('||Saving dataset to parquet')
-        data.to_parquet(file_path)
+
+        if isinstance(data, pd.DataFrame):
+            data.to_parquet(file_path)
+        elif isinstance(data, pl.DataFrame):
+            data.write_parquet(file_path)
+        else:
+            logger.error(f'||{type(data)} not supported')
 
     def read_parquet(self) -> pd.DataFrame:
         file_path = os.path.join(self.results_path, self._parquet_name + '.parquet')
@@ -311,6 +321,9 @@ class ParquetDataset:
 class PrepareEngine(ABC):
     def __init__(self, dataset,
                         separation_config: SeparationModelConfig):
+        if not isinstance(separation_config, SeparationModelConfig):
+            logger.error(f"PrepareEngine||separation_config must be SeparationModelConfig, get {type(separation_config)}")
+            raise ValueError(f"PrepareEngine||separation_config must be SeparationModelConfig, get {type(separation_config)}")
         self.separation_config = separation_config
         self.dataset = dataset
 
@@ -397,13 +410,26 @@ class PandasInterface(PrepareEngine):
 
 
 class PolarsInterface(PrepareEngine):
-    def __init__(self, data: pd.DataFrame, prepare_interface: PrepareDataset, separation_config: SeparationModelConfig,
-                 extra_columns: list = None):
+    def __init__(
+            self,
+            data: pl.DataFrame,
+            prepare_interface: PrepareDataset,
+            separation_config: SeparationModelConfig,
+            extra_columns: list | None = None
+    ):
+        if not isinstance(data, pl.DataFrame):
+            logger.error(f"PolarsEngine||Data must be polars DataFrame, get {type(data)}")
+            raise ValueError(f"PolarsEngine||Data must be polars DataFrame, get {type(data)}")
         super().__init__(data, separation_config)
+        self._lazy_dataset = self.dataset.lazy()
         self._prepare_interface = prepare_interface
-        self.separation_config = separation_config
         self._extra_columns = extra_columns
         self._extra_columns_data = None
+
+    def get_train_test_indexes(self):
+        self._lazy_dataset = TrainTestIndexesPl(
+            X=self._lazy_dataset, separation_config=self.separation_config
+        ).train_test_split()
 
     def prepared_subset(self,  prepare_func: Callable = None,
                         args_dict: dict = None)->ModelDataSubset:
