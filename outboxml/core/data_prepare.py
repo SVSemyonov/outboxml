@@ -105,14 +105,14 @@ class OptiBinningEncoder:
 class PrepareDatasetResult:
     def __init__(
             self,
-            data: pd.DataFrame,
+            data: pd.DataFrame | pl.DataFrame,
             features_numerical: Optional[List[str]],
             features_categorical: Optional[List[str]],
             model_config: ModelConfig,
             corr_df: Optional[pd.DataFrame] = None,
             encoding_map: dict = None
     ):
-        self.data: pd.DataFrame = data
+        self.data: pd.DataFrame | pl.DataFrame = data
         self.features_numerical: Optional[List[str]] = features_numerical
         self.features_categorical: Optional[List[str]] = features_categorical
         self.model_config: ModelConfig = model_config
@@ -375,6 +375,26 @@ def prepare_relative_feature_series(
     return (numerator / denominator).replace([-np.inf, np.inf], np.nan).fillna(default_value)
 
 
+def prepare_relative_feature_series_pl(
+        data: pl.LazyFrame,
+        feature_name: str,
+        numerator_name: str,
+        denominator_name: str,
+        default_value: Union[float, int],
+) -> pl.LazyFrame:
+    if not isinstance(default_value, (int, float)):
+        raise ConfigError("Invalid default value for relative feature")
+    return (
+        data
+        .with_columns(
+            pl.when(pl.col(denominator_name) == 0)
+            .then(pl.lit(default_value))
+            .otherwise(pl.col(numerator_name) / pl.col(denominator_name))
+            .alias(feature_name)
+        )
+    )
+
+
 def prepare_relative_feature(
         numerator: Union[float, int],
         denominator: Union[float, int],
@@ -609,7 +629,7 @@ def prepare_numerical_feature(
 
 def prepare_dataset(
         group_name: str,
-        data: Union[Dict, pd.DataFrame],
+        data: Union[Dict, pd.DataFrame, pl.DataFrame],
         train_ind: Optional[pd.Index],
         test_ind: Optional[pd.Index],
         model_config: ModelConfig,
@@ -624,12 +644,17 @@ def prepare_dataset(
 ) -> PrepareDatasetResult:
 
     as_dict: bool = False
+    as_polars: bool = False
     if isinstance(data, dict):
         as_dict = True
+    elif isinstance(data, pl.DataFrame):
+        as_polars = True
+        lazy_data: pl.LazyFrame = data.lazy()
     elif isinstance(data, pd.DataFrame):
         pd.options.mode.chained_assignment = None
     else:
-        raise TypeError("Invalid data type")
+        logger.error(f"Invalid data type {type(data)}")
+        raise TypeError(f"Invalid data type {type(data)}")
 
     if model_config.relative_features:
         for relative_feature in model_config.relative_features:
@@ -639,6 +664,16 @@ def prepare_dataset(
                     denominator=data[relative_feature.denominator],
                     default_value=relative_feature.default
                 )
+
+            elif as_polars:
+                data = prepare_relative_feature_series_pl(
+                    data=lazy_data,
+                    feature_name=relative_feature.name,
+                    numerator_name=relative_feature.numerator,
+                    denominator_name=relative_feature.denominator,
+                    default_value=relative_feature.default
+                )
+
             else:
                 data[relative_feature.name] = prepare_relative_feature_series(
                     numerator=data[relative_feature.numerator],
@@ -778,9 +813,13 @@ def prepare_dataset(
 
     if as_dict:
         data = pd.DataFrame([data])
+    elif as_polars:
+        data = data.collect()
+    else:
+        data = data[features_all]
 
     return PrepareDatasetResult(
-        data=data[features_all],
+        data=data,
         features_numerical=features_numerical,
         features_categorical=features_categorical,
         model_config=model_config,

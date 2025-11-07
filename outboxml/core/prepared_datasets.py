@@ -17,11 +17,23 @@ from outboxml.extractors import Extractor
 
 
 class BasePrepareDataset(ABC):
+
+    def __init__(self, group_name: str, model_config: Optional[ModelConfig] = None):
+        self.group_name = group_name
+        self._model_config: Optional[ModelConfig] = model_config
+
+    def load_model_config(self, model_config: ModelConfig):
+        self._model_config = model_config
+
+    def get_model_config(self):
+        try:
+            return self._model_config
+        except TypeError:
+            return None
+
     @abstractmethod
     def prepare_dataset(self, **params) -> PrepareDatasetResult:
         pass
-
-
 
 
 class PrepareDataset(BasePrepareDataset):
@@ -36,14 +48,13 @@ class PrepareDataset(BasePrepareDataset):
             data_post_prep_func: Optional[Callable] = None,
             group_name: str = 'general',
     ):
+        super().__init__(group_name=group_name, model_config=model_config)
         self._check_prepared: bool = check_prepared
         self._calc_corr: bool = calc_corr
         self._save_data: bool = save_data
         self._corr_threshold: Optional[float] = corr_threshold
-        self._model_config: Optional[ModelConfig] = model_config
         self._data_pred_prep_func: Optional[Callable] = data_pred_prep_func
         self._data_post_prep_func: Optional[Callable] = data_post_prep_func
-        self.group_name = group_name
 
     def prepare_dataset(
             self, data: pd.DataFrame, train_ind: pd.Index, test_ind: pd.Index, target: pd.Series = None
@@ -57,7 +68,8 @@ class PrepareDataset(BasePrepareDataset):
                 data = self._data_pred_prep_func(data)
                 logger.info('User pred prep completed')
             except:
-                print('data pred_prep Error')
+                logger.error("User pred prep error")
+                raise NotImplementedError("User pred prep error")
 
         prepare_dataset_result = self._prepare_dataset(data=data, train_ind=train_ind, test_ind=test_ind, target=target)
 
@@ -67,18 +79,10 @@ class PrepareDataset(BasePrepareDataset):
                 prepare_dataset_result.data = self._data_post_prep_func(prepare_dataset_result.data)
                 logger.info('User post prep completed')
             except:
-                print('data post_prep Error')
+                logger.error("User post prep error")
+                raise NotImplementedError("User post prep error")
 
         return prepare_dataset_result
-
-    def load_model_config(self, model_config):
-        self._model_config = model_config
-
-    def get_model_config(self):
-        try:
-            return self._model_config
-        except TypeError:
-            return None
 
     def _prepare_dataset(
             self, data: pd.DataFrame, train_ind: pd.Index, test_ind: pd.Index, target: pd.Series = None
@@ -94,6 +98,70 @@ class PrepareDataset(BasePrepareDataset):
             save_data=self._save_data,
             corr_threshold=self._corr_threshold,
             target=target
+        )
+
+        return prepare_dataset_result
+
+
+class PrepareDatasetPl(BasePrepareDataset):
+    def __init__(
+            self,
+            group_name: str,
+            model_config: Optional[ModelConfig] = None,
+            data_pred_prep_func: Optional[Callable] = None,
+            data_post_prep_func: Optional[Callable] = None,
+            check_prepared: bool = True,
+    ):
+        super().__init__(group_name=group_name, model_config=model_config)
+        self._data_pred_prep_func: Optional[Callable] = data_pred_prep_func
+        self._data_post_prep_func: Optional[Callable] = data_post_prep_func
+        self._check_prepared: bool = check_prepared
+
+    def prepare_dataset(
+            self, data: pl.DataFrame, target: pl.DataFrame | None = None
+    ) -> PrepareDatasetResult:
+
+        if self._model_config.data_filter_condition is not None:
+            data = data.filter(self._model_config.data_filter_condition)
+
+        if self._data_pred_prep_func is not None:
+            logger.info("User pred prep polars function")
+            try:
+                data = self._data_pred_prep_func(data)
+                logger.info("User pred prep completed")
+            except:
+                logger.error("User pred prep error")
+                raise NotImplementedError("User pred prep error")
+
+        prepare_dataset_result = self._prepare_dataset(data, target)
+
+        if self._data_post_prep_func is not None:
+            logger.info("User post prep polars function")
+            try:
+                prepare_dataset_result.data = self._data_post_prep_func(prepare_dataset_result.data)
+                logger.info("User post prep completed")
+            except:
+                logger.error("User post prep error")
+                raise NotImplementedError("User post prep error")
+
+        return prepare_dataset_result
+
+    def _prepare_dataset(
+            self, data: pl.DataFrame, target: pl.DataFrame | None = None
+    ) -> PrepareDatasetResult:
+
+        prepare_dataset_result = prepare_dataset(
+            group_name=self.group_name,
+            data=data,
+            train_ind=None,
+            test_ind=None,
+            model_config=self._model_config,
+            check_prepared=self._check_prepared,
+            save_data=False,
+            target=target,
+            log=True,
+            modify_dtypes=True,
+            raise_on_encoding_error=True,
         )
 
         return prepare_dataset_result
@@ -172,39 +240,42 @@ class TrainTestIndexes:
 
 class TrainTestIndexesPl:
 
-    def __init__(self, X: pl.LazyFrame, separation_config: SeparationModelConfig):
-        self.X: pl.LazyFrame = X
+    def __init__(self, dataset: pl.DataFrame, separation_config: SeparationModelConfig):
+        self.dataset: pl.DataFrame = dataset
         self._separation_config = separation_config
 
-    def train_test_split(self) -> pl.LazyFrame:
+    def train_test_split(self) -> pl.DataFrame:
 
-        if self._separation_config.kind == SeparationParams.rand:
+        if "is_train_obml" in self.dataset.columns:
+            logger.info("Separation polars already exists")
+
+        elif self._separation_config.kind == SeparationParams.rand:
             logger.info("Random separation polars")
-            self.X = RandomSeparationPl(self._separation_config).train_test_indexes(self.X)
+            self.dataset = RandomSeparationPl(self._separation_config).train_test_indexes(self.dataset)
 
         elif self._separation_config.kind == SeparationParams.period:
             logger.info("Date separation polars")
-            self.X = DateSeparationPl(self._separation_config).train_test_indexes(self.X)
+            self.dataset = DateSeparationPl(self._separation_config).train_test_indexes(self.dataset)
 
         elif self._separation_config.kind == SeparationParams.null:
             logger.info("Null separation polars")
-            self.X = (
-                self.X
+            self.dataset = (
+                self.dataset
                 .with_columns(
-                    pl.lit(1).cast(pl.Int32).alias("is_train")
+                    pl.lit(1).cast(pl.Int32).alias("is_train_obml")
                 )
             )
 
         else:
             logger.info("No separation polars")
-            self.X = (
-                self.X
+            self.dataset = (
+                self.dataset
                 .with_columns(
-                    pl.lit(1).cast(pl.Int32).alias("is_train")
+                    pl.lit(1).cast(pl.Int32).alias("is_train_obml")
                 )
             )
 
-        return self.X
+        return self.dataset
 
 
 class BaseSeparation(ABC):
@@ -235,15 +306,15 @@ class RandomSeparationPl(BaseSeparation):
     def __init__(self, separation_config: SeparationModelConfig):
         self._separation_config = separation_config
 
-    def train_test_indexes(self, X: pl.LazyFrame) -> pl.LazyFrame:
+    def train_test_indexes(self, dataset: pl.DataFrame) -> pl.DataFrame:
         return (
-            X
+            dataset
             .with_columns(
                 pl.int_range(pl.len(), dtype=pl.Int32)
                 .shuffle(seed=self._separation_config.random_state)
                 .gt(pl.len() * self._separation_config.test_train_proportion)
                 .cast(pl.Int32)
-                .alias("is_train")
+                .alias("is_train_obml")
             )
         )
 
@@ -266,18 +337,18 @@ class DateSeparationPl(BaseSeparation):
     def __init__(self, separation_config: SeparationModelConfig):
         self._separation_config = separation_config
 
-    def train_test_indexes(self, X: pl.LazyFrame) -> pl.LazyFrame:
+    def train_test_indexes(self, dataset: pl.DataFrame) -> pl.DataFrame:
         column_period = self._separation_config.period_column[0]
 
         return (
-            X
+            dataset
             .with_columns(
                 pl.when(pl.col(column_period).is_between(*self._separation_config.train_period))
                 .then(pl.lit(1).cast(pl.Int32))
                 .when(pl.col(column_period).is_between(*self._separation_config.test_period))
                 .then(pl.lit(0).cast(pl.Int32))
                 .otherwise(pl.lit(None))
-                .alias("is_train")
+                .alias("is_train_obml")
             )
         )
 

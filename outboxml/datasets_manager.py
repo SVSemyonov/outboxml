@@ -21,7 +21,7 @@ from outboxml.core.data_prepare import prepare_dataset
 from outboxml.core.pydantic_models import AllModelsConfig, DataModelConfig, ModelConfig
 from outboxml.extractors import Extractor, BaseExtractor, SimpleExtractor
 from outboxml.metrics.base_metrics import BaseMetric, BaseMetrics
-from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes
+from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes, PrepareDatasetPl
 from outboxml.metrics.processor import ModelMetrics
 from outboxml.models import DefaultModels
 from outboxml import config
@@ -528,13 +528,25 @@ class DataSetsManager:
     def __load_prepare_datasets(self):
 
         i = 0
-        if self._prepare_datasets is None:
+        if self._prepare_datasets is None and self._prepare_engine == "pandas":
             self._prepare_datasets = {}
             logger.info("Load models prepare datasets")
             for model_config in self._models_configs:
                 self._prepare_datasets[model_config.name] = PrepareDataset(model_config=model_config,
                                                                            check_prepared=True,
                                                                            group_name=self.group_name)
+
+        elif self._prepare_datasets is None and self._prepare_engine == "polars":
+            self._prepare_datasets = {}
+            logger.info("Load models prepare datasets with polars")
+            for model_config in self._models_configs:
+                self._prepare_datasets[model_config.name] = PrepareDatasetPl(
+                    group_name=self.group_name, model_config=model_config, check_prepared=True
+                )
+
+        elif self._prepare_datasets is None:
+            logger.error("Unknown prepare engine")
+            raise ValueError("Unknown prepare engine")
 
         else:
             logger.info("User models prepare datasets")
