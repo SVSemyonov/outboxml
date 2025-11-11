@@ -40,6 +40,7 @@ class ModelsParams(str, Enum):
     glm_without_scaler = "glm_without_scaler"
     catboost = "catboost"
     catboost_over_glm = "catboost_over_glm"
+    xgboost = "xgboost"
     clustering = "clustering"
 
 
