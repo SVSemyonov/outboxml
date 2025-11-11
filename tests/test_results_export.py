@@ -16,7 +16,7 @@ test_configs_path = Path(__file__).resolve().parent/ "test_configs"
 test_data_path = Path(__file__).resolve().parent/"test_data"
 
 config_name = str(test_configs_path / 'config-example-titanic.json')
-
+#config_name = str(test_configs_path / 'config-example-titanic_xgboost.json')
 
 path_to_data = test_data_path / 'titanic.csv'
 path_to_parquet = test_data_path / 'titanic.csv'
