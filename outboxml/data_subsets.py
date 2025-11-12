@@ -156,15 +156,17 @@ class DataPreprocessor:
                                                 version=self._version,
                                                 prepare_datasets=self._prepare_datasets)
         self._parquet_dataset = ParquetDataset(config=self.config,
-                                               parquet_name='temp_dataset_v' + self._version
+                                               parquet_name='temp_dataset_v' + self._version,
+                                               prepare_engine=prepare_engine,
                                                )
         self.temp_subset: Optional[ModelDataSubset] = None
         self._data_columns = []
         self._retro = retro
         self.index_train = pd.Index([])
         self.index_test = pd.Index([])
+
     @property
-    def dataset(self):
+    def dataset(self)->pd.DataFrame:
         if isinstance(self._dataset, pd.DataFrame):
             if not self._retro:
                 self._collect_features_list()
@@ -172,7 +174,7 @@ class DataPreprocessor:
             else:
                 data_to_save = self._dataset
             self._parquet_dataset.save_parquet(data_to_save)
-            return data_to_save
+            self._dataset = None
 
         elif isinstance(self._dataset, Extractor):
             data = self._dataset.extract_dataset()
@@ -182,8 +184,7 @@ class DataPreprocessor:
             else:
                 data_to_save = data
             self._parquet_dataset.save_parquet(data_to_save)
-            return data_to_save
-        #   self._dataset = None
+            self._dataset = None
         logger.info('Reading data from parquet')
         return self._parquet_dataset.read_parquet()
 
@@ -333,9 +334,10 @@ class PickleModelSubset:
 
 
 class ParquetDataset:
-    def __init__(self, config, parquet_name: str):
+    def __init__(self, config, parquet_name: str, prepare_engine:str='pandas'):
         self._parquet_name = parquet_name
         self.results_path = config.results_path
+        self._prepare_engine=prepare_engine
 
     def save_parquet(self, data: pd.DataFrame | pl.DataFrame, rewrite: bool = True):
         file_path = os.path.join(self.results_path, self._parquet_name + '.parquet')
@@ -344,21 +346,20 @@ class ParquetDataset:
 
         else:
             logger.info('||Saving dataset to parquet')
-            data.to_parquet(file_path)
-        logger.info('||Saving dataset to parquet')
+            if isinstance(data, pd.DataFrame):
+                data.to_parquet(file_path)
+            elif isinstance(data, pl.DataFrame):
+                data.write_parquet(file_path)
+            else:
+                logger.error(f'||{type(data)} not supported')
 
-        if isinstance(data, pd.DataFrame):
-            data.to_parquet(file_path)
-        elif isinstance(data, pl.DataFrame):
-            data.write_parquet(file_path)
-        else:
-            logger.error(f'||{type(data)} not supported')
 
-    def read_parquet(self) -> pd.DataFrame:
+    def read_parquet(self) -> pd.DataFrame|pl.DataFrame:
         file_path = os.path.join(self.results_path, self._parquet_name + '.parquet')
-        return pd.read_parquet(file_path)
-
-
+        if self._prepare_engine == 'pandas':
+            return pd.read_parquet(file_path)
+        elif self._prepare_engine == 'polars':
+            return pl.read_parquet(file_path)
 
 
 class PrepareEngine(ABC):

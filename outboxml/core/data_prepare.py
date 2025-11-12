@@ -24,18 +24,18 @@ from outboxml.core.enums import EncodingNames
 
 
 pl_numeric_dtypes = [
-    pl.dtypes.Decimal,
-    pl.dtypes.Float32,
-    pl.dtypes.Float64,
-    pl.dtypes.Int8,
-    pl.dtypes.Int16,
-    pl.dtypes.Int32,
-    pl.dtypes.Int64,
-    pl.dtypes.Int128,
-    pl.dtypes.UInt8,
-    pl.dtypes.UInt16,
-    pl.dtypes.UInt32,
-    pl.dtypes.UInt64,
+    pl.datatypes.Decimal,
+    pl.datatypes.Float32,
+    pl.datatypes.Float64,
+    pl.datatypes.Int8,
+    pl.datatypes.Int16,
+    pl.datatypes.Int32,
+    pl.datatypes.Int64,
+    pl.datatypes.Int128,
+    pl.datatypes.UInt8,
+    pl.datatypes.UInt16,
+    pl.datatypes.UInt32,
+    pl.datatypes.UInt64,
 ]
 
 
