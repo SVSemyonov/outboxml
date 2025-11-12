@@ -614,7 +614,7 @@ def prepare_numerical_feature(
                 list(pd.IntervalIndex.from_arrays(val_splits[:-1], val_splits[1:]).astype(str))
             )
         }
-        feature_value = map_num(feature_value, val_splits, mapping)
+        feature_value = map_num(feature_value, mapping)
 
     return feature_value
 

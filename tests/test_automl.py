@@ -191,7 +191,6 @@ class AutoMLTest(TestCase):
                                 models_config=str(config_name),
                                 business_metric=TitanicMetric(),
                                 compare_business_metric=BaseCompareBusinessMetric(calculate_threshold=True),
-                                save_temp=False,
                                 hp_tune=True,
                                 retro=True
                                 )
