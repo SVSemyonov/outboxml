@@ -10,7 +10,7 @@ from sklearn.base import is_classifier
 import pandas as pd
 import numpy as np
 from loguru import logger
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, Literal
 from sklearn.preprocessing import LabelEncoder
 
 from outboxml.core.enums import ModelsParams
@@ -21,7 +21,7 @@ from outboxml.core.data_prepare import prepare_dataset
 from outboxml.core.pydantic_models import AllModelsConfig, DataModelConfig, ModelConfig
 from outboxml.extractors import Extractor, BaseExtractor, SimpleExtractor
 from outboxml.metrics.base_metrics import BaseMetric, BaseMetrics
-from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes
+from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes, PrepareDatasetPl
 from outboxml.metrics.processor import ModelMetrics
 from outboxml.models import DefaultModels
 from outboxml import config
@@ -226,14 +226,16 @@ class DataSetsManager:
             business_metric: Optional[BaseMetric] = None,
             use_baseline_model: int = 0,
             retro_changes: Optional[RetroDataset] = None,
-            external_config=None,
-            use_temp_files: bool=False,
+            external_config = None,
+            use_temp_files: bool = False,
+            prepare_engine: Literal['pandas', 'polars'] = 'pandas',
     ):
         if external_config is None:
             self._external_config = config
         else:
             self._external_config = external_config
         self._use_temp_files = use_temp_files
+        self._prepare_engine = prepare_engine
         self._exposure = {}
         self._all_models_config_name: Union[str, Dict] = config_name
         self._results: Dict[str, DSManagerResult] = {}
@@ -526,13 +528,25 @@ class DataSetsManager:
     def __load_prepare_datasets(self):
 
         i = 0
-        if self._prepare_datasets is None:
+        if self._prepare_datasets is None and self._prepare_engine == "pandas":
             self._prepare_datasets = {}
             logger.info("Load models prepare datasets")
             for model_config in self._models_configs:
                 self._prepare_datasets[model_config.name] = PrepareDataset(model_config=model_config,
                                                                            check_prepared=True,
                                                                            group_name=self.group_name)
+
+        elif self._prepare_datasets is None and self._prepare_engine == "polars":
+            self._prepare_datasets = {}
+            logger.info("Load models prepare datasets with polars")
+            for model_config in self._models_configs:
+                self._prepare_datasets[model_config.name] = PrepareDatasetPl(
+                    group_name=self.group_name, model_config=model_config, check_prepared=True
+                )
+
+        elif self._prepare_datasets is None:
+            logger.error("Unknown prepare engine")
+            raise ValueError("Unknown prepare engine")
 
         else:
             logger.info("User models prepare datasets")
@@ -579,6 +593,7 @@ class DataSetsManager:
                                                    dataset=self._extractor,
                                                    external_config=self._external_config,
                                                    version=self.version,
+                                                   prepare_engine=self._prepare_engine,
                                                    use_saved_files=self._use_temp_files,
                                                    data_config=self.data_config,
                                                    retro=self._retro

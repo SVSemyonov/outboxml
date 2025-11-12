@@ -8,11 +8,12 @@ from typing import Optional, List, Dict, Union, Callable, Literal
 import multiprocessing as mp
 
 import pandas as pd
+import polars as pl
 from loguru import logger
 
 from outboxml import config
 from outboxml.core.data_prepare import prepare_dataset
-from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes
+from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes, TrainTestIndexesPl, PrepareDatasetPl
 from outboxml.core.pydantic_models import DataConfig, DataModelConfig, SeparationModelConfig
 from outboxml.extractors import Extractor
 
@@ -90,10 +91,47 @@ class ModelDataSubset:
 
         )
 
+    @classmethod
+    def load_subset_pl(
+            cls,
+            model_name: str,
+            data: pl.DataFrame,
+            features_numerical: Optional[List[str]] = None,
+            features_categorical: Optional[List[str]] = None,
+            column_exposure: Optional[str] = None,
+            column_target: Optional[str] = None,
+            extra_columns_list: Optional[List[str]] = None,
+    ):
+        X = data.to_pandas()
+
+        X_train = X.loc[X["is_train_obml"] == 1].drop(columns=["is_train_obml"])
+        y_train = X.loc[X["is_train_obml"] == 1][column_target] if column_target else pd.Series()
+        exposure_train = X.loc[X["is_train_obml"] == 1][column_exposure] if column_exposure  else None
+
+        X_test = X.loc[X["is_train_obml"] == 0].drop(columns=["is_train_obml"])
+        y_test = X.loc[X["is_train_obml"] == 0][column_target] if column_target else pd.Series()
+        exposure_test = X.loc[X["is_train_obml"] == 0][column_exposure] if column_exposure else None
+
+        extra_columns_data = X[extra_columns_list] if extra_columns_list else None
+
+        return cls(
+            model_name=model_name,
+            X_train=X_train,
+            y_train=y_train,
+            X_test=X_test,
+            y_test=y_test,
+            features_numerical=features_numerical,
+            features_categorical=features_categorical,
+            X=None,
+            exposure_train=exposure_train,
+            exposure_test=exposure_test,
+            extra_columns=extra_columns_data,
+        )
+
 
 class DataPreprocessor:
     def __init__(self,
-                 prepare_dataset_interface_dict: Dict[str, PrepareDataset],
+                 prepare_dataset_interface_dict: Dict[str, PrepareDataset | PrepareDatasetPl],
                  dataset: Union[pd.DataFrame, Extractor],
                  data_config: DataModelConfig,
                  version: str = '1',
@@ -189,16 +227,19 @@ class DataPreprocessor:
                                           extra_columns=self._extra_columns,
                                           )
             data_subset = prepare_engine.prepared_subset(prepare_func, args_dict)
+            self.index_train, self.index_test = prepare_engine.get_train_test_indexes()
 
         elif self._prepare_engine == 'polars':
-            prepare_engine =PolarsInterface(data=self.dataset, #передаем эксраткор или пуьб к паркету для lasy
-                                          prepare_interface=self._prepare_datasets[model_name],
-                                          separation_config=self._data_config.separation,
-                                          extra_columns=self._extra_columns)
+            prepare_engine = PolarsInterface(data=self.dataset,
+                                             prepare_interface=self._prepare_datasets[model_name],
+                                             separation_config=self._data_config.separation,
+                                             extra_columns=self._extra_columns)
             data_subset = prepare_engine.prepared_subset(prepare_func, args_dict)
+            self.index_train, self.index_test = data_subset.X_train.index, data_subset.X_test.index
+
         else:
             raise f'Unknow engine for data preparation'
-        self.index_train, self.index_test = prepare_engine.get_train_test_indexes()
+
         if to_pickle:
             self._pickle_subset.save_subset_to_pickle(model_name, data_subset, True)
             self._prepared_subsets[model_name] = True
@@ -296,7 +337,7 @@ class ParquetDataset:
         self._parquet_name = parquet_name
         self.results_path = config.results_path
 
-    def save_parquet(self, data: pd.DataFrame, rewrite: bool = True):
+    def save_parquet(self, data: pd.DataFrame | pl.DataFrame, rewrite: bool = True):
         file_path = os.path.join(self.results_path, self._parquet_name + '.parquet')
         if os.path.exists(file_path) and not rewrite:
             logger.warning(f'||File {file_path} already exists.')
@@ -304,6 +345,14 @@ class ParquetDataset:
         else:
             logger.info('||Saving dataset to parquet')
             data.to_parquet(file_path)
+        logger.info('||Saving dataset to parquet')
+
+        if isinstance(data, pd.DataFrame):
+            data.to_parquet(file_path)
+        elif isinstance(data, pl.DataFrame):
+            data.write_parquet(file_path)
+        else:
+            logger.error(f'||{type(data)} not supported')
 
     def read_parquet(self) -> pd.DataFrame:
         file_path = os.path.join(self.results_path, self._parquet_name + '.parquet')
@@ -313,8 +362,12 @@ class ParquetDataset:
 
 
 class PrepareEngine(ABC):
-    def __init__(self, dataset,
-                        separation_config: SeparationModelConfig):
+    def __init__(
+            self, dataset, separation_config: SeparationModelConfig
+    ):
+        if not isinstance(separation_config, SeparationModelConfig):
+            logger.error(f"PrepareEngine||separation_config must be SeparationModelConfig, get {type(separation_config)}")
+            raise ValueError(f"PrepareEngine||separation_config must be SeparationModelConfig, get {type(separation_config)}")
         self.separation_config = separation_config
         self.dataset = dataset
 
@@ -322,10 +375,6 @@ class PrepareEngine(ABC):
     def prepared_subset(self, *params):
         pass
 
-    def get_train_test_indexes(self):
-        index_train, index_test = TrainTestIndexes(X=self.dataset,
-                                                   separation_config=self.separation_config).train_test_indexes()
-        return index_train, index_test
 
 class PandasInterface(PrepareEngine):
 
@@ -338,6 +387,11 @@ class PandasInterface(PrepareEngine):
         self.separation_config = separation_config
         self._extra_columns = extra_columns
         self._extra_columns_data = None
+
+    def get_train_test_indexes(self):
+        index_train, index_test = TrainTestIndexes(X=self.dataset,
+                                                   separation_config=self.separation_config).train_test_indexes()
+        return index_train, index_test
 
     def prepared_subset(self,  prepare_func: Callable = None,
                         args_dict: dict = None):
@@ -401,28 +455,81 @@ class PandasInterface(PrepareEngine):
 
 
 class PolarsInterface(PrepareEngine):
-    def __init__(self, data: pd.DataFrame, prepare_interface: PrepareDataset, separation_config: SeparationModelConfig,
-                 extra_columns: list = None):
+    def __init__(
+            self,
+            data: pl.DataFrame,
+            prepare_interface: PrepareDatasetPl,
+            separation_config: SeparationModelConfig,
+            extra_columns: List[str] | None = None
+    ):
+        if not isinstance(data, pl.DataFrame):
+            logger.error(f"PolarsEngine||data must be polars DataFrame, get {type(data)}")
+            raise ValueError(f"PolarsEngine||data must be polars DataFrame, get {type(data)}")
         super().__init__(data, separation_config)
+        if not isinstance(prepare_interface, PrepareDatasetPl):
+            logger.error(f"PolarsEngine||prepare_interface must be PrepareDatasetPl, get {type(prepare_interface)}")
+            raise ValueError(f"PolarsEngine||prepare_interface must be PrepareDatasetPl, get {type(prepare_interface)}")
         self._prepare_interface = prepare_interface
-        self.separation_config = separation_config
-        self._extra_columns = extra_columns
-        self._extra_columns_data = None
+        if not isinstance(extra_columns, (list, type(None))):
+            logger.error(f"PolarsEngine||extra_columns must be List[str] or None, get {type(extra_columns)}")
+            raise ValueError(f"PolarsEngine||extra_columns must be List[str] or None, get {type(extra_columns)}")
+        self._extra_columns_list = extra_columns
 
-    def prepared_subset(self,  prepare_func: Callable = None,
-                        args_dict: dict = None)->ModelDataSubset:
-        """
-        data_subset = ModelDataSubset.load_subset(
+    def get_train_test_split(self) -> pl.DataFrame:
+
+        return TrainTestIndexesPl(
+            dataset=self.dataset, separation_config=self.separation_config
+        ).train_test_split()
+
+    def _filter_data_by_exposure(self, dataset: pl.DataFrame) -> (pl.DataFrame, pl.DataFrame | None):
+
+        model_config = self._prepare_interface.get_model_config()
+
+        if model_config.column_exposure:
+            logger.info("Polars Engine||Weighting target on exposure")
+            X = dataset.filter(pl.col(model_config.column_exposure) > 0)
+            target = (
+                X.select(pl.col(model_config.column_target) / pl.col(model_config.column_exposure), "is_train_obml")
+                if model_config.column_target else None
+            )
+
+        else:
+            logger.info("Polars Engine||Target without exposure")
+            X = dataset
+            target = (
+                X.select(model_config.column_target, "is_train_obml")
+                if model_config.column_target else None
+            )
+
+        return X, target
+
+    def prepared_subset(
+            self,  prepare_func: Callable = None, args_dict: dict = None
+    ) -> ModelDataSubset:
+
+        self.dataset = self.get_train_test_split()
+
+        model_config = self._prepare_interface.get_model_config()
+        model_name = model_config.name
+
+        X, target = self._filter_data_by_exposure(self.dataset)
+
+        if prepare_func is not None:
+            prepare_dataset_result = prepare_func(X, target, **args_dict)
+        else:
+            prepare_dataset_result = self._prepare_interface.prepare_dataset(X, target)
+
+        self._prepare_interface._model_config = deepcopy(prepare_dataset_result.model_config)
+
+        data_subset = ModelDataSubset.load_subset_pl(
             model_name=model_name,
-            X=X,
-            Y=y,
-            index_train=index_train,
-            index_test=index_test,
-            features_numerical=prepare_dataset_result.features_numerical if model_config is not None else [],
-            features_categorical=prepare_dataset_result.features_categorical if model_config is not None else [],
+            data=prepare_dataset_result.data,
+            features_numerical=prepare_dataset_result.features_numerical,
+            features_categorical=prepare_dataset_result.features_categorical,
             column_exposure=model_config.column_exposure if model_config.column_exposure else None,
             column_target=model_config.column_target if model_config.column_target else None,
-            extra_columns=self._extra_columns_data if self._extra_columns_data is not None else None)
-        """
-        pass
+            extra_columns_list=self._extra_columns_list,
+        )
 
+        logger.debug('Model ' + model_name + ' || Data preparation finished')
+        return data_subset
