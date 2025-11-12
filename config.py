@@ -4,6 +4,9 @@ from environs import Env
 env_reader = Env()
 env_reader.read_env()
 
+work_type_fit = "CPU"
+work_type_hptune = "GPU"
+
 base_path = Path(__file__).resolve().parent
 results_path = base_path / "results"
 prod_path = base_path
