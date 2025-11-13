@@ -306,7 +306,6 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
         model_ctb = catboost_wrapper(
             objective=catboost_objective,
             task_type=self.work_type_fit,
-            verbose=2,
             **params_catboost if params_catboost else {},
         )
 
