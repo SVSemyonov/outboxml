@@ -270,7 +270,7 @@ def feature_encoding(
                     list(pd.IntervalIndex.from_arrays(feature.bins[:-1], feature.bins[1:]).astype(str))
                 )
             }
-            feature_value = map_num(feature_value, feature.bins, mapping)
+            feature_value = map_num(feature_value, mapping)
         except Exception as e:
             raise ValueError(f"{feature.name} || Cannot convert to WoE")
 
@@ -280,7 +280,7 @@ def feature_encoding(
         try:
             if not isinstance(feature_value, (float, int)):
                 feature_value = float(feature_value)
-            feature_value = map_num(feature_value, feature.bins, feature.mapping)
+            feature_value = map_num(feature_value, feature.mapping)
         except Exception as e:
             raise ValueError(f"{feature.name} || Cannot convert to WoE")
 

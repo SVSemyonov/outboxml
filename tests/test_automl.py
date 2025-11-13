@@ -123,10 +123,34 @@ class HPTune(TestCase):
                 'min_data_in_leaf': trial.suggest_int("min_data_in_leaf", 1, 101, step=10),
             }
 
-        params = HPTuning(data_preprocessor=self.ds_manager._data_preprocessor, folds_num_for_cv=5, ).best_params(model_name='first',
-                                                                                        trials=5,
-                                                                                        direction='maximize',
-                                                                                        parameters_for_optuna_func=parameters_for_optuna)
+        params = HPTuning(data_preprocessor=self.ds_manager._data_preprocessor, folds_num_for_cv=5, ).best_params(
+            model_name='first',
+            trials=5,
+            direction='maximize',
+            parameters_for_optuna_func=parameters_for_optuna)
+        self.assertIsInstance(params, dict)
+
+    def test_hp_tune_xgboost(self):
+        self.ds_manager._prepare_datasets['first']._model_config.objective = 'poisson'
+        self.ds_manager._prepare_datasets['first']._model_config.wrapper = 'xgboost'
+
+        def parameters_for_optuna(trial):
+            return {
+                "iterations": trial.suggest_int('iterations', 10, 12, step=1),
+                "max_depth": trial.suggest_int("max_depth", 1, 15, step=2),
+                "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
+                "subsample": trial.suggest_float("subsample", 0.6, 1.0),
+                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
+                "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 10, log=True),
+                "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 10, log=True),
+                "gamma": trial.suggest_int("gamma", 0, 5),
+            }
+
+        params = HPTuning(data_preprocessor=self.ds_manager._data_preprocessor, folds_num_for_cv=5, ).best_params(
+            model_name='first_xgboost',
+            trials=5,
+            direction='maximize',
+            parameters_for_optuna_func=parameters_for_optuna)
         self.assertIsInstance(params, dict)
 
     def test_hp_tune_glm(self):

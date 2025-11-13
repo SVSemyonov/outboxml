@@ -119,6 +119,7 @@ class ModelConfig(BaseModel):
     features: List[FeatureModelConfig]
     intersections: Optional[List[IntersectionModelConfig]] = None
     params_catboost: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None
+    params_xgb: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None
     params_glm:  Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None
     params: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None
     treatment_dict: Optional[Dict[str, str]] = None

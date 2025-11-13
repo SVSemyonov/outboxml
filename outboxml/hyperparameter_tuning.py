@@ -1,6 +1,7 @@
 from typing import Callable, Union
 import pandas as pd
 from catboost import CatBoostRegressor, CatBoostClassifier
+from xgboost import XGBRegressor, XGBClassifier
 from loguru import logger
 from optuna import create_study
 from optuna.samplers import TPESampler, RandomSampler, CmaEsSampler
@@ -182,10 +183,30 @@ class HPTuning:
 
         return model, None
 
+    def _prepare_xgb(self, model_name: str, parameters):
+        if self.result_configs[model_name].objective is not None:
+            objective = self.result_configs[model_name].objective
+            if objective == ModelsParams.poisson:
+                parameters['objective'] = "count:poisson"
+            elif objective == ModelsParams.gamma:
+                parameters['objective'] = "reg:gamma"
+            elif objective == ModelsParams.binary:
+                parameters['objective'] = "binary:logistic"
+            else:
+                parameters['objective'] = self.objective
+        else:
+            logger.info('No objective in config||Using from init')
+            parameters['objective'] = self.objective
+
+        model = self._model.set_params(**parameters)
+        return model, None
+
     def _prepare_model(self, model_name: str, hp_tuning_data, parameters ):
         model = self._model
+        if isinstance(model, (XGBRegressor, XGBClassifier)):
+            return self._prepare_xgb(model_name, parameters)
 
-        if model.__name__ == 'CatBoostRegressor' or model.__name__ == 'CatBoostClassifier':
+        elif model.__name__ == 'CatBoostRegressor' or model.__name__ == 'CatBoostClassifier':
             return self._prepare_catboost(model_name, hp_tuning_data, parameters)
 
         elif  model.__name__ == 'from_formula':
@@ -247,6 +268,12 @@ class HPTuning:
 
         elif wrapper == ModelsParams.catboost and self.objective == ModelsParams.binary:
             model = CatBoostClassifier
+
+        elif wrapper == ModelsParams.xgboost and self.objective != ModelsParams.binary:
+            model = XGBRegressor(verbose=False, enable_categorical=True)
+
+        elif wrapper == ModelsParams.xgboost and self.objective == ModelsParams.binary:
+            model = XGBClassifier(verbose=False, enable_categorical=True)
 
         elif wrapper == ModelsParams.glm:
             model = sf.glm
