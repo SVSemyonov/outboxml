@@ -231,7 +231,7 @@ class DataPreprocessor:
             self.index_train, self.index_test = prepare_engine.get_train_test_indexes()
 
         elif self._prepare_engine == 'polars':
-            prepare_engine = PolarsInterface(data=self.dataset,
+            prepare_engine = PolarsInterface(data=data,
                                              prepare_interface=self._prepare_datasets[model_name],
                                              separation_config=self._data_config.separation,
                                              extra_columns=self._extra_columns)
