@@ -114,6 +114,9 @@ class HPTuning:
         self.__wrapper_model = False,
         self._work_type = work_type
 
+        if self._work_type == 'GPU':
+            logger.warning("HPTune use GPU")
+
     @staticmethod
     def parameters_for_optuna(trial, work_type: str = 'CPU'):
         parameters = {
@@ -261,7 +264,7 @@ class HPTuning:
             return score
 
         # Подбор гиперпараметров
-        if self._work_type == "GPU" and isinstance(self._model, (CatBoostRegressor, CatBoostClassifier)):
+        if self._work_type == "GPU":
             n_jobs = 1
         study = create_study(sampler=self._sampler, direction=direction)
         study.optimize(objective, n_trials=trials, show_progress_bar=True, timeout=timeout, n_jobs=n_jobs)
@@ -281,10 +284,10 @@ class HPTuning:
             model = CatBoostClassifier
 
         elif wrapper == ModelsParams.xgboost and self.objective != ModelsParams.binary:
-            model = XGBRegressor(verbose=False, enable_categorical=True)
+            model = XGBRegressor(verbosity=0, enable_categorical=True)
 
         elif wrapper == ModelsParams.xgboost and self.objective == ModelsParams.binary:
-            model = XGBClassifier(verbose=False, enable_categorical=True)
+            model = XGBClassifier(verbosity=0, enable_categorical=True)
 
         elif wrapper == ModelsParams.glm:
             model = sf.glm

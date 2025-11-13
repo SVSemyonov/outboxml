@@ -323,7 +323,7 @@ class AutoMLManager(DataSetsManager):
                                               folds_num_for_cv=self._hp_tuning_config.cv_folds_num,
                                               objective=model.objective,
                                               random_state=self.config.data_config.separation.random_state,
-                                              work_type=self._external_config.work_type_hptune,
+                                              work_type=self._work_type_hptune,
                                               ).best_params(model_name=model.name,
                                                             parameters_for_optuna_func=parameters_for_optuna_func,
                                                             timeout=self.timeout)
@@ -331,6 +331,7 @@ class AutoMLManager(DataSetsManager):
 
             except Exception as exc:
                 self.errors['HP tuning'] = exc
+                logger.error(str(exc))
                 logger.info('Returning {}')
         return new_hp
 
