@@ -127,6 +127,9 @@ class ModelDataSubset:
             exposure_test=exposure_test,
             extra_columns=extra_columns_data,
         )
+    #TODO
+    def __add__(self, other):
+        return ModelDataSubset()
 
 
 class DataPreprocessor:
@@ -354,7 +357,7 @@ class ParquetDataset:
                 logger.error(f'||{type(data)} not supported')
 
 
-    def read_parquet(self) -> pd.DataFrame|pl.DataFrame:
+    def read_parquet(self, to_polars=False) -> pd.DataFrame|pl.DataFrame:
         file_path = os.path.join(self.results_path, self._parquet_name + '.parquet')
         if self._prepare_engine == 'pandas':
             return pd.read_parquet(file_path)
