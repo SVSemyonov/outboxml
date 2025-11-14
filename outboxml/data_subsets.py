@@ -127,9 +127,54 @@ class ModelDataSubset:
             exposure_test=exposure_test,
             extra_columns=extra_columns_data,
         )
-    #TODO
+    #TODO unit test
     def __add__(self, other):
-        return ModelDataSubset()
+        """Adding of two ModelDataSubset"""
+        if not isinstance(other, ModelDataSubset):
+            raise TypeError(f"Unsupported operand type(s) for +: 'ModelDataSubset' and '{type(other).__name__}'")
+
+        # Объединяем датафреймы и серии
+        new_X_train = pd.concat([self.X_train, other.X_train], axis=1)
+
+        # Объединяем X_test (если оба существуют)
+        if self.X_test is not None and other.X_test is not None and isinstance(other.X_test , pd.DataFrame):
+            if not other.X_test.empty:
+                new_X_test = pd.concat([self.X_test, other.X_test],  axis=1)
+            else:
+                new_X_test = self.X_test
+        else:
+            new_X_test = self.X_test
+
+        # Объединяем списки features
+        new_features_numerical = list(set(self.features_numerical + other.features_numerical))
+        new_features_categorical = list(set(self.features_categorical + other.features_categorical))
+
+        # Объединяем X (если оба существуют)
+        new_X = pd.concat([self.X, other.X], axis=1)
+
+        # Объединяем extra_columns
+        if self.extra_columns is not None and other.extra_columns is not None:
+            new_extra_columns = pd.concat([self.extra_columns, other.extra_columns], ignore_index=True)
+        elif self.extra_columns is not None:
+            new_extra_columns = self.extra_columns.copy()
+        elif other.extra_columns is not None:
+            new_extra_columns = other.extra_columns.copy()
+        else:
+            new_extra_columns = None
+
+        return ModelDataSubset(
+            model_name=self.model_name,
+            X_train=new_X_train,
+            y_train=self.y_train,
+            X_test=new_X_test,
+            y_test=self.y_test,
+            features_numerical=new_features_numerical,
+            features_categorical=new_features_categorical,
+            X=new_X,
+            exposure_train=self.exposure_train,
+            exposure_test=self.exposure_test,
+            extra_columns=new_extra_columns
+        )
 
 
 class DataPreprocessor:
