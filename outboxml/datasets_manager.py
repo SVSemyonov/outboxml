@@ -234,6 +234,8 @@ class DataSetsManager:
             self._external_config = config
         else:
             self._external_config = external_config
+        self._work_type_fit = self._external_config.work_type_fit
+        self._work_type_hptune = self._external_config.work_type_hptune
         self._use_temp_files = use_temp_files
         self._prepare_engine = prepare_engine
         self._exposure = {}
@@ -563,7 +565,8 @@ class DataSetsManager:
                                               data_subsets=self._data_preprocessor.data_subsets(),
                                               models_configs=self._models_configs,
                                               group_name=self.group_name,
-                                              baseline_model=self._use_baseline_model).load_default()
+                                              baseline_model=self._use_baseline_model,
+                                              work_type_fit=self._work_type_fit).load_default()
 
     def __init_retro(self):
         logger.debug('Initializing retro')

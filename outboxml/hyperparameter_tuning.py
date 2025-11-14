@@ -9,10 +9,8 @@ from sklearn.model_selection import cross_val_score, KFold
 import statsmodels.formula.api as sf
 from outboxml.core.enums import ModelsParams
 from outboxml.data_subsets import DataPreprocessor
-
 from outboxml.datasets_manager import DataSetsManager, ModelDataSubset
 from outboxml.models import StatsModelsEstimator
-
 
 class OptunaModel:
     def __init__(self,):
@@ -99,7 +97,8 @@ class HPTuning:
                  scoring_fun: Union[str, Callable] = 'neg_mean_absolute_error',
                  folds_num_for_cv: int = 3,
                  objective = 'RMSE',
-                 random_state: int = 42
+                 random_state: int = 42,
+                 work_type: str = 'CPU'
                  ):
 
         self._glm_model = None
@@ -112,11 +111,15 @@ class HPTuning:
         self.result_configs = {}
         self.objective = objective
         self._random_state = random_state
-        self.__wrapper_model = False
+        self.__wrapper_model = False,
+        self._work_type = work_type
+
+        if self._work_type == 'GPU':
+            logger.warning("HPTune use GPU")
 
     @staticmethod
-    def parameters_for_optuna(trial):
-        return {
+    def parameters_for_optuna(trial, work_type: str = 'CPU'):
+        parameters = {
             'iterations': trial.suggest_int('iterations', 100, 1200, step=100),
             'depth': trial.suggest_int('depth', 1, 15, step=2),
             'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1, log=True),
@@ -125,6 +128,12 @@ class HPTuning:
             'colsample_bylevel': trial.suggest_float("colsample_bylevel", 0.05, 1.0),
             'min_data_in_leaf': trial.suggest_int("min_data_in_leaf", 1, 101, step=10),
         }
+        if work_type == "GPU":
+            del parameters['colsample_bylevel']
+            parameters['rsm'] = 1
+            parameters['bootstrap_type'] = trial.suggest_categorical('bootstrap_type', ['Bayesian', 'Poisson'])
+
+        return parameters
 
 
     def best_params(self, model_name: str, scoring_fun: Callable = None, trials: int = 100, direction: str = 'maximize',
@@ -176,6 +185,8 @@ class HPTuning:
         else:
             logger.info('No objective in config||Using from init')
             objective = self.objective
+        if self._work_type == 'GPU':
+            parameters['task_type'] = 'GPU'
         model = self._model(cat_features=hp_tuning_data.features_categorical,
                             thread_count=-1,
                             objective=objective, verbose=False,
@@ -197,7 +208,8 @@ class HPTuning:
         else:
             logger.info('No objective in config||Using from init')
             parameters['objective'] = self.objective
-
+        if self._work_type == 'GPU':
+            parameters['device'] = 'cuda'
         model = self._model.set_params(**parameters)
         return model, None
 
@@ -223,7 +235,7 @@ class HPTuning:
                   parameters_for_optuna_func: Callable=None,
                   timeout=None):
 
-
+        n_jobs = -1
         X = hp_tuning_data.X_train
         y_train = hp_tuning_data.y_train
         if hp_tuning_data.exposure_train is not None:
@@ -252,8 +264,10 @@ class HPTuning:
             return score
 
         # Подбор гиперпараметров
+        if self._work_type == "GPU":
+            n_jobs = 1
         study = create_study(sampler=self._sampler, direction=direction)
-        study.optimize(objective, n_trials=trials, show_progress_bar=True, timeout=timeout, n_jobs=-1)
+        study.optimize(objective, n_trials=trials, show_progress_bar=True, timeout=timeout, n_jobs=n_jobs)
         return study.best_params
 
     def _load_model_from_config(self, model_name: str, hp_tuning_data):
@@ -270,10 +284,10 @@ class HPTuning:
             model = CatBoostClassifier
 
         elif wrapper == ModelsParams.xgboost and self.objective != ModelsParams.binary:
-            model = XGBRegressor(verbose=False, enable_categorical=True)
+            model = XGBRegressor(verbosity=0, enable_categorical=True)
 
         elif wrapper == ModelsParams.xgboost and self.objective == ModelsParams.binary:
-            model = XGBClassifier(verbose=False, enable_categorical=True)
+            model = XGBClassifier(verbosity=0, enable_categorical=True)
 
         elif wrapper == ModelsParams.glm:
             model = sf.glm
