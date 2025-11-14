@@ -106,7 +106,6 @@ class HPTune(TestCase):
     def setUp(self):
         self.ds_manager = DataSetsManager(config_name=str(config_name)
                                           )
-        self.ds_manager.get_subset(model_name='first')
 
     def test_hp_tune_catboost(self):
         self.ds_manager._prepare_datasets['first']._model_config.objective = 'poisson'
@@ -133,7 +132,6 @@ class HPTune(TestCase):
     def test_hp_tune_xgboost(self):
         self.ds_manager._prepare_datasets['first']._model_config.objective = 'poisson'
         self.ds_manager._prepare_datasets['first']._model_config.wrapper = 'xgboost'
-        self.ds_manager._data_preprocessor._prepare_datasets['first']._model_config.wrapper = 'xgboost'
 
         def parameters_for_optuna(trial):
             return {
