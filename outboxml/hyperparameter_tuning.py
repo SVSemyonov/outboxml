@@ -272,9 +272,10 @@ class HPTuning:
 
     def _load_model_from_config(self, model_name: str, hp_tuning_data):
         self.__wrapper_model = True
-        model_config = self._data_preprocessor._prepare_datasets[model_name]._model_config
+        model_config = self._data_preprocessor._prepare_datasets[model_name].get_model_config()
         self.result_configs[model_name] = model_config
-        logger.info('Loading model and objective from config')
+        logger.info('Loading model and objective from config||'+model_config.wrapper)
+
         wrapper = model_config.wrapper
         model = None
         if wrapper == ModelsParams.catboost and self.objective != ModelsParams.binary:

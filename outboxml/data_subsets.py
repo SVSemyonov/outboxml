@@ -28,8 +28,8 @@ class ModelDataSubset:
             y_train: pd.Series = pd.Series(),
             X_test: Optional[pd.DataFrame] = None,
             y_test: Optional[pd.Series] = None,
-            features_numerical: Optional[List[str]] = None,
-            features_categorical: Optional[List[str]] = None,
+            features_numerical: Optional[List[str]] = [],
+            features_categorical: Optional[List[str]] = [],
             X: Optional[pd.DataFrame] = None,
             exposure_train: Optional[pd.Series] = None,
             exposure_test: Optional[pd.Series] = None,
@@ -127,6 +127,57 @@ class ModelDataSubset:
             exposure_test=exposure_test,
             extra_columns=extra_columns_data,
         )
+    #TODO unit test
+    def __add__(self, other):
+        """Adding of two ModelDataSubset"""
+        if not isinstance(other, ModelDataSubset):
+            raise TypeError(f"Unsupported operand type(s) for +: 'ModelDataSubset' and '{type(other).__name__}'")
+
+        # Объединяем датафреймы и серии
+        new_X_train = pd.concat([self.X_train, other.X_train], axis=1)
+
+        # Объединяем X_test (если оба существуют)
+        if self.X_test is not None and other.X_test is not None and isinstance(other.X_test , pd.DataFrame):
+            if not other.X_test.empty:
+                new_X_test = pd.concat([self.X_test, other.X_test],  axis=1)
+            else:
+                new_X_test = self.X_test
+        else:
+            new_X_test = self.X_test
+
+        # Объединяем списки features
+        new_features_numerical = list(set(self.features_numerical + other.features_numerical))
+        new_features_categorical = list(set(self.features_categorical + other.features_categorical))
+
+        # Объединяем X (если оба существуют)
+        if self.X is not None:
+            new_X = pd.concat([self.X, other.X], axis=1)
+        else:
+            new_X = None
+
+        # Объединяем extra_columns
+        if self.extra_columns is not None and other.extra_columns is not None:
+            new_extra_columns = pd.concat([self.extra_columns, other.extra_columns], ignore_index=True)
+        elif self.extra_columns is not None:
+            new_extra_columns = self.extra_columns.copy()
+        elif other.extra_columns is not None:
+            new_extra_columns = other.extra_columns.copy()
+        else:
+            new_extra_columns = None
+
+        return ModelDataSubset(
+            model_name=self.model_name,
+            X_train=new_X_train,
+            y_train=self.y_train,
+            X_test=new_X_test,
+            y_test=self.y_test,
+            features_numerical=new_features_numerical,
+            features_categorical=new_features_categorical,
+            X=new_X,
+            exposure_train=self.exposure_train,
+            exposure_test=self.exposure_test,
+            extra_columns=new_extra_columns
+        )
 
 
 class DataPreprocessor:
@@ -156,15 +207,17 @@ class DataPreprocessor:
                                                 version=self._version,
                                                 prepare_datasets=self._prepare_datasets)
         self._parquet_dataset = ParquetDataset(config=self.config,
-                                               parquet_name='temp_dataset_v' + self._version
+                                               parquet_name='temp_dataset_v' + self._version,
+                                               prepare_engine=prepare_engine,
                                                )
         self.temp_subset: Optional[ModelDataSubset] = None
         self._data_columns = []
         self._retro = retro
         self.index_train = pd.Index([])
         self.index_test = pd.Index([])
+
     @property
-    def dataset(self):
+    def dataset(self)->pd.DataFrame:
         if isinstance(self._dataset, pd.DataFrame):
             if not self._retro:
                 self._collect_features_list()
@@ -172,7 +225,7 @@ class DataPreprocessor:
             else:
                 data_to_save = self._dataset
             self._parquet_dataset.save_parquet(data_to_save)
-            return data_to_save
+            self._dataset = None
 
         elif isinstance(self._dataset, Extractor):
             data = self._dataset.extract_dataset()
@@ -182,8 +235,7 @@ class DataPreprocessor:
             else:
                 data_to_save = data
             self._parquet_dataset.save_parquet(data_to_save)
-            return data_to_save
-        #   self._dataset = None
+            self._dataset = None
         logger.info('Reading data from parquet')
         return self._parquet_dataset.read_parquet()
 
@@ -230,7 +282,7 @@ class DataPreprocessor:
             self.index_train, self.index_test = prepare_engine.get_train_test_indexes()
 
         elif self._prepare_engine == 'polars':
-            prepare_engine = PolarsInterface(data=self.dataset,
+            prepare_engine = PolarsInterface(data=data,
                                              prepare_interface=self._prepare_datasets[model_name],
                                              separation_config=self._data_config.separation,
                                              extra_columns=self._extra_columns)
@@ -253,10 +305,12 @@ class DataPreprocessor:
             if self._use_saved_files:
                 logger.info(f'File {file_path} already exists.')
                 self._prepared_subsets[model_name] = True
+                return True
+            elif model_name in self._prepared_subsets.keys():
+                return self._prepared_subsets[model_name]
             else:
                 self._prepared_subsets[model_name] = False
-        if model_name in self._prepared_subsets.keys():
-            return self._prepared_subsets[model_name]
+
         else:
             return False
 
@@ -331,28 +385,32 @@ class PickleModelSubset:
 
 
 class ParquetDataset:
-    def __init__(self, config, parquet_name: str):
+    def __init__(self, config, parquet_name: str, prepare_engine:str='pandas'):
         self._parquet_name = parquet_name
         self.results_path = config.results_path
+        self._prepare_engine=prepare_engine
 
     def save_parquet(self, data: pd.DataFrame | pl.DataFrame, rewrite: bool = True):
         file_path = os.path.join(self.results_path, self._parquet_name + '.parquet')
         if os.path.exists(file_path) and not rewrite:
             logger.warning(f'||File {file_path} already exists.')
-        logger.info('||Saving dataset to parquet')
 
-        if isinstance(data, pd.DataFrame):
-            data.to_parquet(file_path)
-        elif isinstance(data, pl.DataFrame):
-            data.write_parquet(file_path)
         else:
-            logger.error(f'||{type(data)} not supported')
+            logger.info('||Saving dataset to parquet')
+            if isinstance(data, pd.DataFrame):
+                data.to_parquet(file_path)
+            elif isinstance(data, pl.DataFrame):
+                data.write_parquet(file_path)
+            else:
+                logger.error(f'||{type(data)} not supported')
 
-    def read_parquet(self) -> pd.DataFrame:
+
+    def read_parquet(self, to_polars=False) -> pd.DataFrame|pl.DataFrame:
         file_path = os.path.join(self.results_path, self._parquet_name + '.parquet')
-        return pd.read_parquet(file_path)
-
-
+        if self._prepare_engine == 'pandas':
+            return pd.read_parquet(file_path)
+        elif self._prepare_engine == 'polars':
+            return pl.read_parquet(file_path)
 
 
 class PrepareEngine(ABC):

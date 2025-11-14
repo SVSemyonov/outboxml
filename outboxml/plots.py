@@ -536,7 +536,7 @@ class CompareModelsPlot:
 
 
         elif cohort_base == 'fact':
-            y = self.__compare_cohort_model_base(df1=df1, df2=df2, samples=samples, cut_min_value=cut_min_value,
+            y = self.__compare_cohort_fact_base(df1=df1, df2=df2, samples=samples, cut_min_value=cut_min_value,
                                                  cut_max_value=cut_max_value)
             names = ['model1', 'fact', 'model2', 'exposure']
 
@@ -604,8 +604,8 @@ class CompareModelsPlot:
     def __compare_cohort_fact_base(self, df1: pd.DataFrame, df2: pd.DataFrame,
                                    samples:float, cut_min_value: float, cut_max_value: float):
 
-        column_to_group = "y_true"
-        column_to_plot = 'predict'
+        column_to_group ="y_true"
+        column_to_plot = "y_true"
         df2 = df2.rename(columns={"predict": "predict_old_model", "y_prediction": "prediction_old_model"})
         change_samples = False
         df = pd.concat([df1, df2[['predict_old_model', "prediction_old_model"]]], axis=1)

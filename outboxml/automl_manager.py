@@ -181,12 +181,13 @@ class AutoMLManager(DataSetsManager):
                  retro: bool = True,
                  hp_tune: bool = True,
                  async_mode: bool = False,
-                 save_temp: bool = False,
+                 use_temp_files: bool = False,
                  model_timeout_seconds: int = None,
                  grafana_connection=None,
                  models_dict: dict=None
                  ):
-        super().__init__(config_name=models_config, extractor=extractor, external_config=external_config)
+        super().__init__(config_name=models_config, extractor=extractor,
+                         external_config=external_config, use_temp_files=use_temp_files)
         self.models_dict = models_dict
         self.timeout = model_timeout_seconds
         self._business_metric = business_metric
@@ -196,7 +197,6 @@ class AutoMLManager(DataSetsManager):
             self._compare_business_metric = BaseCompareBusinessMetric()
         self.__grafana_connection = grafana_connection
         self._async_mode = async_mode
-        self._save_temp = save_temp
         self.features_list_to_exclude = []
         self._auto_ml_config = auto_ml_config
         self._feature_selection_config = None
@@ -231,18 +231,17 @@ class AutoMLManager(DataSetsManager):
     def update_models(self, send_mail: bool = False, parameters_for_optuna: dict = None):
         self._init_logger()
         email = AutoMLReviewEMail(config=self._external_config)
-     #   try:
-        self.load_dataset()
-        self.status['Loading dataset'] = True
-        self.feature_selection()
-
-        if self._hp_tune:
-            new_hp = self.hp_tuning(parameters_for_optuna)
-            self.automl_results.new_hp = new_hp
-            self.__update_hyperparameters(new_hp)
-            self.status['HP tuning'] = True
-            self.automl_results.run_time['hp_tuning'] = datetime.now()
         try:
+
+            self.status['Loading dataset'] = True
+            self.feature_selection()
+
+            if self._hp_tune:
+                new_hp = self.hp_tuning(parameters_for_optuna)
+                self.automl_results.new_hp = new_hp
+                self.__update_hyperparameters(new_hp)
+                self.status['HP tuning'] = True
+                self.automl_results.run_time['hp_tuning'] = datetime.now()
             results = self.fit_models(models_dict=self.models_dict)
             self.status['Fitting'] = True
             self.automl_results.run_time['fitting'] = datetime.now()
