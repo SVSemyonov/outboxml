@@ -16,6 +16,7 @@ from outboxml.core.data_prepare import (
     prepare_numerical_feature,
 )
 from outboxml.core.pydantic_models import FeatureModelConfig
+from outboxml.data_subsets import ModelDataSubset
 
 
 class TestDataPrepare(TestCase):
@@ -163,6 +164,16 @@ class TestDataPrepare(TestCase):
             pd.Series(["(3.0, inf]", "(-inf, 1.0]", "(-inf, 1.0]", "(-inf, 1.0]", "(1.0, 3.0]", "(3.0, inf]", "(3.0, inf]", "(3.0, inf]"])
         )
 
+    def test_model_data_subset(self):
+        data = pd.read_csv('test_data/titanic.csv')
+        data1 = data.drop(columns=['AGE'])
+        data2 = data['AGE']
+        datasubset1 = ModelDataSubset(model_name='test',X_train=data1, features_categorical=list(data.columns))
+        datasubset2 = ModelDataSubset(model_name='test', X_train=data2, features_numerical=['AGE'])
+        dsubset = datasubset1 + datasubset2
+        self.assertIsInstance(dsubset, ModelDataSubset)
+        self.assertEqual(dsubset.X_train.shape, (891,12))
+        self.assertEqual(datasubset1.X_train.shape, (891, 11))
 
 if __name__ == '__main__':
     main()

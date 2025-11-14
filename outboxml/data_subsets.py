@@ -28,8 +28,8 @@ class ModelDataSubset:
             y_train: pd.Series = pd.Series(),
             X_test: Optional[pd.DataFrame] = None,
             y_test: Optional[pd.Series] = None,
-            features_numerical: Optional[List[str]] = None,
-            features_categorical: Optional[List[str]] = None,
+            features_numerical: Optional[List[str]] = [],
+            features_categorical: Optional[List[str]] = [],
             X: Optional[pd.DataFrame] = None,
             exposure_train: Optional[pd.Series] = None,
             exposure_test: Optional[pd.Series] = None,
@@ -150,7 +150,10 @@ class ModelDataSubset:
         new_features_categorical = list(set(self.features_categorical + other.features_categorical))
 
         # Объединяем X (если оба существуют)
-        new_X = pd.concat([self.X, other.X], axis=1)
+        if self.X is not None:
+            new_X = pd.concat([self.X, other.X], axis=1)
+        else:
+            new_X = None
 
         # Объединяем extra_columns
         if self.extra_columns is not None and other.extra_columns is not None:
