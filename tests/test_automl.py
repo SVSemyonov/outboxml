@@ -133,6 +133,7 @@ class HPTune(TestCase):
     def test_hp_tune_xgboost(self):
         self.ds_manager._prepare_datasets['first']._model_config.objective = 'poisson'
         self.ds_manager._prepare_datasets['first']._model_config.wrapper = 'xgboost'
+        self.ds_manager._data_preprocessor._prepare_datasets['first']._model_config.wrapper = 'xgboost'
 
         def parameters_for_optuna(trial):
             return {
@@ -147,7 +148,7 @@ class HPTune(TestCase):
             }
 
         params = HPTuning(data_preprocessor=self.ds_manager._data_preprocessor, folds_num_for_cv=5, ).best_params(
-            model_name='first_xgboost',
+            model_name='first',
             trials=5,
             direction='maximize',
             parameters_for_optuna_func=parameters_for_optuna)
@@ -223,7 +224,7 @@ class AutoMLTest(TestCase):
                               )
         self.assertEqual(auto_ml.status
                          , {'Loading dataset': True,
-                                                                  'Feature selection': False,
+                                                                  'Feature selection': True,
                                                                   'HP tuning': True,
                                                                   'Fitting': True,
                                                                   'Compare with previous': True,
