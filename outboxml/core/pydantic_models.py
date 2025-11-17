@@ -214,3 +214,9 @@ class MonitoringConfig(BaseModel):
     dashboard_name: str
     extrapolation_period: int = 12
     target_column: str
+
+
+class UpdateRequest(BaseModel):
+    auto_ml_config: AutoMLConfig = None
+    all_model_config: AllModelsConfig =None
+    monitoring_config: MonitoringConfig =None
