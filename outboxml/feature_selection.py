@@ -424,7 +424,47 @@ class BaseFS:
     def get_updated_model_config(model_config: ModelConfig, features_to_drop: list) -> ModelConfig:
 
         model_config_to_return = deepcopy(model_config)
-        if model_config_to_return.features is not None:
-            model_config_to_return.features = [obj for obj in model_config_to_return.features if
-                                               obj.name not in features_to_drop]
+        if model_config_to_return is not None:
+
+            if model_config_to_return.features is not None:
+                model_config_to_return.features = [obj for obj in model_config_to_return.features if
+                                                   obj.name not in features_to_drop]
         return model_config_to_return
+
+
+class TempSubsetFS(BaseFS):
+    def __init__(self, data_preprocessor: DataPreprocessor,
+                 parameters: FeatureSelectionConfig,
+                 feature_selection_interface: SelectionInterface,
+                 prepare_data_interface: BasePrepareDataset,
+                 new_features_list: list = None):
+        super().__init__(data_preprocessor, parameters, feature_selection_interface, prepare_data_interface,
+                         new_features_list)
+
+    def _prepare_data(self, model_name: str=None)->ModelDataSubset:
+        feature_params = {}
+        full_data = self._data_preprocessor.dataset
+        for feature in self.features_for_model:
+            if feature in self.types_dict['NUMERIC']:
+                type = 'numerical'
+            else:
+                type = 'categorical'
+            feature_params[feature] = self._prepare_feature(serie=full_data[feature], type=type)
+        self._data_preprocessor._version = self._data_preprocessor._version.split('_new')[0]
+        subset = self._data_preprocessor.get_subset(model_name)
+        data_new = full_data[self.features_for_model]
+        new_features_subset = DataPreprocessor(prepare_engine=self._data_preprocessor._prepare_engine,
+                                               version=self._data_preprocessor._version + '_new',
+                                               prepare_dataset_interface_dict=self._data_preprocessor._prepare_datasets,
+                                               data_config=self._data_preprocessor._data_config,
+                                               dataset=data_new,
+                                               use_saved_files=False,
+                                               external_config=self._data_preprocessor.config).get_subset(model_name,
+                                                                                                          prepare_func=self._data_prepare_interface.prepare_dataset,
+                                                                                                          args={
+                                                                                                              'features_params': feature_params,
+                                                                                                              'new_features': self.types_dict}
+                                                                                                          )
+
+
+        return subset + new_features_subset

@@ -29,7 +29,7 @@ async def ensemble_predict(
     elif isinstance(features_values, list):
         data = pd.DataFrame(features_values)
     elif isinstance(features_values, pd.DataFrame):
-        data = features_values
+        data = features_values.copy()
     else:
         raise TypeError("Invalid features_values type")
 

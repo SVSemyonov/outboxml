@@ -25,3 +25,4 @@ schedule==1.2.2
 psycopg2-binary
 scipy<=1.15.3
 xgboost
+polars
