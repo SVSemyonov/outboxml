@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Union
 
 from outboxml.automl_manager import AutoMLManager
 from outboxml import config
-from outboxml.core.pydantic_models import UpdateRequest, MonitoringRequest
+from outboxml.core.pydantic_models import UpdateRequest, MonitoringRequest, AutoMLResultRequest, MonitoringResultRequest
 from outboxml.core.utils import ResultPickle
 from outboxml.core.validators import GroupValidator
 from outboxml.monitoring_manager import MonitoringManager
@@ -25,12 +25,20 @@ async def health_route():
 
 @app.post("/api/update")
 async def update_route(update_request: UpdateRequest):
-
+    user_paramters = update_request.user_parameters
+    retro =  user_paramters.get('retro', False)
+    hp_tune = user_paramters.get('hp_tune', False)
+    use_temp_files = user_paramters.get('use_temp_files', False)
+    #TODO other parameters
     try:
         auto_ml_config = update_request.auto_ml_config
         all_model_config = update_request.all_model_config
         auto_ml  = AutoMLManager(auto_ml_config=auto_ml_config,
-                                models_config=all_model_config,
+                                 models_config=all_model_config,
+                                 retro=retro,
+                                 hp_tune=hp_tune,
+                                 use_temp_files=use_temp_files,
+
                          )
         auto_ml.update_models()
         response = auto_ml.status
@@ -48,15 +56,43 @@ async def update_route(monitoring_request: MonitoringRequest):
     try:
         monitoring_config = monitoring_request.monitoring_config
         all_model_config = monitoring_request.all_model_config
-        if monitoring_config is not None and all_model_config is not None:
-
-           monitoring  = MonitoringManager(monitoring_config=monitoring_config,
+        monitoring  = MonitoringManager(monitoring_config=monitoring_config,
                                         models_config=all_model_config,
                          )
-           monitoring.review()
-        else:
-            raise f'Wrong input'
+        monitoring.review()
+
         response = {'Monitoring status': 'OK'}
+        status_code = status.HTTP_200_OK
+
+    except Exception as exc:
+        response = {"error": traceback.format_exc()}
+        status_code = status.HTTP_400_BAD_REQUEST
+
+    return JSONResponse(content=jsonable_encoder(response), status_code=status_code)
+
+
+@app.get("/api/auto_ml_result")
+async def update_route(auto_ml_result_request: AutoMLResultRequest):
+    try:
+        model_name = auto_ml_result_request.main_model
+
+
+        response = {'Auto ml results': 'OK'}
+        status_code = status.HTTP_200_OK
+
+    except Exception as exc:
+        response = {"error": traceback.format_exc()}
+        status_code = status.HTTP_400_BAD_REQUEST
+
+    return JSONResponse(content=jsonable_encoder(response), status_code=status_code)
+
+
+@app.get("/api/monitoring_result")
+async def update_route(monitoring_result_request: MonitoringResultRequest):
+    try:
+        model_name = monitoring_result_request.main_model
+
+        response = {'Monitoring results': 'OK'}
         status_code = status.HTTP_200_OK
 
     except Exception as exc:
