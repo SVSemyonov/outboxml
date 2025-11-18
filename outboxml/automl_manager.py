@@ -20,7 +20,7 @@ from outboxml.core.pydantic_models import AutoMLConfig
 from outboxml.core.utils import ResultPickle
 from outboxml.dataset_retro import RetroDataset
 from outboxml.datasets_manager import DataSetsManager, ModelDataSubset
-from outboxml.export_results import ResultExport, GrafanaExport
+from outboxml.export_results import ResultExport, DashboardExport
 from outboxml.extractors import Extractor
 from outboxml.feature_selection import BaseFS, FeatureSelectionInterface
 from outboxml.hyperparameter_tuning import HPTuning
@@ -366,7 +366,7 @@ class AutoMLManager(DataSetsManager):
             df = ResultExport(ds_manager=ds_manager_for_save).grafana_export(project_name=group_name,
                                                                              date_time=datetime.now())
 
-            GrafanaExport(df=df, table_name=self._auto_ml_config.grafana_table_name,
+            DashboardExport(df=df, table_name=self._auto_ml_config.grafana_table_name,
                           connection=self.__grafana_connection).load_data_to_db()
         except Exception as exc:
             logger.error('grafana export error||' + str(exc))

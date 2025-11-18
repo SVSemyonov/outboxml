@@ -5,14 +5,16 @@ import pickle
 import pandas as pd
 from loguru import logger
 from pydantic import ValidationError
+from sqlalchemy import create_engine, text
 
 from outboxml import config
 from outboxml.core.data_prepare import prepare_dataset
 from outboxml.core.email import EMailMonitoring
 from outboxml.core.pydantic_models import MonitoringConfig
 from outboxml.datadrift import DataDrift
+from outboxml.dataset_monitoring_interface import DatasetMonitor
 from outboxml.datasets_manager import DataSetsManager
-from outboxml.export_results import ResultExport, GrafanaExport
+from outboxml.export_results import ResultExport, DashboardExport
 from outboxml.extractors import Extractor
 from outboxml.metrics.base_metrics import BaseMetric
 
@@ -22,21 +24,22 @@ class MonitoringResult:
         self.group_name = group_name
         self.model_version = 'default'
         self.datadrift = {}
+        self.dataset_monitor = {}
         self.metric = None
         self.extrapolation_results = {}
-        self.report = pd.DataFrame()
+        self.report = {} #pd.DataFrame()
         self.grafana_dashboard = None
 
 
 
 class MonitoringReport:
     def __init__(self, ):
-        pass
+        self._monitoring_result = None
 
-    def make_report(self, monitoring_result: MonitoringResult) -> pd.DataFrame:
+    def make_datadrift_report(self) -> pd.DataFrame:
         report = pd.DataFrame()
-        for key in monitoring_result.datadrift.keys():
-            df_result = monitoring_result.datadrift[key].copy()
+        for key in self._monitoring_result.datadrift.keys():
+            df_result = self._monitoring_result.datadrift[key].copy()
             df_result['model_name'] = key
             report = pd.concat([report, df_result])
         for column in report.columns:
@@ -44,9 +47,21 @@ class MonitoringReport:
                 report[column] = report[column].astype('float')
             except:
                 report[column] = report[column].astype(str)
-        report['model_version'] = monitoring_result.model_version
+        report['model_version'] = self._monitoring_result.model_version
         return report
 
+    def make_dataset_report(self) -> pd.DataFrame:
+        report = pd.DataFrame()
+        for key in self._monitoring_result.dataset_monitor.keys():
+            df_result = self._monitoring_result.dataset_monitor[key].copy()
+        return df_result
+
+    def return_report(self, monitoring_result, report_type):
+        self._monitoring_result = monitoring_result
+        if report_type == 'datadrift':
+            return self.make_datadrift_report()
+        elif report_type == 'dataset':
+            return self.make_dataset_report()
 
 class MonitoringManager:
     """класс для проведения процесса мониторинга для выбранной модели.
@@ -83,7 +98,9 @@ class MonitoringManager:
                  target_extractor: Extractor = None,
                  monitoring_report: MonitoringReport = MonitoringReport(),
                  datadrift_interface: DataDrift = None,
+                 dataset_monitor_interface: DatasetMonitor = None,
                  grafana_connection=None,
+                 superset_connection=None,
                  business_metric: BaseMetric = None,
                  email: EMailMonitoring = None,
                  ):
@@ -91,6 +108,8 @@ class MonitoringManager:
         self._monitoring_config = monitoring_config
         self._models_config = models_config
         self._target_extractor = target_extractor
+        self.__init_monitoring()
+
         if external_config is not None:
             self._external_config = external_config
         else:
@@ -101,6 +120,11 @@ class MonitoringManager:
         else:
             self.datadrift = datadrift_interface
 
+        if dataset_monitor_interface is None:
+            self.dataset_monitor_interface = DatasetMonitor()
+        else:
+            self.dataset_monitor_interface = dataset_monitor_interface
+
         if email is None:
             self.email = EMailMonitoring(config=self._external_config)
         else:
@@ -108,6 +132,7 @@ class MonitoringManager:
 
         self.__load_default_models = False
         self.__grafana_connection = grafana_connection
+        self.__superset_connection = superset_connection
 
         self._business_metric = business_metric
         self._ds_manager = DataSetsManager(config_name=self._models_config, extractor=data_extractor, external_config=external_config)
@@ -118,15 +143,25 @@ class MonitoringManager:
         self.result = MonitoringResult(group_name=self._monitoring_config.group_name)
         self.logs = None
 
-    def review(self, check_datadrift: bool = True,  send_mail: bool = True,
-               to_grafana: bool = True) -> MonitoringResult:
+    def review(self,
+               check_datadrift: bool = True,
+               check_dataset: bool = True,
+               send_mail: bool = True,
+               to_grafana: bool = True,
+               to_superset: bool = True) -> MonitoringResult:
         try:
             if check_datadrift:
                 self.datadrift_review()
-            report = self.prepare_report()
-            self.result.report = report
+                datadrift_report = self.prepare_report('datadrift')
+                self.result.report['datadrift'] = datadrift_report
+            if check_dataset:
+                self.dataset_monitor_review()
+                dataset_monitor_report = self.prepare_report('dataset')
+                self.result.report['dataset'] = dataset_monitor_report
             if to_grafana:
-                self._grafana_report(report)
+                self._dashboard_report(datadrift_report, dashboard_name='grafana')
+            if to_superset:
+                self._dashboard_report(dataset_monitor_report, dashboard_name='superset')
             if send_mail:
                 self.email.success_mail(self.result)
         except Exception as exc:
@@ -136,9 +171,10 @@ class MonitoringManager:
         finally:
             return self.result
 
-    def prepare_report(self) -> pd.DataFrame:
-        logger.info('Preparing report...')
-        return self._monitoring_report.make_report(self.result)
+    def prepare_report(self, report_type: str) -> pd.DataFrame:
+        logger.info(f'Preparing {report_type} report...')
+        return self._monitoring_report.return_report(self.result, report_type=report_type)
+
 
     def datadrift_review(self):
         if self.logs is None:
@@ -162,6 +198,9 @@ class MonitoringManager:
                 logger.error(exc)
                 logger.info('No datadrift results for model')
         return self.result.datadrift
+
+    def dataset_monitor_review(self):
+        self.result.dataset_monitor[self._monitoring_config.pickle_name] = self._dataset_monitor_report()
 
 
     def __init_monitoring(self):
@@ -188,13 +227,54 @@ class MonitoringManager:
         logger.info('Calculating datadrift...')
         return self.datadrift.report(X_train, X_test, self._ds_manager.dataset, self.logs)
 
-    def _grafana_report(self, report: pd.DataFrame):
+    def _dataset_monitor_report(self):
+        logger.info('Calculating dataset_report...')
+        if self._monitoring_config.data_source in ['csv', 'parquet']:
+            dataset_name = os.path.basename(os.path.splitext(self._ds_manager.data_config.local_name_source)[0])
+        else:
+            dataset_name = self._monitoring_config.data_config.table_name_source
+        return self.dataset_monitor_interface.report(
+            monitoring_config=self._monitoring_config,
+            dataset_name=dataset_name,
+            data=self._ds_manager.load_dataset()
+        )
+    # early _grafana_report
+    def _dashboard_report(self, report: pd.DataFrame, dashboard_name: str = 'grafana'):
+        if dashboard_name == 'grafana':
+            conn = self.__grafana_connection
+            table_name = self._monitoring_config.grafana_table_name
+        elif dashboard_name == 'superset':
+            conn = self.__superset_connection
+            table_name = self._monitoring_config.superset_table_name
+            self._delete_existing_report(conn, report)
         try:
-            GrafanaExport(df=report, connection=self.__grafana_connection,
-                          table_name=self._monitoring_config.grafana_table_name).load_data_to_db()
+            DashboardExport(df=report, connection=conn,
+                          table_name=table_name).load_data_to_db()
         except Exception as exc:
             logger.error(exc)
-            logger.info('No results in grafana')
+            logger.info(f'No results in {dashboard_name}')
+
+    def _delete_existing_report(self, connection, df):
+        col_dataset_name = self._monitoring_config.report_uniq_cols['dataset']
+        col_model_name = self._monitoring_config.report_uniq_cols['model']
+
+        dataset_name = df[col_dataset_name].unique()[0]
+        model_name = df[col_model_name].unique()[0]
+        table_name = self._monitoring_config.superset_table_name
+
+        engine = create_engine(connection)
+        with engine.begin() as conn:
+            result = conn.execute(
+            text(
+                f"""
+                DELETE FROM "{table_name}"
+                WHERE "{col_dataset_name}" = '{dataset_name}'
+                  AND "{col_model_name}" = '{model_name}'
+                """
+            )
+        )
+        if result.rowcount > 0:
+            logger.warning(f'Deleted {result.rowcount} rows from {table_name}, because dataset "{dataset_name}" and model "{model_name}" already exists')
 
     def _load_prod_model(self):
 

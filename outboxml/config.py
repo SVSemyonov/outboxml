@@ -20,6 +20,7 @@ mlflow_experiment = env_reader.str("mlflow_experiment", "FrameworkTest")
 
 
 connection_params = env_reader.str("connection", f"postgresql+psycopg2://mlflow:mlflowpassword@postgre:5432/mlflow")
+connection_params_superset = env_reader.str("connection_superset", f"postgresql+psycopg2://superset:superset@postgre:5432/superset")
 
 
 email_smtp_server = ""

@@ -420,9 +420,10 @@ class ResultExport:
             return [], []
 
 
-class GrafanaExport:
+class DashboardExport:
     """
-    Class for export data to grafana db (Motor.grafana.table_name)
+    Early GrafanaExport
+    Class for export data to dashboard db (default "Grafana")
 
     Parameters:
     -----------
@@ -431,7 +432,7 @@ class GrafanaExport:
         connection: user connection engine. By default sqlalchemy MSSQL engine
     ----------
     Methods:
-        load_data_to_db: loading dataframe to grafana source
+        load_data_to_db: loading dataframe to dashboard source
     """
 
     def __init__(self,
