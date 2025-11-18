@@ -217,6 +217,11 @@ class MonitoringConfig(BaseModel):
 
 
 class UpdateRequest(BaseModel):
-    auto_ml_config: AutoMLConfig = None
-    all_model_config: AllModelsConfig =None
-    monitoring_config: MonitoringConfig =None
+    auto_ml_config: AutoMLConfig
+    all_model_config: AllModelsConfig
+    user_parameters: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None
+
+class MonitoringRequest(BaseModel):
+    all_model_config: AllModelsConfig
+    monitoring_config: MonitoringConfig
+    user_parameters: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None
