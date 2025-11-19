@@ -55,7 +55,7 @@ class ModelConfigBuilder(ConfigBuilder):
 
 
 class FeatureBuilder(ConfigBuilder):
-    def __init__(self, **params):
+    def __init__(self, **params:dict):
 
         self.type = params.get("type")
         self.mapping = params.get("mapping")
@@ -68,7 +68,7 @@ class FeatureBuilder(ConfigBuilder):
         self.replace_map = params.get("replace_map")
         self.default_value = params.get("default")
         self.feature_values = params.get("feature_values")
-        self.name = params.get("name")
+        self.name = params.get("name", 'default')
 
     def build(self):
         logger.debug('Feature builder||'+str(self.name))
@@ -125,10 +125,11 @@ class AutoMLConfigBuilder(ConfigBuilder):
 
 
 class AllModelsConfigBuilder(ConfigBuilder):
-    def __init__(self, data: pd.DataFrame=None, **params):
+    def __init__(self,  **params):
         self.project = params.get('project', 'test')
         self.group_name = params.get('group_name', 'example')
         self.version = params.get('version', '1')
+        self.features = params.get('features')
         self.data_config = params.get('data_config',
                                       DataModelConfig(source='database',
                                                       table_name_source='data_table_name',
@@ -137,7 +138,7 @@ class AllModelsConfigBuilder(ConfigBuilder):
                                                                                       test_train_proportion=0.2),
 
                                                                      ))
-        self.models_config = params.get('models_config', [ModelConfigBuilder().build()])
+        self.models_config = params.get('models_config', [ModelConfigBuilder(features=self.features).build()])
 
 
     def build(self):
@@ -147,3 +148,51 @@ class AllModelsConfigBuilder(ConfigBuilder):
                                data_config=self.data_config,
                                models_configs=self.models_config,
                                )
+
+
+def feature_params(serie: pd.Series,
+                   max_category_num: int= 20,
+                   depth: float = 0.01,
+                   q1: float = 0.001, q2: float = 0.999,
+                   )->dict:
+
+    feature_params = {}
+    logger.info('Prepare feature||' + str(serie.name))
+    VC = serie.nunique(dropna=False)
+    if VC == 1:
+        type='categorical'
+    elif 2 < VC < max_category_num and serie.dtype == object:
+        type ='categorical'
+    elif serie.dtype == object:
+        type = 'object'
+    elif pd.api.types.is_datetime64_any_dtype(serie):
+        type = 'date'
+    else:
+       type = 'numerical'
+
+    if type == 'categorical':
+        if 0 < depth < 1:
+            VC = serie.value_counts(dropna=False, normalize=True).reset_index()
+            try:
+                #                     VC = VC[VC[Serie.name] > depth]["index"]
+                VC = VC[VC['proportion'] > depth][serie.name]
+                # VC = serie.value_counts(dropna=False).reset_index()[:int(depth)]["index"]
+                feature_params['default'] = '_NAN_'  # проверить
+                serie.apply(lambda x: x if (x in set(VC)) or (pd.isnull(x)) else "OTHER")
+                feature_params['encoding'] = None
+            except:
+                #                     VC = VC[VC[0] > depth]["index"]
+                logger.error('Error for feature builder||'+ str(serie.name))
+
+    elif type == 'numerical':
+        if q1 or q2:
+
+            feature_params['clip'] = {'min_value': serie.quantile(q1),
+                                      # winsorize(serie, limits=[q1, q2], nan_policy='omit').data.min(),
+                                      'max_value': serie.quantile(
+                                          q2)}  # winsorize(serie, limits=[q1, q2], nan_policy='omit').data.max()}
+            feature_params['default'] = serie.fillna(
+                0).median()  # 0 #медиана или средняя в конфиге _MIN_ or _MEAN_ можно оставить пропуски
+            feature_params['encoding'] = None
+    logger.info(feature_params)
+    return feature_params
