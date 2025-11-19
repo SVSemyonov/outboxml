@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Union
 
 from outboxml.automl_manager import AutoMLManager
 from outboxml import config
+from outboxml.automl_utils import build_default_auto_ml_config, build_default_all_models_config
 from outboxml.core.pydantic_models import UpdateRequest, MonitoringRequest, AutoMLResultRequest, MonitoringResultRequest
 from outboxml.core.utils import ResultPickle
 from outboxml.core.validators import GroupValidator
@@ -93,6 +94,34 @@ async def update_route(monitoring_result_request: MonitoringResultRequest):
         model_name = monitoring_result_request.main_model
 
         response = {'Monitoring results': 'OK'}
+        status_code = status.HTTP_200_OK
+
+    except Exception as exc:
+        response = {"error": traceback.format_exc()}
+        status_code = status.HTTP_400_BAD_REQUEST
+
+    return JSONResponse(content=jsonable_encoder(response), status_code=status_code)
+
+
+@app.get("/api/default_automl_config")
+async def default_automl_config():
+    try:
+
+        response = build_default_auto_ml_config()
+        status_code = status.HTTP_200_OK
+
+    except Exception as exc:
+        response = {"error": traceback.format_exc()}
+        status_code = status.HTTP_400_BAD_REQUEST
+
+    return JSONResponse(content=jsonable_encoder(response), status_code=status_code)
+
+
+@app.get("/api/default_automl_config")
+async def default_model_config():
+    try:
+
+        response = build_default_all_models_config()
         status_code = status.HTTP_200_OK
 
     except Exception as exc:
