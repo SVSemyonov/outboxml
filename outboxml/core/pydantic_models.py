@@ -170,7 +170,7 @@ class FeatureSelectionConfig(BaseModel):
     cutoff_1_category: float = 0.99,
     cutoff_nan: float = 0.7,
     max_corr_value: float = 0.6
-    metric_eval: dict
+    metric_eval: dict = {'metric': 0}
     cv_diff_value: float = 0.05
     encoding_cat: str = 'WoE_cat_to_num'
     encoding_num: str = 'WoE_num_to_num'
