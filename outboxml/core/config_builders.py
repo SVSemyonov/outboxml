@@ -161,7 +161,7 @@ def feature_params(serie: pd.Series,
     VC = serie.nunique(dropna=False)
     if VC == 1:
         type='categorical'
-    elif 2 < VC < max_category_num and serie.dtype == object:
+    elif 2 <= VC < max_category_num and serie.dtype == object:
         type ='categorical'
     elif serie.dtype == object:
         type = 'object'
@@ -174,14 +174,12 @@ def feature_params(serie: pd.Series,
         if 0 < depth < 1:
             VC = serie.value_counts(dropna=False, normalize=True).reset_index()
             try:
-                #                     VC = VC[VC[Serie.name] > depth]["index"]
                 VC = VC[VC['proportion'] > depth][serie.name]
-                # VC = serie.value_counts(dropna=False).reset_index()[:int(depth)]["index"]
                 feature_params['default'] = '_NAN_'  # проверить
                 serie.apply(lambda x: x if (x in set(VC)) or (pd.isnull(x)) else "OTHER")
                 feature_params['encoding'] = None
             except:
-                #                     VC = VC[VC[0] > depth]["index"]
+
                 logger.error('Error for feature builder||'+ str(serie.name))
 
     elif type == 'numerical':

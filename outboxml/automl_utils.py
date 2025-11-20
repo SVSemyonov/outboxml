@@ -10,7 +10,7 @@ from loguru import logger
 from sqlalchemy import create_engine
 import select
 
-from build.lib.outboxml.core.pydantic_models import AutoMLConfig, AllModelsConfig
+from outboxml.core.pydantic_models import AutoMLConfig, AllModelsConfig
 from outboxml.core.config_builders import AutoMLConfigBuilder, AllModelsConfigBuilder, feature_params, FeatureBuilder, \
     ModelConfigBuilder
 from outboxml.core.utils import ResultPickle
@@ -113,8 +113,8 @@ def check_postgre_transaction(script: Callable, config, waiting_time=300):
         raw_conn.close()
 
 
-def build_default_auto_ml_config():
-    return AutoMLConfigBuilder().build().model_dump_json(indent=3)
+def build_default_auto_ml_config(params:dict=None):
+    return AutoMLConfigBuilder(**params).build().model_dump_json(indent=3)
 
 def build_default_all_models_config(data:pd.DataFrame=None,
                                     model_name = 'example',
@@ -136,6 +136,8 @@ def build_default_all_models_config(data:pd.DataFrame=None,
                                     q1=q1,
                                     q2=q2,
                                     )
+            if params == {}:
+                continue
             features.append(FeatureBuilder(**params).build())
     config_params = {'models_config': ModelConfigBuilder(name=model_name,
                                                          features=features,
