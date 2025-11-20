@@ -8,14 +8,16 @@ import pandas as pd
 from sklearn.metrics import mean_absolute_error
 
 from outboxml.automl_manager import RetroFS, AutoMLManager
+from outboxml.core.config_builders import AutoMLConfigBuilder, AllModelsConfigBuilder
 from outboxml.core.email import EMailDSResult, EMailDSCompareResult
 from outboxml.core.prepared_datasets import FeatureSelectionPrepareDataset
-from outboxml.core.pydantic_models import FeatureSelectionConfig
+from outboxml.core.pydantic_models import FeatureSelectionConfig, AutoMLConfig, AllModelsConfig
 from outboxml.datadrift import DataDrift
 from outboxml.datasets_manager import DataSetsManager, DSManagerResult
 from outboxml.export_results import ResultExport
 from outboxml import config
-from outboxml.automl_utils import load_last_pickle_models_result, calculate_previous_models
+from outboxml.automl_utils import load_last_pickle_models_result, calculate_previous_models, \
+    build_default_auto_ml_config, build_default_all_models_config
 from outboxml.extractors import Extractor
 from outboxml.feature_selection import BaseFS, FeatureSelectionInterface
 from outboxml.hyperparameter_tuning import HPTuning
@@ -299,6 +301,12 @@ class TestPredict(TestCase):
         self.assertIsInstance(result['main_response'], dict)
         self.assertIsInstance(result['main_response']['result'], dict)
 
+    def test_config_builder(self):
+        data = pd.read_csv(path_to_data)
+        self.assertIsInstance(AutoMLConfigBuilder().build(), AutoMLConfig)
+        self.assertIsInstance(AllModelsConfigBuilder().build(), AllModelsConfig)
+        self.assertIsInstance(build_default_auto_ml_config({'group_name': 'test'}), str)
+        self.assertIsInstance(build_default_all_models_config(data=data), AllModelsConfig)
 
 if __name__ == '__main__':
     main()

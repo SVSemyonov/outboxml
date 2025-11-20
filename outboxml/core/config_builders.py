@@ -129,7 +129,7 @@ class AllModelsConfigBuilder(ConfigBuilder):
         self.project = params.get('project', 'test')
         self.group_name = params.get('group_name', 'example')
         self.version = params.get('version', '1')
-        self.features = params.get('features')
+        self.features = params.get('features', [])
         self.data_config = params.get('data_config',
                                       DataModelConfig(source='database',
                                                       table_name_source='data_table_name',
