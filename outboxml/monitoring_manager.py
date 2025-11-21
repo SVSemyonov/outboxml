@@ -139,7 +139,6 @@ class MonitoringManager:
 
         self._result_export = ResultExport(ds_manager=self._ds_manager, config=self._external_config)
         self._logs_extractor = logs_extractor
-        self.__init_monitoring()
         self.result = MonitoringResult(group_name=self._monitoring_config.group_name)
         self.logs = None
 
@@ -246,7 +245,10 @@ class MonitoringManager:
         elif dashboard_name == 'superset':
             conn = self.__superset_connection
             table_name = self._monitoring_config.superset_table_name
-            self._delete_existing_report(conn, report)
+            try:
+                self._delete_existing_report(conn, report)
+            except Exception as exc:
+                logger.error(exc)
         try:
             DashboardExport(df=report, connection=conn,
                           table_name=table_name).load_data_to_db()
@@ -259,22 +261,23 @@ class MonitoringManager:
         col_model_name = self._monitoring_config.report_uniq_cols['model']
 
         dataset_name = df[col_dataset_name].unique()[0]
-        model_name = df[col_model_name].unique()[0]
+        model_names = df[col_model_name].unique()
         table_name = self._monitoring_config.superset_table_name
 
         engine = create_engine(connection)
-        with engine.begin() as conn:
-            result = conn.execute(
-            text(
-                f"""
-                DELETE FROM "{table_name}"
-                WHERE "{col_dataset_name}" = '{dataset_name}'
-                  AND "{col_model_name}" = '{model_name}'
-                """
+        for model_name in model_names:
+            with engine.begin() as conn:
+                result = conn.execute(
+                text(
+                    f"""
+                    DELETE FROM "{table_name}"
+                    WHERE "{col_dataset_name}" = '{dataset_name}'
+                      AND "{col_model_name}" = '{model_name}'
+                    """
+                )
             )
-        )
-        if result.rowcount > 0:
-            logger.warning(f'Deleted {result.rowcount} rows from {table_name}, because dataset "{dataset_name}" and model "{model_name}" already exists')
+            if result.rowcount > 0:
+                logger.warning(f'Deleted {result.rowcount} rows from {table_name}, because dataset "{dataset_name}" and model "{model_name}" already exists')
 
     def _load_prod_model(self):
 

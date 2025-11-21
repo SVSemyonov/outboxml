@@ -5,6 +5,7 @@
     "dashboard_name": "TitanicMonitoring",
     "grafana_table_name": "TitanicMonitoring",
     "extrapolation_period": 12,
-    "target_column": "SURVIVED"
+    "target_column": "SURVIVED",
+  "data_source": "csv"
 }
 
