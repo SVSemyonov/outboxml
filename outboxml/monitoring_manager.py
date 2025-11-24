@@ -182,7 +182,7 @@ class MonitoringManager:
                     report_data = self.result.report[dashboard_type]
                     self._dashboard_report(report_data)
             if send_mail:
-                self.email.success_mail(self.result)
+                self.email.success_mail(self.result, self._monitoring_config)
         except Exception as exc:
             logger.error(exc)
             self.email.error_mail(group_name=self.result.group_name, error=exc)
@@ -265,8 +265,6 @@ class MonitoringManager:
         logger.info('Calculating dataset_report...')
         return self.dataset_monitor_interface.report(
             monitoring_config=self._monitoring_config,
-            dataset_name=dataset_name,
-            data=self._ds_manager.load_dataset()
             dataset_name=self._dataset_name,
             prod_models_configs=self._prod_group_name,
             data=self._ds_manager.dataset

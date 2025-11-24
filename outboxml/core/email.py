@@ -343,19 +343,32 @@ class EMailMonitoring(EMail):
     def __init__(self, config):
         super().__init__(config)
 
-    def success_mail(self, monitoring_result):
+    def success_mail(self, monitoring_result, monitoring_config):
         self.base_mail(header_name=monitoring_result.group_name + str(' Monitoring'), text='Отчет по запуску мониторинга')
         self.mail.add_text(
             "Обнаружен дрифт в фичах:",
             n_line_breaks=1,
         )
-        drift_df = self._prepare_drift_df(monitoring_result.report)
 
-        self.mail.add_pandas_table(drift_df,
-                                   params=dict(text_align='right', font_family='sans-serif', width="180px"),
-                                   )
+        for model_name, report in monitoring_result.datadrift.items():
+            drift_df = self._prepare_drift_df(report)
+            drift_df['model_name'] = model_name
+            self.mail.add_pandas_table(drift_df,
+                                       params=dict(text_align='right', font_family='sans-serif', width="180px"),
+                                       )
+
         self.mail.add_text(
-            "Полные результаты выложены в Grafana: " + str(monitoring_result.grafana_dashboard),
+            "Обнаружен дрифт в датасете:",
+            n_line_breaks=1,
+        )
+        for report in monitoring_result.rolling_datadrift.values():
+            rolling_drift_df = self._prepare_rolling_drift_df(report)
+            self.mail.add_pandas_table(rolling_drift_df,
+                                       params=dict(text_align='right', font_family='sans-serif', width="180px"),
+                                       )
+
+        self.mail.add_text(
+            "Полные результаты выложены в Дашборд: " + str(monitoring_config.dashboard_name),
             n_line_breaks=1,
         )
         self.send()
@@ -369,8 +382,16 @@ class EMailMonitoring(EMail):
             return pd.DataFrame()
         else:
             alarm_df = df.loc[df['PSI'] > 0.3]
-            df_to_send = alarm_df[['model_name', 'col', 'PSI', 'KL', 'JS', 'model_version']].sort_values(by='PSI', ascending=False)
+            df_to_send = alarm_df.sort_values(by='PSI', ascending=False)
             return df_to_send
+
+    def _prepare_rolling_drift_df(self, df):
+        if df is None:
+            print('Нет данных для отчета')
+            return pd.DataFrame()
+        else:
+            alarm_df = df.groupby(['FEATURE_NAME']).agg('last').reset_index()
+            return alarm_df.loc[alarm_df['METRIC_VALUE'] > 0.3]
 
 
 class HTMLReport:
