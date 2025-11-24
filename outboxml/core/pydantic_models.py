@@ -210,10 +210,9 @@ class MonitoringConfig(BaseModel):
     group_name: str
     prod_models_path: str
     pickle_name: str
-    grafana_table_name: str
-    superset_table_name: str
+    db_base_name: str
     dashboard_name: str
     extrapolation_period: int = 12
     target_column: str
     data_source: str
-    report_uniq_cols: dict = {'model': 'MODEL_NAME', 'dataset': 'DATASET_NAME'}
+    period_column: str = None
