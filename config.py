@@ -25,4 +25,3 @@ mlflow_tracking_uri = env_reader.str("mlflow_tracking_uri", "http://localhost:50
 mlflow_experiment = env_reader.str("mlflow_experiment", "FrameworkTest")
 
 connection_params = env_reader.str("connection", f"postgresql+psycopg2://mlflow:mlflowpassword@127.0.0.1:5433/mlflow")
-connection_params_superset = env_reader.str("connection_superset", f"postgresql+psycopg2://superset:superset@127.0.0.1:5433/monitoring")
