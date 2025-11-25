@@ -67,7 +67,7 @@ class FeatureBuilder(ConfigBuilder):
         self.cut_number = params.get("cut_number")
         self.replace_map = params.get("replace_map")
         self.default_value = params.get("default")
-        self.feature_values = params.get("feature_values", 'DEFAULT_VALUE')
+        self.feature_values = params.get("feature_values")
         self.name = params.get("name", 'default')
 
     def build(self):

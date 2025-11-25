@@ -10,7 +10,6 @@ from loguru import logger
 from sqlalchemy import create_engine
 import select
 
-from outboxml.core.pydantic_models import AutoMLConfig, AllModelsConfig
 from outboxml.core.config_builders import AutoMLConfigBuilder, AllModelsConfigBuilder, feature_params, FeatureBuilder, \
     ModelConfigBuilder
 from outboxml.core.utils import ResultPickle
