@@ -137,13 +137,14 @@ def build_default_all_models_config(data:pd.DataFrame=None,
                                     q2=q2,
                                     )
             if params == {}:
+                logger.info('Dropping feature||' + str(series.name))
                 continue
             features.append(FeatureBuilder(**params).build())
-    config_params = {'models_config': ModelConfigBuilder(name=model_name,
+    config_params = {'models_config': [ModelConfigBuilder(name=model_name,
                                                          features=features,
                                                          wrapper=wrapper,
                                                          objective=objective,
-                                                         )
+                                                         ).build()]
                      }
 
     return AllModelsConfigBuilder(**config_params).build().model_dump_json(indent=3)

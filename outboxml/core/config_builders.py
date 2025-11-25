@@ -67,7 +67,7 @@ class FeatureBuilder(ConfigBuilder):
         self.cut_number = params.get("cut_number")
         self.replace_map = params.get("replace_map")
         self.default_value = params.get("default")
-        self.feature_values = params.get("feature_values")
+        self.feature_values = params.get("feature_values", 'DEFAULT_VALUE')
         self.name = params.get("name", 'default')
 
     def build(self):
@@ -92,9 +92,10 @@ class FeatureBuilder(ConfigBuilder):
         if self.type == FeaturesTypes.numerical:
             return {"_TYPE_": "_NUM_"}
         else:
-            if self.type == FeaturesTypes.categorical:
+            if self.type == FeaturesTypes.categorical and self.feature_values is not None:
                 return dict(
                     (value, FeatureEngineering.not_changed) for value in list(self.feature_values.unique()))
+
 
 
 class AutoMLConfigBuilder(ConfigBuilder):
@@ -154,6 +155,7 @@ def feature_params(serie: pd.Series,
                    max_category_num: int= 20,
                    depth: float = 0.01,
                    q1: float = 0.001, q2: float = 0.999,
+                   avaliable_types: list=['numerical', 'categorical']
                    )->dict:
 
     feature_params = {}
@@ -169,7 +171,11 @@ def feature_params(serie: pd.Series,
         type = 'date'
     else:
        type = 'numerical'
+    if type not in avaliable_types:
+        return feature_params
 
+    feature_params['type'] = type
+    feature_params['name'] = str(serie.name)
     if type == 'categorical':
         if 0 < depth < 1:
             VC = serie.value_counts(dropna=False, normalize=True).reset_index()
@@ -178,19 +184,20 @@ def feature_params(serie: pd.Series,
                 feature_params['default'] = '_NAN_'  # проверить
                 serie.apply(lambda x: x if (x in set(VC)) or (pd.isnull(x)) else "OTHER")
                 feature_params['encoding'] = None
+                feature_params['feature_values'] = serie
             except:
-
                 logger.error('Error for feature builder||'+ str(serie.name))
+                feature_params = {}
 
     elif type == 'numerical':
         if q1 or q2:
 
-            feature_params['clip'] = {'min_value': serie.quantile(q1),
+            feature_params['clip'] = {'min_value': float(serie.quantile(q1)),
                                       # winsorize(serie, limits=[q1, q2], nan_policy='omit').data.min(),
-                                      'max_value': serie.quantile(
-                                          q2)}  # winsorize(serie, limits=[q1, q2], nan_policy='omit').data.max()}
-            feature_params['default'] = serie.fillna(
-                0).median()  # 0 #медиана или средняя в конфиге _MIN_ or _MEAN_ можно оставить пропуски
+                                      'max_value': float(serie.quantile(
+                                          q2))}  # winsorize(serie, limits=[q1, q2], nan_policy='omit').data.max()}
+            feature_params['default'] = float(serie.fillna(
+                0).median())  # 0 #медиана или средняя в конфиге _MIN_ or _MEAN_ можно оставить пропуски
             feature_params['encoding'] = None
     logger.info(feature_params)
     return feature_params

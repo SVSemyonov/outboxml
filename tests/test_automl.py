@@ -306,7 +306,7 @@ class TestPredict(TestCase):
         self.assertIsInstance(AutoMLConfigBuilder().build(), AutoMLConfig)
         self.assertIsInstance(AllModelsConfigBuilder().build(), AllModelsConfig)
         self.assertIsInstance(build_default_auto_ml_config({'group_name': 'test'}), str)
-        self.assertIsInstance(build_default_all_models_config(data=data), AllModelsConfig)
+        self.assertIsInstance(build_default_all_models_config(data=data), str)
 
 if __name__ == '__main__':
     main()
