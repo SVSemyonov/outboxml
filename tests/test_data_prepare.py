@@ -165,7 +165,7 @@ class TestDataPrepare(TestCase):
         )
 
     def test_model_data_subset(self):
-        data = pd.read_csv('test_data/titanic.csv')
+        data = pd.read_csv('tests/test_data/titanic.csv')
         data1 = data.drop(columns=['AGE'])
         data2 = data['AGE']
         datasubset1 = ModelDataSubset(model_name='test',X_train=data1, features_categorical=list(data.columns))

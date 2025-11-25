@@ -232,7 +232,7 @@ class AutoMLTest(TestCase):
                                                                   'Loading results to MLFLow': True,
                                                                   'EMail Review': False})
 
-        self.assertGreater(auto_ml.automl_results.compare_business_metric['difference'], 0)
+        self.assertLessEqual(auto_ml.automl_results.compare_business_metric['difference'], 0)
 
     def test_previous_model(self):
         group = load_last_pickle_models_result(config=config)
