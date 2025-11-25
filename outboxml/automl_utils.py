@@ -112,7 +112,7 @@ def check_postgre_transaction(script: Callable, config, waiting_time=300):
         raw_conn.close()
 
 
-def build_default_auto_ml_config(params:dict=None):
+def build_default_auto_ml_config(params:dict={}):
     return AutoMLConfigBuilder(**params).build().model_dump_json(indent=3)
 
 def build_default_all_models_config(data:pd.DataFrame=None,

@@ -1,4 +1,6 @@
 import asyncio
+
+import uvicorn
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
@@ -77,7 +79,6 @@ async def update_route(auto_ml_result_request: AutoMLResultRequest):
     try:
         model_name = auto_ml_result_request.main_model
 
-
         response = {'Auto ml results': 'OK'}
         status_code = status.HTTP_200_OK
 
@@ -103,11 +104,11 @@ async def update_route(monitoring_result_request: MonitoringResultRequest):
     return JSONResponse(content=jsonable_encoder(response), status_code=status_code)
 
 
-@app.get("/api/default_automl_config")
-async def default_automl_config():
+@app.post("/api/default_automl_config")
+async def default_automl_config(params: dict={}):
     try:
 
-        response = build_default_auto_ml_config()
+        response = build_default_auto_ml_config(params)
         status_code = status.HTTP_200_OK
 
     except Exception as exc:
@@ -117,11 +118,16 @@ async def default_automl_config():
     return JSONResponse(content=jsonable_encoder(response), status_code=status_code)
 
 
-@app.get("/api/default_automl_config")
-async def default_model_config():
+@app.post("/api/default_all_models_config")
+async def default_model_config(params: dict={}):
     try:
 
-        response = build_default_all_models_config()
+        response = build_default_all_models_config(data=None,
+                                    model_name = 'example',
+                                    max_category_num= 20,
+                                    category_proportion_cut_value=0.01,
+                                    q1=0.001,
+                                    q2=0.999,**params)
         status_code = status.HTTP_200_OK
 
     except Exception as exc:
@@ -129,3 +135,10 @@ async def default_model_config():
         status_code = status.HTTP_400_BAD_REQUEST
 
     return JSONResponse(content=jsonable_encoder(response), status_code=status_code)
+
+
+def run_app(host="127.0.0.2", port=8000):
+    uvicorn.run(app, host=host, port=port)
+
+if __name__ == "__main__":
+    run_app()
