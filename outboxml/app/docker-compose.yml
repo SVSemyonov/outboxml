@@ -96,14 +96,16 @@ services:
   fastapi:
     image: tiangolo/uvicorn-gunicorn-fastapi:python3.11
     container_name: fastapi
-    command: ["sh", "-c", "pip install requests environs && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"]
+    command: ["sh", "-c", "pip install requests environs && uvicorn outboxml.app.fastapi.main_app:app --host 0.0.0.0 --port 8000 --reload"]
     ports:
       - "8000:8000"
     volumes:
-      - ./fastapi:/app
+      - .:/app  # Монтируем всю структуру проекта
+    working_dir: /app
     environment:
       - MODULE_NAME=main
       - VARIABLE_NAME=app
+      - PYTHONPATH=/app
     networks:
       - internal
     depends_on:
