@@ -280,11 +280,10 @@ class TestMonitoringManger(TestCase):
         review = MonitoringManager(monitoring_config=str(monitoring_config),
                                    models_config=str(config_name),
                                    business_metric=BusinessMetricsExample(),
-                                   datadrift_interface=DataDrift(full_calc=True),
-                                   logs_extractor=LogsExtractor(),
-                                   monitoring_report=MonitoringReport()).review(send_mail=False, )
+                                   logs_extractor=LogsExtractor()
+                                   ).review(send_mail=False, )
         self.assertIsInstance(review, MonitoringResult)
-        self.assertAlmostEqual(review.datadrift['first']['PSI']['SEX'], 0.002, 2)
+        self.assertAlmostEqual(review.reviews['datadrift']['first']['PSI']['SEX'], 0.002, 2)
 
 
 class TestPredict(TestCase):
