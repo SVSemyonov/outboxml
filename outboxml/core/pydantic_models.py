@@ -170,7 +170,7 @@ class FeatureSelectionConfig(BaseModel):
     cutoff_1_category: float = 0.99,
     cutoff_nan: float = 0.7,
     max_corr_value: float = 0.6
-    metric_eval: dict
+    metric_eval: dict = {'metric': 0}
     cv_diff_value: float = 0.05
     encoding_cat: str = 'WoE_cat_to_num'
     encoding_num: str = 'WoE_num_to_num'
@@ -214,3 +214,26 @@ class MonitoringConfig(BaseModel):
     dashboard_name: str
     extrapolation_period: int = 12
     target_column: str
+
+
+class UpdateRequest(BaseModel):
+    auto_ml_config: AutoMLConfig
+    all_model_config: AllModelsConfig
+    user_parameters: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None
+
+
+class MonitoringRequest(BaseModel):
+    all_model_config: AllModelsConfig
+    monitoring_config: MonitoringConfig
+    user_parameters: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None
+
+
+class AutoMLResultRequest(BaseModel):
+    main_model: str
+    request: Dict[str, bool]
+
+
+class MonitoringResultRequest(BaseModel):
+    main_model: str
+    request: Dict[str, bool]
+
