@@ -1,6 +1,7 @@
 import json
 import os
 import pickle
+import shutil
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -589,6 +590,22 @@ class AutoMLManager(DataSetsManager):
         if log_path.exists():
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             new_name = f"log_{timestamp}.log"
-            os.rename(log_path, log_path.parent / new_name)
+            try:
+                os.rename(log_path, log_path.parent / new_name)
+            except (PermissionError, OSError) as e:
+                # Файл занят другим процессом, создаем новый файл с уникальным именем
+                logger.warning(f"Не удалось переименовать log.log: {e}. Создаем новый файл с временной меткой.")
+                new_log_path = log_path.parent / new_name
+                # Если файл с таким именем уже существует, добавляем дополнительный суффикс
+                counter = 1
+                while new_log_path.exists():
+                    new_name = f"log_{timestamp}_{counter}.log"
+                    new_log_path = log_path.parent / new_name
+                    counter += 1
+                # Пытаемся скопировать содержимое, если возможно
+                try:
+                    shutil.copy2(log_path, new_log_path)
+                except:
+                    pass  # Если не удалось скопировать, просто продолжаем
 
         logger.add(Path(str(self._external_config.results_path) + '/log.log'))
