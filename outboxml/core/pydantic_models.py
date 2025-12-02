@@ -169,9 +169,10 @@ class FeatureSelectionConfig(BaseModel):
     count_category: int = 100,
     cutoff_1_category: float = 0.99,
     cutoff_nan: float = 0.7,
-    max_corr_value: float = 0.6
-    metric_eval: dict
-    cv_diff_value: float = 0.05
+    max_corr_value: float = None
+    metric_eval: dict = None
+    cv_diff_value: float = None
+    use_temp_data: bool = False
     encoding_cat: str = 'WoE_cat_to_num'
     encoding_num: str = 'WoE_num_to_num'
     features_to_ignore: List[str] = []
