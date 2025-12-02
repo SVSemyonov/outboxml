@@ -194,18 +194,23 @@ class FeatureSelectionInterface(SelectionInterface):
 
 
 class BaseFS:
-    """Класс выбора новых фичей для датасета по настройкам конфига. Исползует базоыве интерфейсы подготовки данных и выбора фичей
-
+    """Class for selecting new features for a dataset based on configuration settings.
+    Utilizes base interfaces for data preparation and feature selection.
     Parameters:
 
-        parameters: конифг для выбора фичей (см. pydantic models)
-        feature_selection_interface: интерфейс для выбора фичей с методом feature_selection()
-        prepare_data_interface: интерфейс подготовки данных с методом data_prepare
-        new_features_list: список фичей для проверки
+        parameters : FeatureSelectionConfig
+            parameters for feature selection (see pydantic models for schema).
+        feature_selection_interface : SelectionInterface
+            Interface for feature selection with a `feature_selection()` method.
+        prepare_data_interface : BasePrepareDataset
+            Interface for data preparation with a `data_prepare()` method.
+        new_features_list : list of str
+            List of candidate features to evaluate.
 
 
     Methods:
-        select_features
+       select_features()
+            Executes the feature selection pipeline.
     """
     def __init__(self,
                  data_preprocessor: DataPreprocessor,
@@ -227,6 +232,7 @@ class BaseFS:
         self.result_features = []
 
     def select_features(self, model_name: str=None, params={}):
+        """Method for executing the feature selection pipeline. Returns a list of names of selected features"""
         logger.debug('Feature selection||Prepare of new_features for research')
         self.value_type()
         if not self.parameters.use_temp_data:
@@ -375,6 +381,7 @@ class BaseFS:
         return feature_params
 
     def _filter_data(self, data_subset: ModelDataSubset, selected_features: list):
+        """Method for creating of the result list of selected features"""
         logger.debug('Feature selection||Preparing results')
         result_features = []
         for selected_feature in selected_features:
