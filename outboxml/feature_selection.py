@@ -45,7 +45,7 @@ class FeatureSelectionInterface(SelectionInterface):
     def __init__(self, feature_selection_config: FeatureSelectionConfig, objective: str = 'RMSE'):
 
         super().__init__()
-        self.to_drop = None
+        self.to_drop = []
         self.last = None
         self.params = {}
         self._config = feature_selection_config
@@ -68,14 +68,16 @@ class FeatureSelectionInterface(SelectionInterface):
         rank = self._config.top_feautures_to_select
         self.last = list(res[res.index >= (res.index.max() - rank)][0].values)
         logger.info('Choosing top ' + str(rank) + str(' features') + '||' + str(self.last))
-        self.to_drop = self.calculate_correlation(X=data_subset.X,
-                                                  threshold=self._config.max_corr_value,
-                                                  features_numerical=data_subset.features_numerical,
-                                                  features_categorical=data_subset.features_categorical)
+        if self._config.max_corr_value is not None:
+            self.to_drop = self.calculate_correlation(X=data_subset.X,
+                                                      threshold=self._config.max_corr_value,
+                                                      features_numerical=data_subset.features_numerical,
+                                                      features_categorical=data_subset.features_categorical)
         logger.info('Features to drop||' + str(self.to_drop))
 
         selected_features = []
-     #   self.calculate_stability(data_subset, features=new_features_list, params=params)
+        if self._config.cv_diff_value is not None:
+            self.calculate_stability(data_subset, features=new_features_list, params=params)
         for feature in self.last:
             if feature not in self.to_drop: selected_features.append(feature)
         return selected_features
@@ -227,7 +229,10 @@ class BaseFS:
     def select_features(self, model_name: str=None, params={}):
         logger.debug('Feature selection||Prepare of new_features for research')
         self.value_type()
-        data_for_research = self._prepare_data(model_name=model_name)
+        if not self.parameters.use_temp_data:
+            data_for_research = self._prepare_data(model_name=model_name)
+        else:
+            data_for_research = self._prepare_data_using_temp(model_name=model_name)
         logger.debug('Feature selection||Preparation finished')
         try:
             selected_features = self._feature_selection_interface.feature_selection(data_for_research,
@@ -262,36 +267,19 @@ class BaseFS:
 
     def value_type(self):
         """
-        Функция для разделения признаков по количеству значений данных в них
-
-        Parameters
-        ----------
-        df : pd.DataFrame
-            Датафрейм, из которого будут получены данные
-        isprint : bool
-            Флаг, отвечающий за то, будет ли выводиться строка после распределения по каждому признаку
+        Splits features into groups based on the number of unique values they contain.
 
         Returns
-        -------
-        (bin_list, cat_list, num_list, drop_list, obj_list): Cortage of 5 [list of str]
-            (
-            Список бинарных признаков (2 значения),
-            Список категориальных признаков (от 3 до 20 уникальных значений в столбцах),
-            Список числовых признаков (всё, что не object с большим количеством значений),
-            Список признаков на удаление (1 значение),
-            Список признаков типа object (обязательны к рассмотрению),
-            )
-
-        Examples
-        --------
-        #>>> (bin_list, cat_list, num_list, drop_list, obj_list) = value_type(df, isprint=False)
-            BINARY: ['EventCreatedByGIBDDFlag', 'E-Garant', <...> ]
-            CATEGORIAL: ['CustomerImportance', 'DTPOSAGOType', <...>]
-            NUMERIC: ['LossNumber', 'InsuredSum', 'LossDateTime', <...>]
-            TO_DROP: ['EventTypeDescription', 'InsuranceTypeName', <...>]
-            OBJECT: ['ContractNumber', 'VictimContractNumber', <...>]
+        dict of 5 lists
+        A dict containing five lists of strings:
+        (
+            bin_list:   List of binary features (exactly 2 unique values),
+            cat_list:   List of categorical features (3 to 20 unique values),
+            num_list:   List of numeric features (non-object dtype with many unique values),
+            drop_list:  List of features to drop (only 1 unique value),
+            obj_list:   List of object-type features (require special attention)
+        )
         """
-        # Инициализация списков
         bin_list, cat_list, num_list, drop_list, date_list, obj_list = [], [], [], [], [], []
         cutoff_1_category = self.parameters.cutoff_1_category
         cutoff_nan = self.parameters.cutoff_nan
@@ -336,34 +324,28 @@ class BaseFS:
 
     def _prepare_feature(self, serie: pd.Series, method='label', type: str = 'categorical', depth: float = 0.01,
                          q1: float = 0.001, q2: float = 0.999, cut_outliers=True):
-        """ Функция среднего уровня, работает с серией из датафрейма, обучает и применяет энкодер
+        """
+            Mid-level function that processes a dict of params for data prepare
 
             Parameters
             ----------
-            Serie : pd.Series
-                Серия для применения к ней преобразований
-            method : str or None
-                "std" for StandardScaler
-                "minmax" for MinMaxScaler
-                "label" for LabelEncoderPro
-                None for None
-            depth: float
-                [0-1] для отсечения по долям. Если какого-то значения меньше 0.01 (1%), то его строки
-                попадут в отдельную объединённую категорию
-                > 1: int, для отсечения по количеству в value_counts
-            q1, q2 : float
-                границы для отсечения выбросов
-            cut_outliers : bool
-                Если True, значения выбросов будут отправлены в None для дальнейшей работы
-                Если False, значения выбросов будут заменены на границы отсечения (винсоризация)
-            name_of_feature: str
-                Имя серии (ключ в словаре кодировщиков)
+            series : pd.Series to be transformed.
+            type: str 'categorical' or 'numerical'
+            depth : float or int, default=None
+                Threshold for rare category grouping:
+                - If float [0-1]: categories with frequency < depth are combined
+                  (e.g., 0.01 groups values with <1% frequency)
+                - If int > 1: categories with count < depth are combined
+            q1, q2 : float, default=0.001, 0.999
+                Quantile boundaries for outlier detection.
+            cut_outliers : bool, default=True
+                - If True: outlier values are set to None for later handling
+                - If False: outlier values are clipped to the quantile boundaries (winsorization)
 
             Returns
             -------
-            self.fit_transform_Encoder(Serie, method, name_of_feature): pd.Series
-                Изменённая серия
-            """
+            {'default': '_NAN_', 'encoding': 'WoE_cat_to_num'}
+        """
         feature_params = {}
         logger.info('Prepare feature||' + str(serie.name))
         if type == 'categorical':
@@ -432,16 +414,7 @@ class BaseFS:
         return model_config_to_return
 
 
-class TempSubsetFS(BaseFS):
-    def __init__(self, data_preprocessor: DataPreprocessor,
-                 parameters: FeatureSelectionConfig,
-                 feature_selection_interface: SelectionInterface,
-                 prepare_data_interface: BasePrepareDataset,
-                 new_features_list: list = None):
-        super().__init__(data_preprocessor, parameters, feature_selection_interface, prepare_data_interface,
-                         new_features_list)
-
-    def _prepare_data(self, model_name: str=None)->ModelDataSubset:
+    def _prepare_data_using_temp(self, model_name: str=None)->ModelDataSubset:
         feature_params = {}
         full_data = self._data_preprocessor.dataset
         for feature in self.features_for_model:
