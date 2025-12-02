@@ -17,7 +17,7 @@ from outboxml.core.monitoring_factory import (
     MonitoringFactory,
     ReportRegistry,
     ReportComponent,
-    DataReviewerContext
+    MonitoringContext,
 )
 
 class MonitoringResult:
@@ -34,10 +34,10 @@ class MonitoringResult:
 
 @ReportRegistry.register("base_datadrift_report")
 class MonitoringReport(ReportComponent):
-    def __init__(self, monitoring_result, monitoring_config):
-        super().__init__(monitoring_result, monitoring_config)
+    def __init__(self):
+        super().__init__()
 
-    def make_report(self, data_dict) -> pd.DataFrame:
+    def make_report(self, data_dict: pd.DataFrame, context: MonitoringContext) -> pd.DataFrame:
         report = pd.DataFrame()
         for key in data_dict.keys():
             df_result = data_dict[key].copy()
@@ -48,7 +48,7 @@ class MonitoringReport(ReportComponent):
                 report[column] = report[column].astype('float')
             except:
                 report[column] = report[column].astype(str)
-        report['model_version'] = self.monitoring_result.model_version
+        report['model_version'] = context.monitoring_result.model_version
         return report
 
 
@@ -106,7 +106,6 @@ class MonitoringManager:
 
         self._business_metric = business_metric
         self._ds_manager = DataSetsManager(config_name=self._models_config, extractor=data_extractor, external_config=external_config)
-
         self._result_export = ResultExport(ds_manager=self._ds_manager, config=self._external_config)
         self._logs_extractor = logs_extractor
         self.__init_monitoring()
@@ -116,31 +115,31 @@ class MonitoringManager:
 
         self.monitoring_service = MonitoringFactory.create_from_config(
             self._monitoring_config,
-            self._ds_manager,
-            self.result
         )
         self.logs = None
 
     def review(self,
                send_mail: bool = True,
-               to_grafana: bool = True,
-               prepare_base_data: bool = True) -> MonitoringResult:
+               to_grafana: bool = True) -> MonitoringResult:
         if self.logs is None:
             self.logs = self._logs_extractor.extract_dataset()
             logger.debug('Logs are loaded')
-        dataset = self._ds_manager.dataset
-        if not prepare_base_data:
-            dataset = self._ds_manager.load_dataset()
-        context = DataReviewerContext(
-            base=dataset,
-            actual=self.logs
+        context = MonitoringContext(
+            data_preprocessor=self._ds_manager._data_preprocessor,
+            actual=self.logs,
+            monitoring_result=self.result,
+            monitoring_config=self._monitoring_config,
+            models_config=self._ds_manager._models_configs,
         )
         service_reviews, service_reports = self.monitoring_service.review_all(context=context)
         self.result.reviews = service_reviews
         self.result.reports = service_reports
         try:
             if to_grafana:
-                self._grafana_report(self.result.reports)
+                for k in self.result.reports.keys():
+                    table_name = self.result.reports[k]['db_table']
+                    if table_name:
+                        self._grafana_report(self.result.reports[k]['df'], table_name)
             if send_mail:
                 self.email.success_mail(self.result)
         except Exception as exc:
@@ -170,10 +169,10 @@ class MonitoringManager:
             logger.error("Config validation error")
             raise ValidationError(e)
 
-    def _grafana_report(self, report: pd.DataFrame):
+    def _grafana_report(self, report: pd.DataFrame, table_name: str) -> None:
         try:
             GrafanaExport(df=report, connection=self.__grafana_connection,
-                          table_name=self._monitoring_config.grafana_table_name).load_data_to_db()
+                          table_name=table_name).load_data_to_db()
         except Exception as exc:
             logger.error(exc)
             logger.info('No results in grafana')
