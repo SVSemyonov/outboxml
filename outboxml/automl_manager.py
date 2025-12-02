@@ -296,6 +296,8 @@ class AutoMLManager(DataSetsManager):
                 new_prepared_data = feature_selector.select_features(params=self._feature_selection_config.params,
                                                                      model_name=model.name)
                 self._data_preprocessor.save_subset_to_pickle(model_name=model.name, data_subset=new_prepared_data, rewrite=True)
+
+                logger.info('Result subset saving to version||' + self._data_preprocessor._version)
                 self._data_preprocessor._use_saved_files = True
                 self.automl_results.new_features[model.name] = feature_selector.result_features
 

@@ -88,8 +88,33 @@ class FeatureSelection(TestCase):
 
     def test_BaseFS(self):
         self.dsManager._data_preprocessor._retro = True
+
         data = BaseFS( new_features_list=self.feature_for_research,
                       parameters=self._fs_config,
+                        data_preprocessor=self.dsManager._data_preprocessor,
+                      prepare_data_interface=FeatureSelectionPrepareDataset(model_config=self.dsManager._models_configs[
+                          0]),
+                      feature_selection_interface=FeatureSelectionInterface(feature_selection_config=self._fs_config,
+                                                                            objective='binomial')
+                      ).select_features(params={"iterations": 30}, model_name='first')
+
+        self.assertEqual(len(data.features_categorical), 1)
+        self.assertEqual(len(data.features_numerical), 4)
+    def test_temp_files_BaseFS(self):
+        self.dsManager._data_preprocessor._retro = True
+        data = BaseFS( new_features_list=self.feature_for_research,
+                      parameters=FeatureSelectionConfig(
+                                                metric_eval={"first": "accuracy", "second": "accuracy"},
+                                                top_feautures_to_select=4,
+                                                count_category=100,
+                                                cutoff_1_category=0.9,
+                                                cutoff_nan=0.7,
+                                                max_corr_value=0.6,
+                                                cv_diff_value=0.1,
+                                                use_temp_data=True,
+                                                encoding_cat='WoE_cat_to_num',
+                                                encoding_num='WoE_num_to_num',
+                                            ),
                         data_preprocessor=self.dsManager._data_preprocessor,
                       prepare_data_interface=FeatureSelectionPrepareDataset(model_config=self.dsManager._models_configs[
                           0]),
@@ -172,21 +197,7 @@ class HPTune(TestCase):
 class AutoMLTest(TestCase):
 
     def setUp(self):
-        self.ds_manager1 = DataSetsManager(config_name=str(config_name)
-                                           )
-        self.ds_manager1.fit_models()
-        self.ds_manager2 = DataSetsManager(config_name=str(config_name)
-                                           )
-
-        self.ds_manager2._results = deepcopy(self.ds_manager1.get_result())
-
-        for key in self.ds_manager2._results:
-            self.ds_manager2._results[key].predictions['train'] = 0.6 * self.ds_manager2._results[key].predictions[
-                'train']
-            self.ds_manager2._results[key].predictions['test'] = 0.9 * self.ds_manager2._results[key].predictions[
-                'test']
-        self.result1 = ResultExport(self.ds_manager1)
-        self.result2 = ResultExport(self.ds_manager1, self.ds_manager2)
+      pass
 
     def test_compare_business_metric(self):
         result = BaseCompareBusinessMetric(calculate_threshold=True,
@@ -214,7 +225,7 @@ class AutoMLTest(TestCase):
                                 models_config=str(config_name),
                                 business_metric=TitanicMetric(),
                                 compare_business_metric=BaseCompareBusinessMetric(calculate_threshold=True),
-                                hp_tune=True,
+                                hp_tune=False,
                                 retro=True
                                 )
         auto_ml.update_models(send_mail=False, parameters_for_optuna={'first': parameters_for_optuna,

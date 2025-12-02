@@ -13,8 +13,9 @@ from sklearn.model_selection import cross_val_score
 from tqdm import tqdm
 
 from outboxml.core.data_prepare import PrepareDatasetResult
+from outboxml.core.enums import FeaturesTypes, FeatureEngineering
 from outboxml.core.prepared_datasets import BasePrepareDataset
-from outboxml.core.pydantic_models import FeatureSelectionConfig, ModelConfig
+from outboxml.core.pydantic_models import FeatureSelectionConfig, ModelConfig, FeatureModelConfig
 from outboxml.data_subsets import DataPreprocessor, ModelDataSubset
 
 
@@ -238,6 +239,7 @@ class BaseFS:
         if not self.parameters.use_temp_data:
             data_for_research = self._prepare_data(model_name=model_name)
         else:
+            logger.info('Using temp data for preparing new features')
             data_for_research = self._prepare_data_using_temp(model_name=model_name)
         logger.debug('Feature selection||Preparation finished')
         try:
@@ -267,11 +269,11 @@ class BaseFS:
         return self._data_preprocessor.get_subset(model_name=model_name,
                                                   prepare_func=self._data_prepare_interface.prepare_dataset,
                                                   args={'features_params': feature_params,
-                                                        'new_features': self.types_dict}
-                                                    )
+                                                        'new_features': self.types_dict},
+                                                  )
 
 
-    def value_type(self):
+    def value_type(self)->dict:
         """
         Splits features into groups based on the number of unique values they contain.
 
@@ -329,7 +331,7 @@ class BaseFS:
         return self.types_dict
 
     def _prepare_feature(self, serie: pd.Series, method='label', type: str = 'categorical', depth: float = 0.01,
-                         q1: float = 0.001, q2: float = 0.999, cut_outliers=True):
+                         q1: float = 0.001, q2: float = 0.999, cut_outliers=True)->dict:
         """
             Mid-level function that processes a dict of params for data prepare
 
@@ -364,6 +366,8 @@ class BaseFS:
                     feature_params['default'] = '_NAN_'  # проверить
                     serie.apply(lambda x: x if (x in set(VC)) or (pd.isnull(x)) else "OTHER")
                     feature_params['encoding'] = self.parameters.encoding_cat
+                    feature_params['replace'] = dict(
+                        (value, FeatureEngineering.not_changed) for value in list(serie.unique()))
                 except:
                     #                     VC = VC[VC[0] > depth]["index"]
                     self.features_for_model.remove(serie.name)
@@ -377,10 +381,13 @@ class BaseFS:
                                                   q2)}  # winsorize(serie, limits=[q1, q2], nan_policy='omit').data.max()}
                     feature_params['default'] = serie.fillna(0).median()  # 0 #медиана или средняя в конфиге _MIN_ or _MEAN_ можно оставить пропуски
                     feature_params['encoding'] = self.parameters.encoding_num
+                    feature_params['replace'] = {"_TYPE_": "_NUM_"}
+
+
         logger.info(feature_params)
         return feature_params
 
-    def _filter_data(self, data_subset: ModelDataSubset, selected_features: list):
+    def _filter_data(self, data_subset: ModelDataSubset, selected_features: list)->ModelDataSubset:
         """Method for creating of the result list of selected features"""
         logger.debug('Feature selection||Preparing results')
         result_features = []
@@ -395,18 +402,11 @@ class BaseFS:
             if feature not in result_features and feature not in self.old_data_list:
                 columns_to_drop.append(feature)
         logger.info('Columns to drop||'+ str(columns_to_drop))
-
-        data_subset.X_train = data_subset.X_train.drop(columns=columns_to_drop).copy()
-        data_subset.X_test = data_subset.X_test.drop(columns=columns_to_drop).copy() if data_subset.X_test is not None else None
-        data_subset.X = data_subset.X.drop(columns=columns_to_drop).copy()
-        for feature in columns_to_drop:
-            if feature in data_subset.features_numerical:
-                data_subset.features_numerical.remove(feature)
-            elif feature in data_subset.features_categorical:
-                data_subset.features_categorical.remove(feature)
+        ModelDataSubset.drop_columns(data_subset, columns_to_drop)
         logger.info('Features for model||' + str(data_subset.X_train.columns.to_list()))
         self._data_preprocessor._prepare_datasets[data_subset.model_name]._model_config = self.get_updated_model_config(
             self._data_prepare_interface._new_model_config, columns_to_drop)
+
         return data_subset
 
     @staticmethod
@@ -422,29 +422,52 @@ class BaseFS:
 
 
     def _prepare_data_using_temp(self, model_name: str=None)->ModelDataSubset:
-        feature_params = {}
+        init_version = deepcopy(self._data_preprocessor._version)
+        version = self._data_preprocessor._version.split('_new')[0]
+        self._data_preprocessor._pickle_subset.version = version
+        self._data_preprocessor._version = version
+        logger.debug('Loading previously saved subsets')
+        self._data_preprocessor._use_saved_files = True
+        subset = self._data_preprocessor.get_subset(model_name)
+        self._data_preprocessor._use_saved_files = False
+        logger.debug('New data prepare')
+        self._data_preprocessor._pickle_subset.version = init_version
+        self._data_preprocessor._version = init_version
+        new_preproc = self._preprocessor_for_using_temp_files(model_name)
+        new_features_subset = new_preproc.get_subset(model_name)
+        self._data_preprocessor._prepare_datasets[model_name]._model_config.features.extend(
+            new_preproc.model_config(model_name).features)
+        return subset + new_features_subset
+
+
+    def _preprocessor_for_using_temp_files(self, model_name):
         full_data = self._data_preprocessor.dataset
+        feature_params = {}
+        new_model_config = deepcopy(self._data_preprocessor.model_config(model_name))
+        new_model_config.features = []
+
         for feature in self.features_for_model:
             if feature in self.types_dict['NUMERIC']:
                 type = 'numerical'
             else:
                 type = 'categorical'
             feature_params[feature] = self._prepare_feature(serie=full_data[feature], type=type)
-        self._data_preprocessor._version = self._data_preprocessor._version.split('_new')[0]
-        subset = self._data_preprocessor.get_subset(model_name)
-        data_new = full_data[self.features_for_model]
-        new_features_subset = DataPreprocessor(prepare_engine=self._data_preprocessor._prepare_engine,
-                                               version=self._data_preprocessor._version + '_new',
-                                               prepare_dataset_interface_dict=self._data_preprocessor._prepare_datasets,
-                                               data_config=self._data_preprocessor._data_config,
-                                               dataset=data_new,
-                                               use_saved_files=False,
-                                               external_config=self._data_preprocessor.config).get_subset(model_name,
-                                                                                                          prepare_func=self._data_prepare_interface.prepare_dataset,
-                                                                                                          args={
-                                                                                                              'features_params': feature_params,
-                                                                                                              'new_features': self.types_dict}
-                                                                                                          )
+            new_model_config.features.append(FeatureModelConfig(name=feature, **feature_params[feature]))
+        new_prepare_datasets = deepcopy(self._data_preprocessor._prepare_datasets)
+        new_prepare_datasets[model_name].load_model_config(new_model_config)
+        new_data_config = deepcopy(self._data_preprocessor._data_config)
+        new_data_config.extra_columns = None
+        data_new = full_data[self.features_for_model +
+                             [new_model_config.column_target]
+                             ]
+        self._data_prepare_interface.load_model_config(new_model_config)
 
-
-        return subset + new_features_subset
+        return DataPreprocessor(prepare_engine=self._data_preprocessor._prepare_engine,
+                                version=self._data_preprocessor._version + '_new',
+                                prepare_dataset_interface_dict=new_prepare_datasets,
+                                data_config=new_data_config,
+                                dataset=data_new,
+                                retro=True,
+                                use_saved_files=False,
+                                external_config=self._data_preprocessor.config,
+                                )
