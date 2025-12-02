@@ -208,9 +208,10 @@ class AutoMLConfig(BaseModel):
 class MonitoringFactoryConfig(BaseModel):
     type: str = "datadrift"
     report: str = "base_datadrift_report"
-    group_model: Optional[bool] = False
+    group_models: Optional[bool] = False
     prepare_base_data: Optional[bool] = True
     parameters: Optional[Dict[str, Any]] = {}
+    db_table_name: Optional[str] = None
 
 class MonitoringConfig(BaseModel):
     group_name: str

@@ -1,36 +1,86 @@
 from loguru import logger
 import pandas as pd
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from outboxml.core.data_prepare import prepare_dataset
 from typing import Dict, Any, Optional
-from outboxml.core.pydantic_models import MonitoringFactoryConfig
+from outboxml.datasets_manager import DataPreprocessor
+
+@dataclass
+class DataContext:
+    base: pd.DataFrame
+    actual: pd.DataFrame
+
+    X_train: pd.DataFrame = None
+    X_test: pd.DataFrame = None
+
+@dataclass
+class MonitoringContext:
+    data_preprocessor: DataPreprocessor
+
+    monitoring_result: Any
+    monitoring_config: Any
+    models_config: Any
+
+    actual: pd.DataFrame
+
+    def get_prepared_data(self) -> DataContext:
+        try:
+            if not self.models_config:
+                raise ValueError("Model config is required for prepared data")
+
+            subset = self.data_preprocessor.get_subset(model_name=self.models_config.name)
+
+            prepared = prepare_dataset(
+                group_name=self.monitoring_result.group_name,
+                data=self.actual.copy(),
+                train_ind=self.actual.index,
+                test_ind=pd.Index([]),
+                model_config=self.models_config,
+            )
+
+            return DataContext(
+                base=self.data_preprocessor.dataset,
+                actual=self.actual.copy(),
+                X_train=subset.X_train,
+                X_test=prepared.data
+            )
+
+        except Exception as e:
+            logger.exception("Failed to prepare data in MonitoringContext")
+            raise e
+
+    def get_raw_data(self):
+        return DataContext(
+            base=self.data_preprocessor.dataset,
+            actual=self.actual.copy()
+        )
+
 
 class DataReviewerComponent(ABC):
-    def __init__(self, group_model: bool = True):
-        self.group_model: bool = group_model
 
     @abstractmethod
-    def review(self, context) -> pd.DataFrame:
+    def review(self, context: MonitoringContext) -> pd.DataFrame:
         pass
 
 
 class ReportComponent(ABC):
-    def __init__(self, monitoring_result, monitoring_config):
-        self.monitoring_result = monitoring_result
-        self.monitoring_config = monitoring_config
-
-    @abstractmethod
-    def make_report(self, data):
+    def __init__(self):
         pass
 
-@dataclass
-class DataReviewerContext:
-    X_train: Optional[pd.DataFrame] = None
-    X_test: Optional[pd.DataFrame] = None
+    @abstractmethod
+    def make_report(self, *params) -> pd.DataFrame:
+        pass
 
-    base: Optional[pd.DataFrame] = None
-    actual: Optional[pd.DataFrame] = None
+
+@dataclass
+class MonitoringItem:
+    data_reviewer: DataReviewerComponent
+    reviewer_report: ReportComponent
+    group_models: bool
+    name: str
+    table_name: Optional[str] = None
+
 
 class DataReviewerRegistry:
     _monitorings = {}
@@ -72,63 +122,58 @@ class ReportRegistry():
         return list(cls._reports.keys())
 
 
-@dataclass
-class MonitoringItem:
-    data_reviewer: DataReviewerComponent
-    reviewer_report: ReportComponent
-    name: str
-
-
 class MonitoringService:
-    def __init__(self, ds_manager):
+    def __init__(self):
         self.monitoring_items = []
-        self._ds_manager = ds_manager
 
     def add_item(self, item: MonitoringItem):
         self.monitoring_items.append(item)
 
-    def review_all(self, context: DataReviewerContext) -> tuple[dict[Any, Any], dict[Any, Any]]:
+    def review_all(self, context: MonitoringContext) -> tuple[dict[Any, Any], dict[Any, Any]]:
+
         data_reviewer_results = {}
         reviewer_report_results = {}
 
         for item in self.monitoring_items:
             try:
-                if not item.data_reviewer.group_model:
+                if not item.group_models:
                     models_reviewer_result = {}
-                    for model in self._ds_manager._models_configs:
-                        context.X_train = self._ds_manager.get_subset(model_name=model.name).X_train
-                        context.X_test = prepare_dataset(group_name=self._ds_manager.group_name,
-                                                 data=context.actual.copy(),
-                                                 train_ind=context.actual.index,
-                                                 test_ind=pd.Index([]),
-                                                 model_config=model,
-                                                 ).data
-                        reviewer_result = item.data_reviewer.review(context)
+                    for model in context.models_config:
+                        model_ctx = replace(context, models_config=model)
+                        reviewer_result = item.data_reviewer.review(model_ctx)
                         models_reviewer_result[model.name] = reviewer_result
 
-                    final_report = item.reviewer_report.make_report(models_reviewer_result)
+                    final_report = item.reviewer_report.make_report(models_reviewer_result, context)
                     data_reviewer_results[item.name] = models_reviewer_result
-                    reviewer_report_results[item.name] = final_report
+                    reviewer_report_results[item.name] = {
+                        'df': final_report,
+                        'db_table': item.table_name,
+                    }
                 else:
                     reviewer_result = item.data_reviewer.review(context)
                     data_reviewer_results[item.name] = reviewer_result
-                    reviewer_report_results[item.name] = item.reviewer_report.make_report(reviewer_result)
-            except:
-                logger.error(f'Cannot review {item.name}')
+                    reviewer_report_results[item.name] = {
+                        'df': item.reviewer_report.make_report(reviewer_result, context),
+                        'db_table': item.table_name,
+                    }
+            except Exception as e:
+                logger.exception(f"Error executing monitoring item '{item.name}'")
+                continue
 
         return data_reviewer_results, reviewer_report_results
 
 class MonitoringFactory:
     @staticmethod
     def create_from_config(
-            monitoring_config,
-            ds_manager,
-            monitoring_result):
-        service = MonitoringService(ds_manager)
+            monitoring_config
+    ):
+        service = MonitoringService()
         monitoring_factory = monitoring_config.monitoring_factory
         for item in monitoring_factory:
             data_reviewer_type = item.type
             reviewer_report_type = item.report
+            group_models = item.group_models
+            db_table_name = item.db_table_name
             params = item.parameters
 
             try:
@@ -139,12 +184,15 @@ class MonitoringFactory:
                 continue
 
             data_reviewer_instance = data_reviewer_class(**params)
-            reviewer_report_instance = reviewer_report_class(monitoring_result, monitoring_config)
+            reviewer_report_instance = reviewer_report_class()
 
             m_item = MonitoringItem(
                 data_reviewer=data_reviewer_instance,
                 reviewer_report=reviewer_report_instance,
-                name=data_reviewer_type)
+                name=data_reviewer_type,
+                group_models=group_models,
+                table_name=db_table_name
+            )
 
             service.add_item(m_item)
 
