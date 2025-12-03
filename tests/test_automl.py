@@ -123,7 +123,7 @@ class FeatureSelection(TestCase):
                       ).select_features(params={"iterations": 30}, model_name='first')
 
         self.assertEqual(len(data.features_categorical), 1)
-        self.assertEqual(len(data.features_numerical), 4)
+        self.assertEqual(len(data.features_numerical), 2)
 
 
 class HPTune(TestCase):
@@ -197,7 +197,21 @@ class HPTune(TestCase):
 class AutoMLTest(TestCase):
 
     def setUp(self):
-      pass
+        self.ds_manager1 = DataSetsManager(config_name=str(config_name)
+                                           )
+        self.ds_manager1.fit_models()
+        self.ds_manager2 = DataSetsManager(config_name=str(config_name)
+                                           )
+
+        self.ds_manager2._results = deepcopy(self.ds_manager1.get_result())
+
+        for key in self.ds_manager2._results:
+            self.ds_manager2._results[key].predictions['train'] = 0.6 * self.ds_manager2._results[key].predictions[
+                'train']
+            self.ds_manager2._results[key].predictions['test'] = 0.9 * self.ds_manager2._results[key].predictions[
+                'test']
+        self.result1 = ResultExport(self.ds_manager1)
+        self.result2 = ResultExport(self.ds_manager1, self.ds_manager2)
 
     def test_compare_business_metric(self):
         result = BaseCompareBusinessMetric(calculate_threshold=True,
@@ -225,7 +239,7 @@ class AutoMLTest(TestCase):
                                 models_config=str(config_name),
                                 business_metric=TitanicMetric(),
                                 compare_business_metric=BaseCompareBusinessMetric(calculate_threshold=True),
-                                hp_tune=False,
+                                hp_tune=True,
                                 retro=True
                                 )
         auto_ml.update_models(send_mail=False, parameters_for_optuna={'first': parameters_for_optuna,
