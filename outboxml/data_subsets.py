@@ -14,7 +14,7 @@ from loguru import logger
 from outboxml import config
 from outboxml.core.data_prepare import prepare_dataset
 from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes, TrainTestIndexesPl, PrepareDatasetPl
-from outboxml.core.pydantic_models import DataConfig, DataModelConfig, SeparationModelConfig
+from outboxml.core.pydantic_models import DataConfig, DataModelConfig, SeparationModelConfig, ModelConfig
 from outboxml.extractors import Extractor
 
 
@@ -221,6 +221,10 @@ class DataPreprocessor:
                                                parquet_name='temp_dataset_v' + self._version,
                                                prepare_engine=prepare_engine,
                                                )
+        self._model_config_pickle = ModelConfigPickle(config=self.config,
+                                                      version=self._version,
+                                                      )
+
         self.temp_subset: Optional[ModelDataSubset] = None
         self._data_columns = []
         self._retro = retro
@@ -255,6 +259,7 @@ class DataPreprocessor:
         return self._prepare_datasets[model_name].get_model_config()
 
     def save_subset_to_pickle(self, model_name: str, data_subset: ModelDataSubset, rewrite: bool = False):
+        self._model_config_pickle.save_config_to_pickle(model_name,self.model_config(model_name), rewrite)
         self._pickle_subset.save_subset_to_pickle(model_name, data_subset, rewrite)
 
     def get_subset(self, model_name: str = None, from_pickle: bool = True, prepare_func: Callable = None,
@@ -263,7 +268,6 @@ class DataPreprocessor:
         if from_pickle:
             if not self._check_prepared_subset(model_name):
                 self._prepare_subset(model_name, True, prepare_func, args)
-
             return self._pickle_subset.load_subsets_from_pickle(model_name)
         else:
             self._prepare_subset(model_name, to_pickle=False)
@@ -367,7 +371,7 @@ class PickleModelSubset:
     def load_subsets_from_pickle(self, model_name: str, version: str = '1') -> ModelDataSubset:
 
         file_path = os.path.join(self.results_path, model_name + '_v' + self.version + '_subset.pickle')
-        logger.info(model_name + '_v' + self.version + '_subset.pickle' + '||Loading subset from pickle')
+        logger.info(model_name + '_v' + self.version + '||Loading subset from pickle')
         with open(file_path, "rb") as f:
             subset = pickle.load(f)
 
@@ -386,7 +390,7 @@ class PickleModelSubset:
         if os.path.exists(file_path) and not rewrite:
             logger.warning(f'{model_name}||File {file_path} already exists.')
         else:
-            logger.info(model_name + '_v' + self.version + '_prepare_model_config.pickle'  + '||Saving subset to pickle')
+            logger.info(model_name + '_v' + self.version  + '||Saving subset to pickle')
             with open(file_path, "wb") as f:
                 pickle.dump(subset, f)
 
@@ -418,6 +422,31 @@ class ParquetDataset:
             return pd.read_parquet(file_path)
         elif self._prepare_engine == 'polars':
             return pl.read_parquet(file_path)
+
+
+class ModelConfigPickle:
+    def __init__(self, config, version):
+        self.results_path = config.results_path
+        self.version = version
+
+
+    def load_config_from_pickle(self, model_name: str) -> ModelConfig:
+        file_path = os.path.join(self.results_path, model_name + '_v' + self.version + '_model_config.pickle')
+        logger.info(model_name + '_v' + self.version + '_subset.pickle' + '||Loading model config from pickle')
+        with open(file_path, "rb") as f:
+            config = pickle.load(f)
+        return config
+
+
+    def save_config_to_pickle(self, model_name, model_config: ModelConfig, rewrite: bool = False):
+        file_path = os.path.join(self.results_path, model_name + '_v' + self.version + '_model_config.pickle')
+
+        if os.path.exists(file_path) and not rewrite:
+            logger.warning(f'model config {model_name}||File {file_path} already exists.')
+        else:
+            logger.info(model_name + '_v' + self.version + '_prepare_model_config.pickle' + '||Saving subset to pickle')
+            with open(file_path, "wb") as f:
+                pickle.dump(model_config, f)
 
 
 class PrepareEngine(ABC):
