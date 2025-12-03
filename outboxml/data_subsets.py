@@ -268,6 +268,7 @@ class DataPreprocessor:
         if from_pickle:
             if not self._check_prepared_subset(model_name):
                 self._prepare_subset(model_name, True, prepare_func, args)
+            self._prepare_datasets[model_name].load_model_config(self._model_config_pickle.load_config_from_pickle(model_name))
             return self._pickle_subset.load_subsets_from_pickle(model_name)
         else:
             self._prepare_subset(model_name, to_pickle=False)
