@@ -1,5 +1,7 @@
 from pydantic import BaseModel, model_validator
 from typing import List, Dict, Any, Optional, Union
+
+from pydantic.dataclasses import dataclass
 from typing_extensions import Literal
 
 from outboxml.core.enums import FilesNames, SeparationParams, FeatureEngineering
@@ -125,6 +127,7 @@ class ModelConfig(BaseModel):
     treatment_dict: Optional[Dict[str, str]] = None
     cat_features_catboost: Optional[List[str]] = None  # TODO: move to features
     data_filter_condition: Optional[str] = None
+    model_config = {'frozen': False}
 
     @model_validator(mode="after")
     def check_unique_features_names(self):

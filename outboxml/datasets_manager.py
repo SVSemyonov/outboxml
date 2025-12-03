@@ -336,11 +336,13 @@ class DataSetsManager:
             data_subset = self.get_subset(model_name)
             predictions_train = self._predict(model, data_subset.X_train)
             predictions_test = self._predict(model, data_subset.X_test)
+
             metrics[model_name] = ModelMetrics(data_config=self.data_config,
                                                model_config=self._prepare_datasets[model_name].get_model_config(),
                                                data_subset=data_subset,
                                                ).result_dict(predictions={'train': predictions_train,
                                                                           'test': predictions_test})
+
 
 
             self._results[model_name] = DSManagerResult(model_name=model_name,

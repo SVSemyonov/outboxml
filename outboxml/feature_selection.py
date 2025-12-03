@@ -1,17 +1,12 @@
 from copy import deepcopy
 
-import numpy as np
 import pandas as pd
 from abc import ABC
-from datetime import datetime as dt
-import phik
-from catboost import EFeaturesSelectionAlgorithm, EShapCalcType, Pool, CatBoostClassifier, CatBoostRegressor
 from loguru import logger
-from sklearn.metrics import get_scorer_names
-from sklearn.model_selection import cross_val_score
 
 from tqdm import tqdm
 
+from outboxml.analysis_tools import CorrelationMatrix, CatboostShapAnalysis, CVAnalysis
 from outboxml.core.data_prepare import PrepareDatasetResult
 from outboxml.core.enums import FeaturesTypes, FeatureEngineering
 from outboxml.core.prepared_datasets import BasePrepareDataset
@@ -61,137 +56,35 @@ class FeatureSelectionInterface(SelectionInterface):
         except KeyError:
             self.objective = objective
 
-    def feature_selection(self,data_subset: ModelDataSubset, params: dict = {}, new_features_list: list = []):
-
-        summary = self.__fit_catboost(data_subset, params)
+    def feature_selection(self,data_subset: ModelDataSubset, new_features_list: list, params: dict = None ):
+        catboost_shap_analysis = CatboostShapAnalysis(data_subset=data_subset,
+                                                      config=self._config,
+                                                      objective=self.objective,
+                                                      params=params)
+        summary = catboost_shap_analysis.fit_catboost()
         res = pd.DataFrame([summary['eliminated_features_names'] + summary['selected_features_names'],
                             summary['loss_graph']['loss_values']]).T  # .plot()
         rank = self._config.top_feautures_to_select
         self.last = list(res[res.index >= (res.index.max() - rank)][0].values)
         logger.info('Choosing top ' + str(rank) + str(' features') + '||' + str(self.last))
         if self._config.max_corr_value is not None:
-            self.to_drop = self.calculate_correlation(X=data_subset.X,
-                                                      threshold=self._config.max_corr_value,
-                                                      features_numerical=data_subset.features_numerical,
-                                                      features_categorical=data_subset.features_categorical)
+            self.to_drop = CorrelationMatrix(data=data_subset.X,
+                              threshold=self._config.max_corr_value,
+                              feature_importance_list=self.last,
+                              ).drop_list(features_numerical=data_subset.features_numerical)
+
         logger.info('Features to drop||' + str(self.to_drop))
 
         selected_features = []
         if self._config.cv_diff_value is not None:
-            self.calculate_stability(data_subset, features=new_features_list, params=params)
+            self.to_drop = CVAnalysis(list_to_exclude=self.to_drop,
+                       data_subset=data_subset,
+                       config=self._config,
+                       objective=self.objective,
+                       catboost_params=params).calculate_stability(features=new_features_list)
         for feature in self.last:
             if feature not in self.to_drop: selected_features.append(feature)
         return selected_features
-
-    def __fit_catboost(self, data_subset: ModelDataSubset, params={}):
-        logger.debug('Feature selection||Fitting catboost')
-        X_train, X_test, y_train, y_test, cat_features = self.__train_data(data_subset)
-        train_pool = Pool(X_train, y_train, feature_names=list(X_train.columns),
-                          cat_features=cat_features)
-        test_pool = Pool(X_test, y_test, feature_names=list(X_train.columns),
-                         cat_features=cat_features)
-        steps = X_train.shape[1]
-        model = self.__load_model(params)
-        summary = model.select_features(
-            train_pool,
-            eval_set=test_pool,
-            features_for_select=f'0-{steps - 1}',
-            num_features_to_select=1,
-            #     steps=train_X.shape[1] - 1,
-            steps=steps - 1,
-            algorithm=EFeaturesSelectionAlgorithm.RecursiveByShapValues,
-            shap_calc_type=EShapCalcType.Regular,
-            train_final_model=True,
-            logging_level='Silent',
-            plot=False
-        )
-        return summary
-
-    def calculate_correlation(self,
-                              X,
-                              features_numerical: list,
-                              features_categorical: list,
-                              threshold: float = 0.9):
-        X = X[reversed(self.last)]  # упорядочен по значимости
-        logger.debug('Feature selection||Calculating correlations')
-        phik_matrix = X.phik_matrix(interval_cols=features_numerical)
-        upper = phik_matrix.where(np.triu(np.ones(phik_matrix.shape), k=1).astype(
-            bool))  # берем из набора скоррелированных только самую значимую
-
-        # Найти признаки с корреляцией выше порогового значения
-        to_drop = [column for column in upper.columns if any(upper[column] > threshold)]
-        if len(to_drop) > 0:
-            logger.info('Dropping ' + str(to_drop))
-        return to_drop
-
-    def calculate_stability(self, data_subset: ModelDataSubset, features=[], params={}):
-        """Calculation of stability using phik matrix"""
-        #TODO разобраться со списками
-        if features == []:
-            return features
-        else:
-            features_for_calc = features.copy()
-            cat_features = data_subset.features_categorical.copy()
-            cat_features_for_calc = cat_features.copy()
-            for feature in features:
-                if feature in self.to_drop:
-                    features_for_calc.remove(feature)
-            for cat_feature in cat_features:
-                if cat_feature in self.to_drop:
-                    cat_features_for_calc.remove(cat_feature)
-            X_train, X_test, y_train, y_test, _ = self.__train_data(data_subset)
-            for feature in features_for_calc:
-                catboost_features = cat_features_for_calc.copy()
-                if len(features_for_calc) > 1:
-                    features_for_cv = features_for_calc.copy()
-                    features_for_cv.remove(feature)
-                    X = X_train[X_train.columns[~X_train.columns.isin(features_for_cv)]]
-                else:
-                    X = X_train
-                logger.debug('CV for feature ' + str(feature))
-                for cat_feature in cat_features_for_calc:
-                    if cat_feature not in X.columns:
-                        catboost_features.remove(cat_feature)
-
-                model = self.__load_model(params, catboost_features)
-
-                try:
-                    scoring = self.__choose_scoring_fun(model_name=data_subset.model_name)
-                    scores = cross_val_score(model, X, y_train, cv=3, scoring=scoring)
-                    logger.info('CV dif for feature||'+ str(np.max(scores)/np.min(scores)))
-                    if (np.max(scores) / np.min(scores) - 1) > self._config.cv_diff_value:
-                        logger.info('Dropping non-stable feature')
-                        self.to_drop.append(feature)
-
-                except Exception as exc:
-                    logger.error(exc)
-                    logger.info('No CV for feature')
-
-    def __train_data(self, data_subset:ModelDataSubset)->tuple:
-        X_train = data_subset.X_train
-        X_test = data_subset.X_test
-        cat_features = data_subset.features_categorical
-        y_train = data_subset.y_train / data_subset.exposure_train if data_subset.exposure_train is not None else data_subset.y_train
-        y_test = data_subset.y_test / data_subset.exposure_test if data_subset.exposure_test is not None else data_subset.y_test
-        return X_train, X_test, y_train, y_test, cat_features
-
-    def __choose_scoring_fun(self, model_name: str):
-        if self._config.metric_eval[model_name] in get_scorer_names():
-            return self._config.metric_eval[model_name]
-        else:
-            logger.error('Unknown metric for cv||Returning neg_mean_absolute_error')
-            return 'neg_mean_absolute_error'
-
-    def __load_model(self, params, cat_features=None):
-        if self.objective == "Logloss":
-            logger.info('Classification')
-            model = CatBoostClassifier(objective=self.objective, cat_features=cat_features, verbose=False, **params)
-
-        else:
-            logger.info('Regression')
-            model = CatBoostRegressor(objective=self.objective, cat_features=cat_features, verbose=False, **params)
-
-        return model
 
 
 class BaseFS:
@@ -244,8 +137,8 @@ class BaseFS:
         logger.debug('Feature selection||Preparation finished')
         try:
             selected_features = self._feature_selection_interface.feature_selection(data_for_research,
-                                                                                    params,
                                                                                     self.features_for_model,
+                                                                                    params,
                                                                                     )
 
         except Exception as exc:
@@ -404,15 +297,23 @@ class BaseFS:
         logger.info('Columns to drop||'+ str(columns_to_drop))
         ModelDataSubset.drop_columns(data_subset, columns_to_drop)
         logger.info('Features for model||' + str(data_subset.X_train.columns.to_list()))
-        self._data_preprocessor._prepare_datasets[data_subset.model_name]._model_config = self.get_updated_model_config(
-            self._data_prepare_interface._new_model_config, columns_to_drop)
+
+        if self._data_prepare_interface._new_model_config is not None:
+            self._data_preprocessor._prepare_datasets[data_subset.model_name].load_model_config(self.get_updated_model_config(
+                self._data_prepare_interface._new_model_config, columns_to_drop)
+            )
 
         return data_subset
 
     @staticmethod
-    def get_updated_model_config(model_config: ModelConfig, features_to_drop: list) -> ModelConfig:
+    def get_updated_model_config(model_config: ModelConfig, features_to_drop: list, features_to_append: list=None) -> ModelConfig:
+        if model_config is None:
+            raise logger.error('Error while corrected config in AB test')
 
         model_config_to_return = deepcopy(model_config)
+
+        if features_to_append is not None:
+            model_config_to_return.features.extend(features_to_append)
         if model_config_to_return is not None:
 
             if model_config_to_return.features is not None:
@@ -426,17 +327,23 @@ class BaseFS:
         version = self._data_preprocessor._version.split('_new')[0]
         self._data_preprocessor._pickle_subset.version = version
         self._data_preprocessor._version = version
+
         logger.debug('Loading previously saved subsets')
         self._data_preprocessor._use_saved_files = True
         subset = self._data_preprocessor.get_subset(model_name)
         self._data_preprocessor._use_saved_files = False
+
         logger.debug('New data prepare')
         self._data_preprocessor._pickle_subset.version = init_version
         self._data_preprocessor._version = init_version
         new_preproc = self._preprocessor_for_using_temp_files(model_name)
         new_features_subset = new_preproc.get_subset(model_name)
-        self._data_preprocessor._prepare_datasets[model_name]._model_config.features.extend(
-            new_preproc.model_config(model_name).features)
+
+        self._data_preprocessor._prepare_datasets[model_name].load_model_config(self.get_updated_model_config(
+            self._data_preprocessor.model_config(model_name), features_to_drop=[],
+            features_to_append=new_preproc.model_config(model_name).features)
+        )
+
         return subset + new_features_subset
 
 
