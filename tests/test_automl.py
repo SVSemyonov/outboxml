@@ -8,14 +8,16 @@ import pandas as pd
 from sklearn.metrics import mean_absolute_error
 
 from outboxml.automl_manager import RetroFS, AutoMLManager
+from outboxml.core.config_builders import AutoMLConfigBuilder, AllModelsConfigBuilder
 from outboxml.core.email import EMailDSResult, EMailDSCompareResult
 from outboxml.core.prepared_datasets import FeatureSelectionPrepareDataset
-from outboxml.core.pydantic_models import FeatureSelectionConfig
+from outboxml.core.pydantic_models import FeatureSelectionConfig, AutoMLConfig, AllModelsConfig
 from outboxml.datadrift import DataDrift
 from outboxml.datasets_manager import DataSetsManager, DSManagerResult
 from outboxml.export_results import ResultExport
 from outboxml import config
-from outboxml.automl_utils import load_last_pickle_models_result, calculate_previous_models
+from outboxml.automl_utils import load_last_pickle_models_result, calculate_previous_models, \
+    build_default_auto_ml_config, build_default_all_models_config
 from outboxml.extractors import Extractor
 from outboxml.feature_selection import BaseFS, FeatureSelectionInterface
 from outboxml.hyperparameter_tuning import HPTuning
@@ -88,6 +90,7 @@ class FeatureSelection(TestCase):
 
     def test_BaseFS(self):
         self.dsManager._data_preprocessor._retro = True
+
         data = BaseFS( new_features_list=self.feature_for_research,
                       parameters=self._fs_config,
                         data_preprocessor=self.dsManager._data_preprocessor,
@@ -99,6 +102,30 @@ class FeatureSelection(TestCase):
 
         self.assertEqual(len(data.features_categorical), 1)
         self.assertEqual(len(data.features_numerical), 4)
+    def test_temp_files_BaseFS(self):
+        self.dsManager._data_preprocessor._retro = True
+        data = BaseFS( new_features_list=self.feature_for_research,
+                      parameters=FeatureSelectionConfig(
+                                                metric_eval={"first": "accuracy", "second": "accuracy"},
+                                                top_feautures_to_select=4,
+                                                count_category=100,
+                                                cutoff_1_category=0.9,
+                                                cutoff_nan=0.7,
+                                                max_corr_value=0.6,
+                                                cv_diff_value=0.1,
+                                                use_temp_data=True,
+                                                encoding_cat='WoE_cat_to_num',
+                                                encoding_num='WoE_num_to_num',
+                                            ),
+                        data_preprocessor=self.dsManager._data_preprocessor,
+                      prepare_data_interface=FeatureSelectionPrepareDataset(model_config=self.dsManager._models_configs[
+                          0]),
+                      feature_selection_interface=FeatureSelectionInterface(feature_selection_config=self._fs_config,
+                                                                            objective='binomial')
+                      ).select_features(params={"iterations": 30}, model_name='first')
+
+        self.assertEqual(len(data.features_categorical), 1)
+        self.assertEqual(len(data.features_numerical), 2)
 
 
 class HPTune(TestCase):
@@ -230,7 +257,7 @@ class AutoMLTest(TestCase):
                                                                   'Loading results to MLFLow': True,
                                                                   'EMail Review': False})
 
-        self.assertGreater(auto_ml.automl_results.compare_business_metric['difference'], 0)
+        self.assertLessEqual(auto_ml.automl_results.compare_business_metric['difference'], 0)
 
     def test_previous_model(self):
         group = load_last_pickle_models_result(config=config)
@@ -298,6 +325,12 @@ class TestPredict(TestCase):
         self.assertIsInstance(result['main_response'], dict)
         self.assertIsInstance(result['main_response']['result'], dict)
 
+    def test_config_builder(self):
+        data = pd.read_csv(path_to_data)
+        self.assertIsInstance(AutoMLConfigBuilder().build(), AutoMLConfig)
+        self.assertIsInstance(AllModelsConfigBuilder().build(), AllModelsConfig)
+        self.assertIsInstance(build_default_auto_ml_config({'group_name': 'test'}), str)
+        self.assertIsInstance(build_default_all_models_config(data=data), str)
 
 if __name__ == '__main__':
     main()

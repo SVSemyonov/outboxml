@@ -336,11 +336,13 @@ class DataSetsManager:
             data_subset = self.get_subset(model_name)
             predictions_train = self._predict(model, data_subset.X_train)
             predictions_test = self._predict(model, data_subset.X_test)
+
             metrics[model_name] = ModelMetrics(data_config=self.data_config,
                                                model_config=self._prepare_datasets[model_name].get_model_config(),
                                                data_subset=data_subset,
                                                ).result_dict(predictions={'train': predictions_train,
                                                                           'test': predictions_test})
+
 
 
             self._results[model_name] = DSManagerResult(model_name=model_name,
@@ -409,7 +411,6 @@ class DataSetsManager:
         prediction = model.predict(data_subset.X[chain(features_numerical, features_categorical)])
         if isinstance(prediction, np.ndarray):
             prediction = pd.Series(prediction, index=data_subset.X.index)
-        print(prediction)
 
         metrics = ModelMetrics(model_config=model_config,
                                data_subset=data_subset,
@@ -432,16 +433,6 @@ class DataSetsManager:
         return res
 
     def __get_fitted_models(self, models: dict, fitted: bool = False) -> dict:
-        if not fitted:
-            logger.info('Fitting')
-            for model_name, model in models.items():
-                try:
-                    model.fit()
-                except:
-                    logger.debug('User-defined model needs X, Y for train. Using datasubsets')
-                    data_subset = self.get_subset(model_name)
-                    model.fit(data_subset.X_train, data_subset.y_train)
-                    logger.debug('Model ' + str(model_name) + ' is fitted')
         return models
 
     def _predict(self, model, X):
