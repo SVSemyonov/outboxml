@@ -101,7 +101,7 @@ class BaselineModels:
         self.model_name = model_name
         self.__model_number = model_number
 
-    def choose_model(self) -> BaseWrapperModel:
+    def choose_model(self) -> BaseEstimator:
         if self.__model_number == 1:
             model = RandomForestClassifierModel(dataset=self.__dataset,
                                                 model_name=self.model_name,
@@ -159,7 +159,7 @@ class BaseLineModel(BaseWrapperModel):
         self._model_name = model_name
         self.__strategy = strategy
 
-    def fit(self):
+    def fit(self)->BaseEstimator:
         model = DummyRegressor(strategy=self.__strategy).fit(self.__dataset.X_train, self.__dataset.y_train)
         return model
 

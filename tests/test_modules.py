@@ -1,4 +1,5 @@
 from array import array
+from copy import deepcopy
 from unittest import TestCase
 from unittest import main
 
@@ -9,6 +10,7 @@ from statsmodels.genmod.generalized_linear_model import GLMResultsWrapper
 import statsmodels.formula.api as sf
 
 from outboxml.core.data_prepare import OptiBinningEncoder
+from outboxml.core.enums import ModelsParams
 from outboxml.core.prepared_datasets import PrepareDataset
 from outboxml.core.pydantic_models import DataModelConfig
 from outboxml.dataset_retro import RetroDataset
@@ -189,6 +191,54 @@ class ModelsTest(TestCase):
         self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
         self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
 
+    def test_objective_catboost(self):
+        model_config = deepcopy(self.model_config)
+        model_config.objective = ModelsParams.rmsewithuncertainty
+        model = CatboostModel(data_subset=self.subset,
+                              model_config=model_config,
+                              ).fit()
+
+        model._wrapper = 'catboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.get_feature_importance(), np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+        model_config = deepcopy(self.model_config)
+
+        model_config.objective = ModelsParams.gamma
+        model = CatboostModel(data_subset=self.subset,
+                              model_config=model_config,
+                              ).fit()
+        model._wrapper = 'catboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.get_feature_importance(), np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+        model_config = deepcopy(self.model_config)
+
+        model_config.objective = ModelsParams.rmse
+        model = CatboostModel(data_subset=self.subset,
+                              model_config=model_config,
+                              ).fit()
+        model._wrapper = 'catboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.get_feature_importance(), np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+        model_config.objective = ModelsParams.binary
+        model = CatboostModel(data_subset=self.subset,
+                              model_config=model_config,
+                              ).fit()
+        model._wrapper = 'catboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.get_feature_importance(), np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+
     def test_catboostoverglm_model(self):
         model = CatboostOverGLMModel(data_subset=self.subset,
                                      sm_model=StatsmodelsModel(data_subset=self.subset,
@@ -226,8 +276,85 @@ class ModelsTest(TestCase):
         self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
         self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
 
+    def test_objective_xgboost(self):
+        model_config = deepcopy(self.model_config)
+        model_config.objective = ModelsParams.rmsewithuncertainty
+        model = XgboostModel(data_subset=self.subset,
+                              model_config=model_config,
+                             work_type_fit='cpu'
+                             ).fit()
 
+        model._wrapper = 'xgboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.feature_importances_, np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
 
+        model_config = deepcopy(self.model_config)
+
+        model_config.objective = ModelsParams.gamma
+        model = XgboostModel(data_subset=self.subset,
+                              model_config=model_config,
+                             work_type_fit='cpu'
+                             ).fit()
+        model._wrapper = 'xgboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.feature_importances_, np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+        model_config = deepcopy(self.model_config)
+
+        model_config.objective = ModelsParams.rmse
+        model = XgboostModel(data_subset=self.subset,
+                              model_config=model_config,
+                              work_type_fit='cpu'
+                              ).fit()
+        model._wrapper = 'xgboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.feature_importances_, np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+        model_config.objective = ModelsParams.binary
+        model = XgboostModel(data_subset=self.subset,
+                              model_config=model_config,
+                             work_type_fit='cpu'
+                              ).fit()
+        model._wrapper = 'xgboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.feature_importances_, np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+    def test_baseline_models(self):
+        model = BaselineModels(dataset=self.subset,
+                               model_name='first',
+                               model_number=1).choose_model()
+        self.assertIsInstance(model, BaseEstimator)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), np.ndarray)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+        model = BaselineModels(dataset=self.subset,
+                               model_name='first',
+                               model_number=2).choose_model()
+        self.assertIsInstance(model, BaseEstimator)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), np.ndarray)
+        self.assertEqual(model.predict(X=self.subset.X_test).sum(), 0) #mode
+
+        model = BaselineModels(dataset=self.subset,
+                               model_name='first',
+                               model_number=3).choose_model()
+        self.assertIsInstance(model, BaseEstimator)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), np.ndarray)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+        model = BaselineModels(dataset=self.subset,
+                               model_name='first',
+                               model_number=4).choose_model()
+        self.assertIsInstance(model, BaseEstimator)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), np.ndarray)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
 
 if __name__ == '__main__':
     main()
