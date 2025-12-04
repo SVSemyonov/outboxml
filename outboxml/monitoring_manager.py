@@ -20,36 +20,6 @@ from outboxml.core.monitoring_factory import (
     MonitoringContext,
 )
 
-class MonitoringResult:
-    def __init__(self, group_name):
-        self.group_name = group_name
-        self.model_version = 'default'
-        self.dataset_name = 'default'
-        self.reviews = {}
-        self.metric = None
-        self.extrapolation_results = {}
-        self.reports = {}
-        self.grafana_dashboard = None
-
-
-@ReportRegistry.register("base_datadrift_report")
-class MonitoringReport(ReportComponent):
-    def __init__(self):
-        super().__init__()
-
-    def make_report(self, data_dict: pd.DataFrame, context: MonitoringContext) -> pd.DataFrame:
-        report = pd.DataFrame()
-        for key in data_dict.keys():
-            df_result = data_dict[key].copy()
-            df_result['model_name'] = key
-            report = pd.concat([report, df_result])
-        for column in report.columns:
-            try:
-                report[column] = report[column].astype('float')
-            except:
-                report[column] = report[column].astype(str)
-        report['model_version'] = context.monitoring_result.model_version
-        return report
 
 
 class MonitoringManager:

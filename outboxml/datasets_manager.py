@@ -13,6 +13,7 @@ from loguru import logger
 from typing import List, Dict, Any, Optional, Union, Literal
 from sklearn.preprocessing import LabelEncoder
 
+from outboxml.monitoring_result import DataContext
 from outboxml.core.enums import ModelsParams
 from outboxml.data_subsets import DataPreprocessor, ModelDataSubset
 from outboxml.dataset_retro import RetroDataset
@@ -364,7 +365,7 @@ class DataSetsManager:
     def check_datadrift(self, model_name: str) -> pd.DataFrame:
         """Method for checking datadrift between train and test. Using DataDrift library"""
         subset = self.get_subset(model_name)
-        report = DataDrift().report(train_data=subset.X_train, test_data=subset.X_test, )
+        report = DataDrift(full_calc=False).review(DataContext(X_train=subset.X_train, X_test=subset.X_test))
 
         return report
 

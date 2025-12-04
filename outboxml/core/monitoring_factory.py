@@ -2,59 +2,18 @@ from loguru import logger
 import pandas as pd
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
+
+from build.lib.outboxml.core.pydantic_models import ModelConfig
+from outboxml.monitoring_result import MonitoringContext
 from outboxml.core.data_prepare import prepare_dataset
 from typing import Dict, Any, Optional
+
+from outboxml.core.pydantic_models import MonitoringConfig
 from outboxml.datasets_manager import DataPreprocessor
 
-@dataclass
-class DataContext:
-    base: pd.DataFrame
-    actual: pd.DataFrame
 
-    X_train: pd.DataFrame = None
-    X_test: pd.DataFrame = None
 
-@dataclass
-class MonitoringContext:
-    data_preprocessor: DataPreprocessor
 
-    monitoring_result: Any
-    monitoring_config: Any
-    models_config: Any
-
-    actual: pd.DataFrame
-
-    def get_prepared_data(self) -> DataContext:
-        try:
-            if not self.models_config:
-                raise ValueError("Model config is required for prepared data")
-
-            subset = self.data_preprocessor.get_subset(model_name=self.models_config.name)
-
-            prepared = prepare_dataset(
-                group_name=self.monitoring_result.group_name,
-                data=self.actual.copy(),
-                train_ind=self.actual.index,
-                test_ind=pd.Index([]),
-                model_config=self.models_config,
-            )
-
-            return DataContext(
-                base=self.data_preprocessor.dataset,
-                actual=self.actual.copy(),
-                X_train=subset.X_train,
-                X_test=prepared.data
-            )
-
-        except Exception as e:
-            logger.exception("Failed to prepare data in MonitoringContext")
-            raise e
-
-    def get_raw_data(self):
-        return DataContext(
-            base=self.data_preprocessor.dataset,
-            actual=self.actual.copy()
-        )
 
 
 class DataReviewerComponent(ABC):
@@ -197,3 +156,23 @@ class MonitoringFactory:
             service.add_item(m_item)
 
         return service
+
+
+@ReportRegistry.register("base_datadrift_report")
+class MonitoringReport(ReportComponent):
+    def __init__(self):
+        super().__init__()
+
+    def make_report(self, data_dict: pd.DataFrame, context: MonitoringContext) -> pd.DataFrame:
+        report = pd.DataFrame()
+        for key in data_dict.keys():
+            df_result = data_dict[key].copy()
+            df_result['model_name'] = key
+            report = pd.concat([report, df_result])
+        for column in report.columns:
+            try:
+                report[column] = report[column].astype('float')
+            except:
+                report[column] = report[column].astype(str)
+        report['model_version'] = context.monitoring_result.model_version
+        return report

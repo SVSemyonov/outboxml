@@ -5,10 +5,10 @@ import pandas as pd
 from loguru import logger
 from sklearn.preprocessing import LabelEncoder
 
+from outboxml.monitoring_result import DataContext
 from outboxml.core.monitoring_factory import (
     DataReviewerRegistry,
     DataReviewerComponent,
-    MonitoringContext
 )
 
 
@@ -24,8 +24,8 @@ class DataDrift(DataReviewerComponent):
         self.full_report = []
         self.columns_to_exclude = columns_to_exclude
 
-    def review(self, context: MonitoringContext)-> pd.DataFrame:
-        data_context = context.get_prepared_data()
+    def review(self, data_context: DataContext)-> pd.DataFrame:
+
         train_data = data_context.X_train
         test_data = data_context.X_test
 
