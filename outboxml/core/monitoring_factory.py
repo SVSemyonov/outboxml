@@ -12,10 +12,6 @@ from outboxml.core.pydantic_models import MonitoringConfig
 from outboxml.datasets_manager import DataPreprocessor
 
 
-
-
-
-
 class DataReviewerComponent(ABC):
 
     @abstractmethod
