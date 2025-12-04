@@ -6,7 +6,7 @@ from loguru import logger
 
 from tqdm import tqdm
 
-from outboxml.analysis_tools import CorrelationMatrix, CatboostShapAnalysis, CVAnalysis
+from outboxml.analysis_tools import CorrelationMatrix, CatboostShapAnalysis,CVStability
 from outboxml.core.data_prepare import PrepareDatasetResult
 from outboxml.core.enums import FeaturesTypes, FeatureEngineering
 from outboxml.core.prepared_datasets import BasePrepareDataset
@@ -56,12 +56,13 @@ class FeatureSelectionInterface(SelectionInterface):
         except KeyError:
             self.objective = objective
 
+
     def feature_selection(self,data_subset: ModelDataSubset, new_features_list: list, params: dict = None ):
         catboost_shap_analysis = CatboostShapAnalysis(data_subset=data_subset,
                                                       config=self._config,
                                                       objective=self.objective,
                                                       params=params)
-        summary = catboost_shap_analysis.fit_catboost()
+        summary = catboost_shap_analysis.result()
         res = pd.DataFrame([summary['eliminated_features_names'] + summary['selected_features_names'],
                             summary['loss_graph']['loss_values']]).T  # .plot()
         rank = self._config.top_feautures_to_select
@@ -71,17 +72,19 @@ class FeatureSelectionInterface(SelectionInterface):
             self.to_drop = CorrelationMatrix(data=data_subset.X,
                               threshold=self._config.max_corr_value,
                               feature_importance_list=self.last,
-                              ).drop_list(features_numerical=data_subset.features_numerical)
+                              features_numerical=data_subset.features_numerical
+                              ).result()
 
         logger.info('Features to drop||' + str(self.to_drop))
 
         selected_features = []
         if self._config.cv_diff_value is not None:
-            self.to_drop = CVAnalysis(list_to_exclude=self.to_drop,
-                       data_subset=data_subset,
-                       config=self._config,
-                       objective=self.objective,
-                       catboost_params=params).calculate_stability(features=new_features_list)
+            self.to_drop = CVStability(list_to_exclude=self.to_drop,
+                                       data_subset=data_subset,
+                                       config=self._config,
+                                       objective=self.objective,
+                                       catboost_params=params,
+                                       features=new_features_list).result()
         for feature in self.last:
             if feature not in self.to_drop: selected_features.append(feature)
         return selected_features
@@ -299,28 +302,12 @@ class BaseFS:
         logger.info('Features for model||' + str(data_subset.X_train.columns.to_list()))
 
         if self._data_prepare_interface._new_model_config is not None:
-            self._data_preprocessor._prepare_datasets[data_subset.model_name].load_model_config(self.get_updated_model_config(
-                self._data_prepare_interface._new_model_config, columns_to_drop)
+            self._data_preprocessor._prepare_datasets[data_subset.model_name].update_model_config(
+                features_to_drop=columns_to_drop,
             )
 
+
         return data_subset
-
-    @staticmethod
-    def get_updated_model_config(model_config: ModelConfig, features_to_drop: list, features_to_append: list=None) -> ModelConfig:
-        if model_config is None:
-            raise logger.error('Error while corrected config in AB test')
-
-        model_config_to_return = deepcopy(model_config)
-
-        if features_to_append is not None:
-            model_config_to_return.features.extend(features_to_append)
-        if model_config_to_return is not None:
-
-            if model_config_to_return.features is not None:
-                model_config_to_return.features = [obj for obj in model_config_to_return.features if
-                                                   obj.name not in features_to_drop]
-        return model_config_to_return
-
 
     def _prepare_data_using_temp(self, model_name: str=None)->ModelDataSubset:
         init_version = deepcopy(self._data_preprocessor._version)
@@ -339,9 +326,9 @@ class BaseFS:
         new_preproc = self._preprocessor_for_using_temp_files(model_name)
         new_features_subset = new_preproc.get_subset(model_name)
 
-        self._data_preprocessor._prepare_datasets[model_name].load_model_config(self.get_updated_model_config(
-            self._data_preprocessor.model_config(model_name), features_to_drop=[],
-            features_to_append=new_preproc.model_config(model_name).features)
+        self._data_preprocessor._prepare_datasets[model_name].update_model_config(
+            features_to_drop=[],
+            features_to_append=new_preproc.model_config(model_name).features,
         )
 
         return subset + new_features_subset

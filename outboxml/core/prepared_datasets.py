@@ -25,6 +25,20 @@ class BasePrepareDataset(ABC):
     def load_model_config(self, model_config: ModelConfig):
         self._model_config = model_config
 
+    def update_model_config(self, features_to_drop: list = None,
+                                  features_to_append: list = None):
+
+        model_config_to_return = deepcopy(self._model_config)
+
+        if features_to_append is not None:
+            model_config_to_return.features.extend(features_to_append)
+        if features_to_drop is not None:
+
+            if model_config_to_return.features is not None:
+                model_config_to_return.features = [obj for obj in model_config_to_return.features if
+                                                   obj.name not in features_to_drop]
+        self._model_config = model_config_to_return
+
     def get_model_config(self):
         try:
             return self._model_config
