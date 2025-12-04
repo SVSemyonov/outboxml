@@ -41,48 +41,10 @@ def calculate_previous_models(ds_manager: DataSetsManager,
 
         for model_result in models:
             model_name = model_result['model_config']['name']
-            try:
-                model_result['model']
-            #FIXME
-            except KeyError:
-                if model_result.get("model_sm") is not None:
-                    model_result["model"] = model_result.get("model_sm")
-                elif model_result.get("model_ctb") is not None:
-                    model_result["model"] = model_result.get("model_ctb")
-
             ds_result_to_compare[model_name] = ds_manager.model_predict(data=ds_manager.dataset,
                                                                         model_name=model_name,
                                                                         model_result=model_result)
     return ds_result_to_compare
-
-
-def load_model_to_source(group_name: str, config=None) -> None:
-    source_path = config.prod_models_path
-    if os.path.isfile(source_path / f"{group_name}.pickle"):
-        raise FileExistsError(f"Already in {source_path}: {group_name}.pickle")
-
-    if not os.path.isfile(config.results_path / f"{group_name}.pickle"):
-        raise FileNotFoundError(f"Not found in {config.results_path}: {group_name}.pickle")
-
-    shutil.copyfile(config.results_path / f"{group_name}.pickle", source_path / f"{group_name}.pickle")
-
-
-def load_model_to_source_from_mlflow(group_name: str, config=None) -> None:
-    source_path = config.prod_models_path
-    if os.path.isfile(source_path / f"{group_name}.pickle"):
-        raise FileExistsError(f"Already in {source_path}: {group_name}.pickle")
-
-    mlflow.set_tracking_uri(config.mlflow_tracking_uri)
-    mlflow.set_experiment(config.mlflow_experiment)
-
-    mlflow_runs = mlflow.search_runs(filter_string=f"tags.mlflow.runName = '{group_name}'")
-    if not mlflow_runs:
-        raise FileNotFoundError(f"Not found in mlflow: {group_name}")
-
-    artifact_uri = mlflow_runs.sort_values("start_time", ascending=False).iloc[0].artifact_uri
-    mlflow.artifacts.download_artifacts(artifact_uri, dst_path="/")
-
-    shutil.copyfile(f"./artifacts/{group_name}.pickle", source_path / f"{group_name}.pickle")
 
 def check_postgre_transaction(script: Callable, config, waiting_time=300):
 

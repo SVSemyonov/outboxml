@@ -9,8 +9,9 @@ from sklearn.base import BaseEstimator
 from statsmodels.genmod.generalized_linear_model import GLMResultsWrapper
 import statsmodels.formula.api as sf
 
-from outboxml.core.data_prepare import OptiBinningEncoder
+from outboxml.core.data_prepare import OptiBinningEncoder, PrepareDatasetResult
 from outboxml.core.enums import ModelsParams
+from outboxml.core.predict import one_model_predict
 from outboxml.core.prepared_datasets import PrepareDataset
 from outboxml.core.pydantic_models import DataModelConfig
 from outboxml.dataset_retro import RetroDataset
@@ -135,6 +136,12 @@ class TestTitanicDS(TestCase):
         self.assertEqual(len(model_res.data_subset.features_categorical), 0)
         self.assertEqual(len(model_res.data_subset.features_numerical), 4)
 
+        result = one_model_predict(group_name='test', model_result=model_res,
+                          features_values=data.iloc[0].to_dict())
+        self.assertIsInstance(result, dict)
+        self.assertIsInstance(result['result'], dict)
+        self.assertIsInstance(result['df'], dict)
+        self.assertIsInstance(result['version_model'], dict)
 
     def test_default_models(self):
         self.dsManager.get_subset(model_name='first')
@@ -355,6 +362,33 @@ class ModelsTest(TestCase):
         self.assertIsInstance(model, BaseEstimator)
         self.assertIsInstance(model.predict(X=self.subset.X_test), np.ndarray)
         self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+
+class TestPrepareDatasets(TestCase):
+    def setUp(self):
+        self.dsManager = DataSetsManager(config_name=config_name,
+                                         )
+        self.subset = self.dsManager.get_subset(model_name='first')
+        self.model_config = self.dsManager._models_configs[0]
+
+    def test_prepare_dataset(self):
+        pr_d = PrepareDataset(check_prepared=True,
+                       calc_corr=True,
+                       corr_threshold=0.8,
+                       save_data=False,
+                       model_config=self.model_config,
+                       group_name='test')
+        self.assertIsInstance(pr_d.prepare_dataset(
+            data=self.dsManager.dataset,
+            test_ind=self.dsManager._data_preprocessor.index_test,
+            train_ind=self.dsManager._data_preprocessor.index_train,
+
+        ), PrepareDatasetResult)
+        model_config = deepcopy(self.model_config)
+        pr_d.update_model_config(features_to_drop=['SEX'])
+        self.assertEqual(len(pr_d.get_model_config().features),2)
+        pr_d.update_model_config(features_to_append=[model_config.features[2]])
+        self.assertEqual(len(pr_d.get_model_config().features),3)
 
 if __name__ == '__main__':
     main()
