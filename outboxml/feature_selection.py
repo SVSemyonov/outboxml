@@ -265,7 +265,6 @@ class BaseFS:
                     feature_params['replace'] = dict(
                         (value, FeatureEngineering.not_changed) for value in list(serie.unique()))
                 except:
-                    #                     VC = VC[VC[0] > depth]["index"]
                     self.features_for_model.remove(serie.name)
 
         elif type == 'numerical':
@@ -278,7 +277,6 @@ class BaseFS:
                     feature_params['default'] = serie.fillna(0).median()  # 0 #медиана или средняя в конфиге _MIN_ or _MEAN_ можно оставить пропуски
                     feature_params['encoding'] = self.parameters.encoding_num
                     feature_params['replace'] = {"_TYPE_": "_NUM_"}
-
 
         logger.info(feature_params)
         return feature_params
@@ -313,6 +311,7 @@ class BaseFS:
         init_version = deepcopy(self._data_preprocessor._version)
         version = self._data_preprocessor._version.split('_new')[0]
         self._data_preprocessor._pickle_subset.version = version
+        self._data_preprocessor._model_config_pickle.version = version
         self._data_preprocessor._version = version
 
         logger.debug('Loading previously saved subsets')
@@ -323,6 +322,8 @@ class BaseFS:
         logger.debug('New data prepare')
         self._data_preprocessor._pickle_subset.version = init_version
         self._data_preprocessor._version = init_version
+        self._data_preprocessor._model_config_pickle.version = init_version
+
         new_preproc = self._preprocessor_for_using_temp_files(model_name)
         new_features_subset = new_preproc.get_subset(model_name)
 
