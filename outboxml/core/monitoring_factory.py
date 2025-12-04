@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from build.lib.outboxml.core.pydantic_models import ModelConfig
 from outboxml.monitoring_result import MonitoringContext
 from outboxml.core.data_prepare import prepare_dataset
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 
 from outboxml.core.pydantic_models import MonitoringConfig
 from outboxml.datasets_manager import DataPreprocessor
@@ -84,7 +84,7 @@ class MonitoringService:
     def add_item(self, item: MonitoringItem):
         self.monitoring_items.append(item)
 
-    def review_all(self, context: MonitoringContext) -> tuple[dict[Any, Any], dict[Any, Any]]:
+    def review_all(self, context: MonitoringContext) -> tuple[Dict[str, Union[pd.DataFrame, Dict[str, pd.DataFrame]]], Dict[str, Dict[str, Union[pd.DataFrame, str]]]]:
 
         data_reviewer_results = {}
         reviewer_report_results = {}
