@@ -3,13 +3,8 @@ import pandas as pd
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 
-from build.lib.outboxml.core.pydantic_models import ModelConfig
 from outboxml.monitoring_result import MonitoringContext
-from outboxml.core.data_prepare import prepare_dataset
-from typing import Dict, Any, Optional
-
-from outboxml.core.pydantic_models import MonitoringConfig
-from outboxml.datasets_manager import DataPreprocessor
+from typing import Optional, Any
 
 
 class DataReviewerComponent(ABC):

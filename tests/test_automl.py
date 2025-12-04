@@ -24,7 +24,7 @@ from outboxml.hyperparameter_tuning import HPTuning
 from outboxml.main_predict import main_predict
 from outboxml.metrics.business_metrics import BaseCompareBusinessMetric
 from outboxml.metrics.base_metrics import BaseMetric
-from outboxml.monitoring_manager import MonitoringManager, MonitoringReport, MonitoringResult
+from outboxml.monitoring_manager import MonitoringManager, MonitoringResult
 from outboxml.target_extrapolation import TargetModel
 
 test_configs_path = Path(__file__).resolve().parent/ "test_configs"
