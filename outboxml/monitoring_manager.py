@@ -124,6 +124,8 @@ class MonitoringManager:
         if self.logs is None:
             self.logs = self._logs_extractor.extract_dataset()
             logger.debug('Logs are loaded')
+        self._ds_manager._retro = True
+        self._ds_manager._init_dsmanager()
         context = MonitoringContext(
             data_preprocessor=self._ds_manager._data_preprocessor,
             actual=self.logs,
