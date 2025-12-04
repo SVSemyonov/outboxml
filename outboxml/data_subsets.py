@@ -314,6 +314,7 @@ class DataPreprocessor:
 
         if to_pickle:
             self._pickle_subset.save_subset_to_pickle(model_name, data_subset, True)
+            self._model_config_pickle.save_config_to_pickle(model_name, self.model_config(model_name), True)
             self._prepared_subsets[model_name] = True
         else:
             self.temp_subset = data_subset
@@ -445,7 +446,7 @@ class ModelConfigPickle:
         if os.path.exists(file_path) and not rewrite:
             logger.warning(f'model config {model_name}||File {file_path} already exists.')
         else:
-            logger.info(model_name + '_v' + self.version + '_prepare_model_config.pickle' + '||Saving subset to pickle')
+            logger.info(model_name + '_v' + self.version + '_prepare_model_config.pickle' + '||Saving pickle')
             with open(file_path, "wb") as f:
                 pickle.dump(model_config, f)
 
