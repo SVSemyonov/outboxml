@@ -176,6 +176,7 @@ class FeatureSelectionConfig(BaseModel):
     encoding_num: str = 'WoE_num_to_num'
     features_to_ignore: List[str] = []
     params: dict = {}
+    use_temp_data: bool = False
 
 
 class HPTuneConfig(BaseModel):
