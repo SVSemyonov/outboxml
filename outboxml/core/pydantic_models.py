@@ -206,6 +206,13 @@ class AutoMLConfig(BaseModel):
     dashboard_name: str
     trigger: Optional[Dict[str, str]] = None
 
+class MonitoringFactoryConfig(BaseModel):
+    type: str = "datadrift"
+    report: str = "base_datadrift_report"
+    group_models: Optional[bool] = False
+    prepare_base_data: Optional[bool] = True
+    parameters: Optional[Dict[str, Any]] = {}
+    db_table_name: Optional[str] = None
 
 class MonitoringConfig(BaseModel):
     group_name: str
@@ -213,5 +220,7 @@ class MonitoringConfig(BaseModel):
     pickle_name: str
     grafana_table_name: str
     dashboard_name: str
+    monitoring_factory: List[MonitoringFactoryConfig] = [MonitoringFactoryConfig()]
     extrapolation_period: int = 12
     target_column: str
+    data_source: str

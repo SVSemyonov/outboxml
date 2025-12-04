@@ -5,13 +5,18 @@ import pandas as pd
 from loguru import logger
 from sklearn.preprocessing import LabelEncoder
 
+from outboxml.core.monitoring_factory import (
+    DataReviewerRegistry,
+    DataReviewerComponent,
+    MonitoringContext
+)
 
-class DataDrift:
-    def __init__(self,
-                 full_calc: bool = False,
-                 columns_to_exclude: list = [],
-                 n_bins: int = 100,
+
+@DataReviewerRegistry.register("datadrift")
+class DataDrift(DataReviewerComponent):
+    def __init__(self, full_calc: bool = True, columns_to_exclude: list = [], n_bins: int = 100,
                  dif_len_string: int = 100):
+        super().__init__()
         self.dif_len_string = dif_len_string
         self.n_bins = n_bins
         self.full_calc = full_calc
@@ -19,8 +24,11 @@ class DataDrift:
         self.full_report = []
         self.columns_to_exclude = columns_to_exclude
 
-    def report(self, train_data: pd. DataFrame, test_data: pd.DataFrame, base_data: pd.DataFrame=None,
-                                        control_data: pd.DataFrame=None)-> pd.DataFrame:
+    def review(self, context: MonitoringContext)-> pd.DataFrame:
+        data_context = context.get_prepared_data()
+        train_data = data_context.X_train
+        test_data = data_context.X_test
+
         result = pd.DataFrame()
 
         for column in train_data.columns:
@@ -43,6 +51,11 @@ class DataDrift:
                 logger.error('No results for '+ column + '||' + str(exc))
         result.index = pd.Index(['PSI', 'KL', 'JS'])
         if self.full_calc:
+            base_data = data_context.base
+            control_data = data_context.actual
+            if base_data is None or control_data is None:
+                logger.error('No base/control data')
+
             full_result = self._full_calculation(base_data, control_data)
             result = pd.concat([result, full_result])
         return result.transpose()
