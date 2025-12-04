@@ -90,6 +90,7 @@ class FeatureSelection(TestCase):
 
     def test_BaseFS(self):
         self.dsManager._data_preprocessor._retro = True
+
         data = BaseFS( new_features_list=self.feature_for_research,
                       parameters=self._fs_config,
                         data_preprocessor=self.dsManager._data_preprocessor,
@@ -101,6 +102,30 @@ class FeatureSelection(TestCase):
 
         self.assertEqual(len(data.features_categorical), 1)
         self.assertEqual(len(data.features_numerical), 4)
+    def test_temp_files_BaseFS(self):
+        self.dsManager._data_preprocessor._retro = True
+        data = BaseFS( new_features_list=self.feature_for_research,
+                      parameters=FeatureSelectionConfig(
+                                                metric_eval={"first": "accuracy", "second": "accuracy"},
+                                                top_feautures_to_select=4,
+                                                count_category=100,
+                                                cutoff_1_category=0.9,
+                                                cutoff_nan=0.7,
+                                                max_corr_value=0.6,
+                                                cv_diff_value=0.1,
+                                                use_temp_data=True,
+                                                encoding_cat='WoE_cat_to_num',
+                                                encoding_num='WoE_num_to_num',
+                                            ),
+                        data_preprocessor=self.dsManager._data_preprocessor,
+                      prepare_data_interface=FeatureSelectionPrepareDataset(model_config=self.dsManager._models_configs[
+                          0]),
+                      feature_selection_interface=FeatureSelectionInterface(feature_selection_config=self._fs_config,
+                                                                            objective='binomial')
+                      ).select_features(params={"iterations": 30}, model_name='first')
+
+        self.assertEqual(len(data.features_categorical), 1)
+        self.assertEqual(len(data.features_numerical), 2)
 
 
 class HPTune(TestCase):
