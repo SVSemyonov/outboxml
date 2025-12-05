@@ -19,7 +19,7 @@ from outboxml.core.monitoring_factory import (
     ReportComponent,
     MonitoringContext,
 )
-
+from outboxml.monitoring_result import MonitoringResult
 
 
 class MonitoringManager:

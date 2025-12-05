@@ -101,7 +101,7 @@ class BaselineModels:
         self.model_name = model_name
         self.__model_number = model_number
 
-    def choose_model(self) -> BaseWrapperModel:
+    def choose_model(self) -> BaseEstimator:
         if self.__model_number == 1:
             model = RandomForestClassifierModel(dataset=self.__dataset,
                                                 model_name=self.model_name,
@@ -159,7 +159,7 @@ class BaseLineModel(BaseWrapperModel):
         self._model_name = model_name
         self.__strategy = strategy
 
-    def fit(self):
+    def fit(self)->BaseEstimator:
         model = DummyRegressor(strategy=self.__strategy).fit(self.__dataset.X_train, self.__dataset.y_train)
         return model
 
@@ -204,6 +204,13 @@ class GLMCatboostCombineModel(BaseWrapperModel):
             elif isinstance(self.model, CatBoostClassifier):
                 prediction = self.model.predict_proba(X[chain(features_numerical, features_categorical)])[:, 1]
 
+        elif self._wrapper == ModelsParams.xgboost:
+            features = list(chain(self.features_numerical, self.features_categorical))
+            if isinstance(self.model, XGBRegressor):
+                prediction = self.model.predict(X[chain(features_numerical, features_categorical)])
+            elif isinstance(self.model, XGBClassifier):
+                prediction = self.model.predict_proba(X[chain(features_numerical, features_categorical)])[:, 1]
+
         if isinstance(prediction, np.ndarray):
             prediction = pd.Series(prediction, index=X.index)
 
@@ -218,8 +225,8 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
 
                  model_config: ModelConfig,
                  sm_model: GLMCatboostCombineModel,
-                 data_subset: Any,
-                 work_type_fit: str
+                 data_subset: ModelDataSubset,
+                 work_type_fit: str='CPU',
                  ):
         self.model_config = model_config
         self.sm_model = sm_model
@@ -367,7 +374,7 @@ class ModelsWrapper(BaseWrapperModel):
 
 class StatsmodelsModel(BaseWrapperModel):
 
-    def __init__(self, data_subset, model_config: ModelConfig):
+    def __init__(self, data_subset: ModelDataSubset, model_config: ModelConfig):
         self.model_name: str = data_subset.model_name
 
         self.objective: Literal[ModelsParams.poisson, ModelsParams.gamma] = model_config.objective
@@ -552,7 +559,7 @@ class CatboostModel(BaseWrapperModel):
                                        )
 
 class XgboostModel(BaseWrapperModel):
-    def __init__(self, data_subset, model_config: ModelConfig, work_type_fit: str):
+    def __init__(self, data_subset, model_config: ModelConfig, work_type_fit: str='CPU'):
         self.model_name: str = data_subset.model_name
         self.objective: Literal[ModelsParams.poisson, ModelsParams.gamma, ModelsParams.binary] = model_config.objective
         logger.info('Model objective||' + str(self.objective))
@@ -605,26 +612,20 @@ class XgboostModel(BaseWrapperModel):
         )
 
         model_xgb.fit(self.X_train[features], y_train_xgb)
+        return GLMCatboostCombineModel(model_name=self.model_name,
+                                       wrapper=self.wrapper,
+                                       min_max_scaler=None,
+                                       model=model_xgb,
+                                       features_numerical=self.features_numerical,
+                                       features_categorical=self.features_categorical,
+                                       )
 
-        self.model_xgb = model_xgb
-
-    def predict(self, X: pd.DataFrame) -> pd.Series:
-        features = list(chain(self.features_numerical, self.features_categorical))
-        if isinstance(self.model_xgb, XGBRegressor):
-            prediction = self.model_xgb.predict(X[features])
-        elif isinstance(self.model, XGBClassifier):
-            prediction = self.model.predict_proba(X[features])[:, 1]
-
-        if isinstance(prediction, np.ndarray):
-            prediction = pd.Series(prediction, index=X.index)
-
-        return prediction
 
 class StatsModelsEstimator(RegressorMixin, BaseEstimator):
     def __init__(self,
                  sm_model,
                  model_config: ModelConfig,
-                 datasubset: Any, ):
+                 datasubset: ModelDataSubset, ):
         self.sm_model = sm_model
         self.model_config = model_config
         self.datasubset = datasubset
