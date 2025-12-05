@@ -13,13 +13,8 @@ from outboxml.datasets_manager import DataSetsManager
 from outboxml.export_results import ResultExport, GrafanaExport
 from outboxml.extractors import Extractor
 from outboxml.metrics.base_metrics import BaseMetric
-from outboxml.core.monitoring_factory import (
-    MonitoringFactory,
-    ReportRegistry,
-    ReportComponent,
-    MonitoringContext,
-)
-from outboxml.monitoring_result import MonitoringResult
+from outboxml.core.monitoring_factory import MonitoringFactory
+from outboxml.monitoring_result import MonitoringResult, DataContext, MonitoringContext
 
 
 
@@ -95,9 +90,11 @@ class MonitoringManager:
         if self.logs is None:
             self.logs = self._logs_extractor.extract_dataset()
             logger.debug('Logs are loaded')
+        self._ds_manager._retro = True
+        self._ds_manager._init_dsmanager()
         context = MonitoringContext(
             data_preprocessor=self._ds_manager._data_preprocessor,
-            actual=self.logs,
+            logs_extractor=self._logs_extractor,
             monitoring_result=self.result,
             monitoring_config=self._monitoring_config,
             models_config=self._ds_manager._models_configs,

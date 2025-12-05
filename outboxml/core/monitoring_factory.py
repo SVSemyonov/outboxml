@@ -3,7 +3,7 @@ import pandas as pd
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 
-from outboxml.monitoring_result import MonitoringContext
+from outboxml.monitoring_result import MonitoringContext, DataContext
 from typing import Dict, Any, Optional, Union
 
 
@@ -80,7 +80,10 @@ class MonitoringService:
         self.monitoring_items.append(item)
 
     def review_all(self, context: MonitoringContext) -> tuple[Dict[str, Union[pd.DataFrame, Dict[str, pd.DataFrame]]], Dict[str, Dict[str, Union[pd.DataFrame, str]]]]:
-
+        data_context = DataContext(
+            base=context.data_preprocessor.dataset,
+            actual=context.logs_extractor.extract_dataset()
+        )
         data_reviewer_results = {}
         reviewer_report_results = {}
 
@@ -89,8 +92,9 @@ class MonitoringService:
                 if not item.group_models:
                     models_reviewer_result = {}
                     for model in context.models_config:
-                        model_ctx = replace(context, models_config=model)
-                        reviewer_result = item.data_reviewer.review(model_ctx)
+                        temp_data_context = replace(data_context)
+                        temp_data_context.prepare_data(context.data_preprocessor, model, )
+                        reviewer_result = item.data_reviewer.review(temp_data_context)
                         models_reviewer_result[model.name] = reviewer_result
 
                     final_report = item.reviewer_report.make_report(models_reviewer_result, context)
@@ -100,7 +104,7 @@ class MonitoringService:
                         'db_table': item.table_name,
                     }
                 else:
-                    reviewer_result = item.data_reviewer.review(context)
+                    reviewer_result = item.data_reviewer.review(data_context)
                     data_reviewer_results[item.name] = reviewer_result
                     reviewer_report_results[item.name] = {
                         'df': item.reviewer_report.make_report(reviewer_result, context),

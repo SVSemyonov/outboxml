@@ -6,7 +6,8 @@ from loguru import logger
 from outboxml.core.data_prepare import prepare_dataset
 from outboxml.core.pydantic_models import ModelConfig, MonitoringConfig
 from outboxml.data_subsets import DataPreprocessor
-
+from outboxml.extractors import Extractor
+from typing import List
 
 
 class MonitoringResult:
@@ -28,30 +29,32 @@ class DataContext:
     base: pd.DataFrame = None
     actual: pd.DataFrame  = None
 
+    def prepare_data(self, data_preprocessor, models_config):
+        try:
+            subset = data_preprocessor.get_subset(model_name=models_config.name)
+
+            prepared = prepare_dataset(
+                group_name='default',
+                data=self.actual.copy(),
+                train_ind=self.actual.index,
+                test_ind=pd.Index([]),
+                model_config=models_config,
+            )
+
+            self.X_train = subset.X_train
+            self.X_test = prepared.data
+
+        except Exception as e:
+            logger.exception("Failed to prepare data in MonitoringContext")
+            raise e
+
 @dataclass
 class MonitoringContext:
     data_preprocessor: DataPreprocessor
 
     monitoring_result: MonitoringResult
     monitoring_config: MonitoringConfig
-    models_config: ModelConfig
-
-    actual: pd.DataFrame
-
-    def get_prepared_data(self) -> DataContext:
-        try:
-            if not self.models_config:
-                raise ValueError("Model config is required for prepared data")
-
-            subset = self.data_preprocessor.get_subset(model_name=self.models_config.name)
-
-            prepared = prepare_dataset(
-                group_name=self.monitoring_result.group_name,
-                data=self.actual.copy(),
-                train_ind=self.actual.index,
-                test_ind=pd.Index([]),
-                model_config=self.models_config,
-            )
+    models_config: List[ModelConfig]
 
             return DataContext(
                 base=self.data_preprocessor.dataset,
@@ -69,3 +72,4 @@ class MonitoringContext:
             base=self.data_preprocessor.dataset,
             actual=self.actual.copy()
         )
+    logs_extractor: Extractor
