@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from pandas.testing import assert_series_equal
@@ -165,7 +167,9 @@ class TestDataPrepare(TestCase):
         )
 
     def test_model_data_subset(self):
-        data = pd.read_csv('tests/test_data/titanic.csv')
+        test_data_path = Path(__file__).resolve().parent / "test_data"
+        path_to_data = test_data_path / 'titanic.csv'
+        data = pd.read_csv(path_to_data)
         data1 = data.drop(columns=['AGE'])
         data2 = data['AGE']
         datasubset1 = ModelDataSubset(model_name='test',X_train=data1, features_categorical=list(data.columns))

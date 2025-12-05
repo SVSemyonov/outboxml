@@ -1,3 +1,6 @@
+from abc import ABC, abstractmethod
+from copy import deepcopy
+
 import numpy as np
 import pandas as pd
 from loguru import logger
@@ -9,7 +12,7 @@ from loguru import logger
 from sklearn.metrics import get_scorer_names
 from sklearn.model_selection import cross_val_score
 
-from outboxml.core.pydantic_models import FeatureSelectionConfig
+from outboxml.core.pydantic_models import FeatureSelectionConfig, ModelConfig
 from outboxml.data_subsets import ModelDataSubset
 
 
@@ -32,37 +35,46 @@ def catboost_model(objective, params, cat_features=None):
 
     return model
 
-class CorrelationMatrix:
+
+class Analysis(ABC):
+    @abstractmethod
+    def result(self, *params):
+        pass
+
+
+class CorrelationMatrix(Analysis):
     def __init__(self,
                  data: pd.DataFrame,
                  feature_importance_list: list,
-                 threshold: float = 0.9):
+                 features_numerical: list,
+                 threshold: float = 0.9,
+                 ):
         self.X = data
         self.last = feature_importance_list
         self.threshold = threshold
+        self.features_numerical = features_numerical
 
-    def drop_list(self,
-                  features_numerical: list,
-                  threshold: float = 0.9):
+    def result(self):
         self.X = self.X[reversed(self.last)]  # упорядочен по значимости
         logger.debug('Feature selection||Calculating correlations')
-        phik_matrix = self.X.phik_matrix(interval_cols=features_numerical)
+        phik_matrix = self.X.phik_matrix(interval_cols=self.features_numerical)
         upper = phik_matrix.where(np.triu(np.ones(phik_matrix.shape), k=1).astype(
             bool))  # берем из набора скоррелированных только самую значимую
 
         # Найти признаки с корреляцией выше порогового значения
-        to_drop = [column for column in upper.columns if any(upper[column] > threshold)]
+        to_drop = [column for column in upper.columns if any(upper[column] > self.threshold)]
         if len(to_drop) > 0:
             logger.info('Dropping ' + str(to_drop))
         return to_drop
 
 
 
-class CVAnalysis:
+class CVStability(Analysis):
     def __init__(self,
                  list_to_exclude: list,
                  data_subset: ModelDataSubset,
                  config: FeatureSelectionConfig,
+                 features: list,
                  objective: str,
                  catboost_params: dict = None
                  ):
@@ -76,10 +88,13 @@ class CVAnalysis:
             self.params  = self.config.params
         else:
             self.params = catboost_params
+        self.features = features
 
-    def calculate_stability(self, features: list):
+
+    def result(self,):
         """Calculation of stability using phik matrix"""
         # TODO разобраться со списками
+        features = self.features
         if features == []:
             return features
         else:
@@ -131,7 +146,7 @@ class CVAnalysis:
             return 'neg_mean_absolute_error'
 
 
-class CatboostShapAnalysis:
+class CatboostShapAnalysis(Analysis):
     def __init__(self,
                  data_subset: ModelDataSubset,
                  config: FeatureSelectionConfig,
@@ -146,7 +161,7 @@ class CatboostShapAnalysis:
         else:
             self.params = params
 
-    def fit_catboost(self,):
+    def result(self,):
         logger.debug('Feature selection||Fitting catboost')
         X_train, X_test, y_train, y_test, cat_features = train_data(self.data_subset)
         train_pool = Pool(X_train, y_train, feature_names=list(X_train.columns),

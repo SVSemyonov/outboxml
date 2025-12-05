@@ -9,7 +9,6 @@
       "type": "datadrift",
       "report": "base_datadrift_report",
       "group_model": false,
-      "prepare_base_data": true,
       "parameters": {
         "full_calc": false
       }

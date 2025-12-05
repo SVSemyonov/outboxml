@@ -13,43 +13,9 @@ from outboxml.datasets_manager import DataSetsManager
 from outboxml.export_results import ResultExport, GrafanaExport
 from outboxml.extractors import Extractor
 from outboxml.metrics.base_metrics import BaseMetric
-from outboxml.core.monitoring_factory import (
-    MonitoringFactory,
-    ReportRegistry,
-    ReportComponent,
-    MonitoringContext,
-)
+from outboxml.core.monitoring_factory import MonitoringFactory
+from outboxml.monitoring_result import MonitoringResult, DataContext, MonitoringContext
 
-class MonitoringResult:
-    def __init__(self, group_name):
-        self.group_name = group_name
-        self.model_version = 'default'
-        self.dataset_name = 'default'
-        self.reviews = {}
-        self.metric = None
-        self.extrapolation_results = {}
-        self.reports = {}
-        self.grafana_dashboard = None
-
-
-@ReportRegistry.register("base_datadrift_report")
-class MonitoringReport(ReportComponent):
-    def __init__(self):
-        super().__init__()
-
-    def make_report(self, data_dict: pd.DataFrame, context: MonitoringContext) -> pd.DataFrame:
-        report = pd.DataFrame()
-        for key in data_dict.keys():
-            df_result = data_dict[key].copy()
-            df_result['model_name'] = key
-            report = pd.concat([report, df_result])
-        for column in report.columns:
-            try:
-                report[column] = report[column].astype('float')
-            except:
-                report[column] = report[column].astype(str)
-        report['model_version'] = context.monitoring_result.model_version
-        return report
 
 
 class MonitoringManager:
@@ -124,9 +90,11 @@ class MonitoringManager:
         if self.logs is None:
             self.logs = self._logs_extractor.extract_dataset()
             logger.debug('Logs are loaded')
+        self._ds_manager._retro = True
+        self._ds_manager._init_dsmanager()
         context = MonitoringContext(
             data_preprocessor=self._ds_manager._data_preprocessor,
-            actual=self.logs,
+            logs_extractor=self._logs_extractor,
             monitoring_result=self.result,
             monitoring_config=self._monitoring_config,
             models_config=self._ds_manager._models_configs,
@@ -185,12 +153,3 @@ class MonitoringManager:
             dataset_name = self._monitoring_config.data_config.table_name_source
 
         return dataset_name
-
-    def _load_prod_model(self):
-        with open(
-                os.path.join(self._monitoring_config.prod_models_path, f"{self._monitoring_config.pickle_name}.pickle"),
-                "rb") as f:
-            group = pickle.load(f)
-        self.result.model_version = self._monitoring_config.pickle_name
-        logger.info(self._monitoring_config.pickle_name + ' is loaded from prod path')
-        return group

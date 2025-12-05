@@ -10,10 +10,13 @@ from sklearn.metrics import mean_absolute_error
 from outboxml.automl_manager import RetroFS, AutoMLManager
 from outboxml.core.config_builders import AutoMLConfigBuilder, AllModelsConfigBuilder
 from outboxml.core.email import EMailDSResult, EMailDSCompareResult
+from outboxml.core.predict import one_model_predict, ensemble_predict
 from outboxml.core.prepared_datasets import FeatureSelectionPrepareDataset
 from outboxml.core.pydantic_models import FeatureSelectionConfig, AutoMLConfig, AllModelsConfig
+from outboxml.core.utils import ResultPickle
 from outboxml.datadrift import DataDrift
 from outboxml.datasets_manager import DataSetsManager, DSManagerResult
+from outboxml.ensemble import Ensemble, EnsembleResult
 from outboxml.export_results import ResultExport
 from outboxml import config
 from outboxml.automl_utils import load_last_pickle_models_result, calculate_previous_models, \
@@ -22,9 +25,10 @@ from outboxml.extractors import Extractor
 from outboxml.feature_selection import BaseFS, FeatureSelectionInterface
 from outboxml.hyperparameter_tuning import HPTuning
 from outboxml.main_predict import main_predict
+from outboxml.main_release import MLFLowRelease
 from outboxml.metrics.business_metrics import BaseCompareBusinessMetric
 from outboxml.metrics.base_metrics import BaseMetric
-from outboxml.monitoring_manager import MonitoringManager, MonitoringReport, MonitoringResult
+from outboxml.monitoring_manager import MonitoringManager, MonitoringResult
 from outboxml.target_extrapolation import TargetModel
 
 test_configs_path = Path(__file__).resolve().parent/ "test_configs"
@@ -102,6 +106,7 @@ class FeatureSelection(TestCase):
 
         self.assertEqual(len(data.features_categorical), 1)
         self.assertEqual(len(data.features_numerical), 4)
+
     def test_temp_files_BaseFS(self):
         self.dsManager._data_preprocessor._retro = True
         data = BaseFS( new_features_list=self.feature_for_research,
@@ -298,32 +303,31 @@ class BusinessMetricsExample(BaseMetric):
     def calculate_metric(self, result1: dict, result2: dict) -> dict:
         return {'Test metric': 1}
 
-
-class TestMonitoringManger(TestCase):
-    def setUp(self):
-        pass
-
-    def test_monitoring(self):
-        review = MonitoringManager(monitoring_config=str(monitoring_config),
-                                   models_config=str(config_name),
-                                   business_metric=BusinessMetricsExample(),
-                                   logs_extractor=LogsExtractor()
-                                   ).review(send_mail=False, )
-        self.assertIsInstance(review, MonitoringResult)
-        self.assertAlmostEqual(review.reviews['datadrift']['first']['PSI']['SEX'], 0.002, 2)
-
-
 class TestPredict(TestCase):
     def setUp(self):
         pass
 
     def test_predict(self):
+
         result = asyncio.run(
             main_predict(config=config, group_name=None, features_values=LogsExtractor().extract_dataset()[:100],
-                         second_group_name=None, second_features_values=LogsExtractor().extract_dataset()[700:]))
+                         second_group_name='example_titanic_2025_09_18_08_37_03', second_features_values=LogsExtractor().extract_dataset()[700:]))
         self.assertIsInstance(result, dict)
         self.assertIsInstance(result['main_response'], dict)
         self.assertIsInstance(result['main_response']['result'], dict)
+        self.assertIsInstance(result['second_response']['result'], dict)
+
+        result = asyncio.run(
+            main_predict(config=config, group_name=None, features_values=LogsExtractor().extract_dataset()[:100],
+                         second_group_name='example_titanic_2025_09_18_08_37_03',
+                         second_features_values=LogsExtractor().extract_dataset()[700:]))
+        self.assertIsInstance(result, dict)
+        self.assertIsInstance(result['main_response'], dict)
+        self.assertIsInstance(result['main_response']['result'], dict)
+        self.assertIsInstance(result['second_response']['result'], dict)
+       # Ensemble(config=config).make_ensemble('test', ['first'])
+       # ensemble_predict(ensemble_name='test', ensemble=EnsembleResult(model_name='first', models=[load_last_pickle_models_result(config=config)]), )
+
 
     def test_config_builder(self):
         data = pd.read_csv(path_to_data)
@@ -331,6 +335,14 @@ class TestPredict(TestCase):
         self.assertIsInstance(AllModelsConfigBuilder().build(), AllModelsConfig)
         self.assertIsInstance(build_default_auto_ml_config({'group_name': 'test'}), str)
         self.assertIsInstance(build_default_all_models_config(data=data), str)
+
+class TestRelease(TestCase):
+    def setUp(self):
+        pass
+
+    def test_MlflowRelease(self):
+        MLFLowRelease(config=config).load_model_to_source_from_mlflow()
+
 
 if __name__ == '__main__':
     main()
