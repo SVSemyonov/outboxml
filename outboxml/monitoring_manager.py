@@ -13,13 +13,9 @@ from outboxml.datasets_manager import DataSetsManager
 from outboxml.export_results import ResultExport, GrafanaExport
 from outboxml.extractors import Extractor
 from outboxml.metrics.base_metrics import BaseMetric
-from outboxml.core.monitoring_factory import (
-    MonitoringFactory,
-    ReportRegistry,
-    ReportComponent,
-    MonitoringContext,
-)
-from outboxml.monitoring_result import MonitoringResult
+from outboxml.core.monitoring_factory import MonitoringFactory
+from outboxml.monitoring_result import MonitoringResult, DataContext, MonitoringContext
+
 
 
 class MonitoringManager:
@@ -94,9 +90,11 @@ class MonitoringManager:
         if self.logs is None:
             self.logs = self._logs_extractor.extract_dataset()
             logger.debug('Logs are loaded')
+        self._ds_manager._retro = True
+        self._ds_manager._init_dsmanager()
         context = MonitoringContext(
             data_preprocessor=self._ds_manager._data_preprocessor,
-            actual=self.logs,
+            logs_extractor=self._logs_extractor,
             monitoring_result=self.result,
             monitoring_config=self._monitoring_config,
             models_config=self._ds_manager._models_configs,
@@ -155,12 +153,3 @@ class MonitoringManager:
             dataset_name = self._monitoring_config.data_config.table_name_source
 
         return dataset_name
-
-    def _load_prod_model(self):
-        with open(
-                os.path.join(self._monitoring_config.prod_models_path, f"{self._monitoring_config.pickle_name}.pickle"),
-                "rb") as f:
-            group = pickle.load(f)
-        self.result.model_version = self._monitoring_config.pickle_name
-        logger.info(self._monitoring_config.pickle_name + ' is loaded from prod path')
-        return group
