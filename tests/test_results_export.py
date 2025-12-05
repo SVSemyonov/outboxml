@@ -4,6 +4,7 @@ import pandas as pd
 from unittest import main
 
 import config
+from outboxml.core.email import EMail, EMailDSResult
 from outboxml.export_results import ResultExport
 
 from outboxml.core.prepared_datasets import PrepareDataset

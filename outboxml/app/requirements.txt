@@ -9,6 +9,7 @@ plotly==5.22.0
 kaleido==0.2.1
 mlflow==2.16.0
 pandas==2.2.2
+polars>1.33
 numpy==1.26.4
 environs==11.0.0
 pretty_html_table==0.9.16

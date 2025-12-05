@@ -3,6 +3,7 @@ from abc import ABC
 from pathlib import Path
 
 import pandas as pd
+import polars as pl
 import pickle
 from loguru import logger
 from sqlalchemy import create_engine, text
@@ -18,8 +19,9 @@ from outboxml.core.utils import FilesNames
 
 
 class Extractor(ABC):
-    """Base interface fo extracting data
-    Inheritanced user classes should contain extract_dataset() method which returns padnas Dataframe and
+    """
+    Base interface for extracting data.
+    Inherited user classes should contain the `extract_dataset` method which returns pandas or polars Dataframe.
     """
 
     def __init__(self, *params):
@@ -28,13 +30,13 @@ class Extractor(ABC):
         self.connection_config = None
 
     @abc.abstractmethod
-    def extract_dataset(self) -> pd.DataFrame:
+    def extract_dataset(self) -> pd.DataFrame | pl.DataFrame:
         pass
 
     def load_config(self, connection_config):
         self.connection_config = connection_config
 
-    def __check_object(self, dataset: pd.DataFrame):
+    def __check_object(self, dataset: pd.DataFrame | pl.DataFrame):
         """Проверка данных на выходе парсера"""
         pass
 

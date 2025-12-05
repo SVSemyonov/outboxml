@@ -13,7 +13,8 @@
         "encoding_cat":  "WoE_cat_to_num",
         "encoding_num":  "WoE_num_to_num",
         "params": {"iterations": 30},
-        "features_to_ignore":  ["general"]
+        "features_to_ignore":  ["general"],
+        "use_temp_data": false
   },
 
   "hp_tune": {"metric_score": {"first": "neg_mean_absolute_error",

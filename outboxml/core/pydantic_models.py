@@ -85,6 +85,24 @@ class FeatureModelConfig(BaseModel):
 
         return self
 
+    @model_validator(mode="after")
+    def check_default(self):
+        # Numerical
+        if self.replace.get(FeatureEngineering.feature_type) == FeatureEngineering.numerical:
+            if not isinstance(self.default, (float, int)):
+                raise ConfigError(f"{self.name}: invalid default value for numerical feature")
+            if not (isinstance(self.fillna, (float, int)) or self.fillna is None):
+                raise ConfigError(f"{self.name}: invalid fillna value for numerical feature")
+
+        # Categorical
+        else:
+            if not isinstance(self.default, (str, int)):
+                raise ConfigError(f"{self.name}: invalid default value for categorical feature")
+            if not (isinstance(self.fillna, (str, int)) or self.fillna is None):
+                raise ConfigError(f"{self.name}: invalid fillna value for categorical feature")
+
+        return self
+
 
 class IntersectionModelConfig(BaseModel):
     name: str
@@ -152,12 +170,13 @@ class FeatureSelectionConfig(BaseModel):
     cutoff_1_category: float = 0.99,
     cutoff_nan: float = 0.7,
     max_corr_value: float = 0.6
-    metric_eval: dict
+    metric_eval: dict = {'metric_name': 0}
     cv_diff_value: float = 0.05
     encoding_cat: str = 'WoE_cat_to_num'
     encoding_num: str = 'WoE_num_to_num'
     features_to_ignore: List[str] = []
     params: dict = {}
+    use_temp_data: bool = False
 
 
 class HPTuneConfig(BaseModel):
@@ -187,6 +206,12 @@ class AutoMLConfig(BaseModel):
     dashboard_name: str
     trigger: Optional[Dict[str, str]] = None
 
+class MonitoringFactoryConfig(BaseModel):
+    type: str = "datadrift"
+    report: str = "base_datadrift_report"
+    group_models: Optional[bool] = False
+    parameters: Optional[Dict[str, Any]] = {}
+    db_table_name: Optional[str] = None
 
 class MonitoringConfig(BaseModel):
     group_name: str
@@ -194,5 +219,7 @@ class MonitoringConfig(BaseModel):
     pickle_name: str
     grafana_table_name: str
     dashboard_name: str
+    monitoring_factory: List[MonitoringFactoryConfig] = [MonitoringFactoryConfig()]
     extrapolation_period: int = 12
     target_column: str
+    data_source: str
