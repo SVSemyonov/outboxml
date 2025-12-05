@@ -153,12 +153,3 @@ class MonitoringManager:
             dataset_name = self._monitoring_config.data_config.table_name_source
 
         return dataset_name
-
-    def _load_prod_model(self):
-        with open(
-                os.path.join(self._monitoring_config.prod_models_path, f"{self._monitoring_config.pickle_name}.pickle"),
-                "rb") as f:
-            group = pickle.load(f)
-        self.result.model_version = self._monitoring_config.pickle_name
-        logger.info(self._monitoring_config.pickle_name + ' is loaded from prod path')
-        return group

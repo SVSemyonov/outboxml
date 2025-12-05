@@ -56,20 +56,5 @@ class MonitoringContext:
     monitoring_config: MonitoringConfig
     models_config: List[ModelConfig]
 
-            return DataContext(
-                base=self.data_preprocessor.dataset,
-                actual=self.actual.copy(),
-                X_train=subset.X_train,
-                X_test=prepared.data
-            )
-
-        except Exception as e:
-            logger.exception("Failed to prepare data in MonitoringContext")
-            raise e
-
-    def get_raw_data(self):
-        return DataContext(
-            base=self.data_preprocessor.dataset,
-            actual=self.actual.copy()
-        )
     logs_extractor: Extractor
+    #data_context: DataContext

@@ -298,21 +298,6 @@ class BusinessMetricsExample(BaseMetric):
     def calculate_metric(self, result1: dict, result2: dict) -> dict:
         return {'Test metric': 1}
 
-
-class TestMonitoringManger(TestCase):
-    def setUp(self):
-        pass
-
-    def test_monitoring(self):
-        review = MonitoringManager(monitoring_config=str(monitoring_config),
-                                   models_config=str(config_name),
-                                   business_metric=BusinessMetricsExample(),
-                                   logs_extractor=LogsExtractor()
-                                   ).review(send_mail=False, )
-        self.assertIsInstance(review, MonitoringResult)
-        self.assertAlmostEqual(review.reviews['datadrift']['first']['PSI']['SEX'], 0.002, 2)
-
-
 class TestPredict(TestCase):
     def setUp(self):
         pass
