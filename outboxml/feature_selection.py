@@ -7,6 +7,7 @@ from loguru import logger
 from tqdm import tqdm
 
 from outboxml.analysis_tools import CorrelationMatrix, CatboostShapAnalysis,CVStability
+from outboxml.core.config_builders import feature_params
 from outboxml.core.data_prepare import PrepareDatasetResult
 from outboxml.core.enums import FeaturesTypes, FeatureEngineering
 from outboxml.core.prepared_datasets import BasePrepareDataset
@@ -22,6 +23,12 @@ class SelectionInterface(ABC):
         """Main selection method"""
         pass
 
+
+class FeatureSelection(ABC):
+    def _prepare_feature(self, *params)->dict:
+        pass
+    def select_features(self)->ModelDataSubset:
+        pass
 
 
 class FeatureSelectionInterface(SelectionInterface):
@@ -90,7 +97,7 @@ class FeatureSelectionInterface(SelectionInterface):
         return selected_features
 
 
-class BaseFS:
+class BaseFS(FeatureSelection):
     """Class for selecting new features for a dataset based on configuration settings.
     Utilizes base interfaces for data preparation and feature selection.
     Parameters:
@@ -226,60 +233,11 @@ class BaseFS:
             logger.info(f"{key}:" + str(value))
         return self.types_dict
 
-    def _prepare_feature(self, serie: pd.Series, method='label', type: str = 'categorical', depth: float = 0.01,
-                         q1: float = 0.001, q2: float = 0.999, cut_outliers=True)->dict:
-        """
-            Mid-level function that processes a dict of params for data prepare
-
-            Parameters
-            ----------
-            series : pd.Series to be transformed.
-            type: str 'categorical' or 'numerical'
-            depth : float or int, default=None
-                Threshold for rare category grouping:
-                - If float [0-1]: categories with frequency < depth are combined
-                  (e.g., 0.01 groups values with <1% frequency)
-                - If int > 1: categories with count < depth are combined
-            q1, q2 : float, default=0.001, 0.999
-                Quantile boundaries for outlier detection.
-            cut_outliers : bool, default=True
-                - If True: outlier values are set to None for later handling
-                - If False: outlier values are clipped to the quantile boundaries (winsorization)
-
-            Returns
-            -------
-            {'default': '_NAN_', 'encoding': 'WoE_cat_to_num'}
-        """
-        feature_params = {}
-        logger.info('Prepare feature||' + str(serie.name))
-        if type == 'categorical':
-            if 0 < depth < 1:
-                VC = serie.value_counts(dropna=False, normalize=True).reset_index()
-                try:
-                    #                     VC = VC[VC[Serie.name] > depth]["index"]
-                    VC = VC[VC['proportion'] > depth][serie.name]
-                    # VC = serie.value_counts(dropna=False).reset_index()[:int(depth)]["index"]
-                    feature_params['default'] = '_NAN_'  # проверить
-                    serie.apply(lambda x: x if (x in set(VC)) or (pd.isnull(x)) else "OTHER")
-                    feature_params['encoding'] = self.parameters.encoding_cat
-                    feature_params['replace'] = dict(
-                        (value, FeatureEngineering.not_changed) for value in list(serie.unique()))
-                except:
-                    self.features_for_model.remove(serie.name)
-
-        elif type == 'numerical':
-            if q1 or q2:
-                if cut_outliers:
-                    feature_params['clip'] = {'min_value': serie.quantile(q1),
-                                              # winsorize(serie, limits=[q1, q2], nan_policy='omit').data.min(),
-                                              'max_value': serie.quantile(
-                                                  q2)}  # winsorize(serie, limits=[q1, q2], nan_policy='omit').data.max()}
-                    feature_params['default'] = serie.fillna(0).median()  # 0 #медиана или средняя в конфиге _MIN_ or _MEAN_ можно оставить пропуски
-                    feature_params['encoding'] = self.parameters.encoding_num
-                    feature_params['replace'] = {"_TYPE_": "_NUM_"}
-
-        logger.info(feature_params)
-        return feature_params
+    def _prepare_feature(self, serie: pd.Series,  depth: float = 0.01,
+                         q1: float = 0.001, q2: float = 0.999)->dict:
+        return feature_params(serie=serie, max_category_num=self.parameters.count_category,
+                              depth=depth, q1=q1, q2=q2,encoding_cat=self.parameters.encoding_cat,
+                              encoding_num=self.parameters.encoding_num)
 
     def _filter_data(self, data_subset: ModelDataSubset, selected_features: list)->ModelDataSubset:
         """Method for creating of the result list of selected features"""
