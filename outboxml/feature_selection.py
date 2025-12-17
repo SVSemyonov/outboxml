@@ -17,16 +17,13 @@ from outboxml.data_subsets import DataPreprocessor, ModelDataSubset
 
 class SelectionInterface(ABC):
     """Selection interface"""
-    def __init__(self)->None:
-        pass
     def feature_selection(self, *params) -> list:
         """Main selection method"""
         pass
 
 
 class FeatureSelection(ABC):
-    def _prepare_feature(self, *params)->dict:
-        pass
+
     def select_features(self, *params)->ModelDataSubset:
         pass
 
@@ -47,7 +44,6 @@ class FeatureSelectionInterface(SelectionInterface):
     """
     def __init__(self, feature_selection_config: FeatureSelectionConfig, objective: str = 'RMSE'):
 
-        super().__init__()
         self.to_drop = []
         self.last = None
         self.params = {}
@@ -139,7 +135,7 @@ class BaseFS(FeatureSelection):
         """Method for executing the feature selection pipeline. Returns a list of names of selected features"""
         logger.debug('Feature selection||Prepare of new_features for research')
         if not self.parameters.use_temp_data:
-            data_for_research = self._prepare_data(model_name=model_name)
+            data_for_research = self.prepare_data(model_name=model_name)
         else:
             logger.info('Using temp data for preparing new features')
             data_for_research = self._prepare_data_using_temp(model_name=model_name)
@@ -158,7 +154,7 @@ class BaseFS(FeatureSelection):
 
         return final_data
 
-    def _prepare_data(self, model_name: str=None)->ModelDataSubset:
+    def prepare_data(self, model_name: str=None)->ModelDataSubset:
         feature_params = {}
         full_data = self._data_preprocessor.dataset
         self.features_for_model = self.feature_types()
