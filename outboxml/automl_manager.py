@@ -593,19 +593,19 @@ class AutoMLManager(DataSetsManager):
             try:
                 os.rename(log_path, log_path.parent / new_name)
             except (PermissionError, OSError) as e:
-                # Файл занят другим процессом, создаем новый файл с уникальным именем
-                logger.warning(f"Не удалось переименовать log.log: {e}. Создаем новый файл с временной меткой.")
+                # File is used by another process, create a new log file with a unique name
+                logger.warning(f"Failed to rename log.log: {e}. Creating a new file with timestamp.")
                 new_log_path = log_path.parent / new_name
-                # Если файл с таким именем уже существует, добавляем дополнительный суффикс
+                # If a file with this name already exists, add an additional suffix
                 counter = 1
                 while new_log_path.exists():
                     new_name = f"log_{timestamp}_{counter}.log"
                     new_log_path = log_path.parent / new_name
                     counter += 1
-                # Пытаемся скопировать содержимое, если возможно
+                # Try to copy contents if possible
                 try:
                     shutil.copy2(log_path, new_log_path)
                 except:
-                    pass  # Если не удалось скопировать, просто продолжаем
+                    pass  # If copying fails, just continue
 
         logger.add(Path(str(self._external_config.results_path) + '/log.log'))
