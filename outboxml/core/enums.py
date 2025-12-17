@@ -72,6 +72,7 @@ class EncodingNames(str, Enum):
     to_float = "to_float"
     to_int = "to_int"
     woe_num_num = "WoE_num_to_num"
+    cut_num = "cut_num"
 
 
 class FeatureTypesForSelection(str, Enum):

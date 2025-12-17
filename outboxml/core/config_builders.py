@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import Optional, List, Union, Dict
 
+import numpy as np
 import pandas as pd
 from loguru import logger
 from pydantic import BaseModel
 
-from outboxml.core.enums import FeaturesTypes, FeatureEngineering
+from outboxml.core.enums import FeaturesTypes, FeatureEngineering, EncodingNames
 from outboxml.core.pydantic_models import FeatureModelConfig, ModelConfig, FeatureSelectionConfig, HPTuneConfig, \
     ModelInferenceConfig, AutoMLConfig, AllModelsConfig, DataConfig, DataModelConfig, SeparationModelConfig
 
@@ -155,9 +156,10 @@ def feature_params(serie: pd.Series,
                    max_category_num: int= 20,
                    depth: float = 0.01,
                    q1: float = 0.001, q2: float = 0.999,
-                   avaliable_types: list=['numerical', 'categorical']
+                   avaliable_types: list=['numerical', 'categorical'],
+                   encoding_cat: str=None,
+                   encoding_num: str=None,
                    )->dict:
-
     feature_params = {}
     logger.info('Prepare feature||' + str(serie.name))
     VC = serie.nunique(dropna=False)
@@ -183,7 +185,7 @@ def feature_params(serie: pd.Series,
                 VC = VC[VC['proportion'] > depth][serie.name]
                 feature_params['default'] = '_NAN_'  # проверить
                 serie.apply(lambda x: x if (x in set(VC)) or (pd.isnull(x)) else "OTHER")
-                feature_params['encoding'] = None
+                feature_params['encoding'] = encoding_cat
                 feature_params['feature_values'] = serie
             except:
                 logger.error('Error for feature builder||'+ str(serie.name))
@@ -195,9 +197,31 @@ def feature_params(serie: pd.Series,
             feature_params['clip'] = {'min_value': float(serie.quantile(q1)),
                                       # winsorize(serie, limits=[q1, q2], nan_policy='omit').data.min(),
                                       'max_value': float(serie.quantile(
-                                          q2))}  # winsorize(serie, limits=[q1, q2], nan_policy='omit').data.max()}
-            feature_params['default'] = float(serie.fillna(
-                0).median())  # 0 #медиана или средняя в конфиге _MIN_ or _MEAN_ можно оставить пропуски
-            feature_params['encoding'] = None
+                                          q2))
+                                      }  # winsorize(serie, limits=[q1, q2], nan_policy='omit').data.max()}
+        feature_params['default'] = float(serie.fillna(0).median())
+        # 0 #медиана или средняя в конфиге _MIN_ or _MEAN_ можно оставить пропуски
+        feature_params['encoding'] = encoding_num
+        if encoding_num == EncodingNames.cut_num:
+            opt_bins = calculate_optimal_bins(serie.dropna())
+            if opt_bins is not None:
+                result, bins = pd.qcut(serie, q=opt_bins, retbins=True, duplicates='drop')
+                logger.info('bins_for_feature||' + str(bins))
+                if len(bins) > 1:
+                    feature_params['cut_number'] = '_'.join(map(str, bins[:-1]))
+                else:
+                    feature_params['cut_number']  = str(bins)
     logger.info(feature_params)
     return feature_params
+
+
+def calculate_optimal_bins(data: pd.Series):
+    try:
+        n = len(data)
+        iqr = np.percentile(data, 75) - np.percentile(data, 25)
+        fd = int(np.ceil((max(data) - min(data)) / (2 * iqr / (n ** (1 / 3)))))
+
+        return min(5, fd)
+    except Exception as exc:
+        logger.error(f'No cut values for {data.name} return None||{str(exc)}')
+        return None
