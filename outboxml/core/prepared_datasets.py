@@ -182,9 +182,8 @@ class PrepareDatasetPl(BasePrepareDataset):
 
 
 class FeatureSelectionPrepareDataset(BasePrepareDataset):
-    def __init__(self,
-                 model_config: ModelConfig,
-                 ):
+    def __init__(self, model_config: ModelConfig, group_name: str):
+        super().__init__(group_name, model_config)
         self.model_config = model_config
         self._new_model_config = None
     def prepare_dataset(self, data: pd.DataFrame,  index_train: pd.Index, index_test:pd.Index,

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, List, Union, Dict
+from typing import Optional, List, Union, Dict, Literal
 
 import numpy as np
 import pandas as pd
@@ -71,7 +71,7 @@ class FeatureBuilder(ConfigBuilder):
         self.feature_values = params.get("feature_values")
         self.name = params.get("name", 'default')
 
-    def build(self):
+    def build(self)->FeatureModelConfig:
         logger.debug('Feature builder||'+str(self.name))
         if self.replace_map is None:
             self.replace_map = self.__get_replace_map()
@@ -154,28 +154,24 @@ class AllModelsConfigBuilder(ConfigBuilder):
 
 def feature_params(serie: pd.Series,
                    max_category_num: int= 20,
+                   cutoff_nan: float=0.6,
+                   cutoff_1_category: float=0.95,
                    depth: float = 0.01,
                    q1: float = 0.001, q2: float = 0.999,
                    avaliable_types: list=['numerical', 'categorical'],
                    encoding_cat: str=None,
                    encoding_num: str=None,
+                   default_cat: Literal['_NAN_'] = '_NAN_',
+                   default_num: Literal['_MEAN_','_MEDIAN_', '_MIN_', '_MAX_', '_ZERO_'] = '_MEDIAN_',
                    )->dict:
+
     feature_params = {}
     logger.info('Prepare feature||' + str(serie.name))
-    VC = serie.nunique(dropna=False)
-    if VC == 1:
-        type='categorical'
-    elif 2 <= VC < max_category_num and serie.dtype == object:
-        type ='categorical'
-    elif serie.dtype == object:
-        type = 'object'
-    elif pd.api.types.is_datetime64_any_dtype(serie):
-        type = 'date'
-    else:
-       type = 'numerical'
+    type = feature_type(serie, max_category_num,
+                   cutoff_nan,
+                   cutoff_1_category)
     if type not in avaliable_types:
         return feature_params
-
     feature_params['type'] = type
     feature_params['name'] = str(serie.name)
     if type == 'categorical':
@@ -183,7 +179,7 @@ def feature_params(serie: pd.Series,
             VC = serie.value_counts(dropna=False, normalize=True).reset_index()
             try:
                 VC = VC[VC['proportion'] > depth][serie.name]
-                feature_params['default'] = '_NAN_'  # проверить
+                feature_params['default'] = default_cat  # проверить
                 serie.apply(lambda x: x if (x in set(VC)) or (pd.isnull(x)) else "OTHER")
                 feature_params['encoding'] = encoding_cat
                 feature_params['feature_values'] = serie
@@ -199,8 +195,17 @@ def feature_params(serie: pd.Series,
                                       'max_value': float(serie.quantile(
                                           q2))
                                       }  # winsorize(serie, limits=[q1, q2], nan_policy='omit').data.max()}
-        feature_params['default'] = float(serie.fillna(0).median())
-        # 0 #медиана или средняя в конфиге _MIN_ or _MEAN_ можно оставить пропуски
+        if default_num == FeatureEngineering.median:
+            feature_params['default'] = float(serie.dropna().median())
+        elif default_num == FeatureEngineering.mean:
+            feature_params['default'] = float(serie.dropna().mean())
+        elif default_num == FeatureEngineering.min:
+            feature_params['default'] = float(serie.dropna().min())
+        elif default_num == FeatureEngineering.max:
+            feature_params['default'] = float(serie.dropna().min())
+        else:
+            feature_params['default'] = 0.0
+
         feature_params['encoding'] = encoding_num
         if encoding_num == EncodingNames.cut_num:
             opt_bins = calculate_optimal_bins(serie.dropna())
@@ -225,3 +230,30 @@ def calculate_optimal_bins(data: pd.Series):
     except Exception as exc:
         logger.error(f'No cut values for {data.name} return None||{str(exc)}')
         return None
+
+def feature_type(serie: pd.Series, max_category_num: int= 20,
+                   cutoff_nan: float=0.6,
+                   cutoff_1_category: float=0.95,)->str:
+    VC = serie.nunique(dropna=False)
+    if VC == 1 or \
+            serie.value_counts(normalize=True, dropna=False).values[0] > cutoff_1_category or \
+            serie.isna().mean() > cutoff_nan:
+        type = 'to_drop'
+        # Если только 2 значения
+    elif VC == 2:
+        type = 'binary'
+    elif 2 < VC <= max_category_num and serie.dtype == object:
+        type = 'categorical'
+    elif serie.dtype == object:
+        type = 'object'
+    elif pd.api.types.is_datetime64_any_dtype(serie):
+        type = 'date'
+    else:
+        type = 'numerical'
+    if type == 'binary':
+        try:
+            serie = pd.to_numeric(serie, errors='raise')
+            type = 'numerical'
+        except:
+            type = 'categorical'
+    return type

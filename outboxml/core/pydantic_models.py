@@ -174,6 +174,9 @@ class FeatureSelectionConfig(BaseModel):
     cv_diff_value: float = 0.05
     encoding_cat: str = 'WoE_cat_to_num'
     encoding_num: str = 'WoE_num_to_num'
+    default_cat: Literal['_NAN_'] = '_NAN_',
+    default_num: Literal['_MEAN_', '_MEDIAN_', '_MIN_', '_MAX_', '_ZERO_'] = '_MEDIAN_',
+    depth: float = 0.01
     features_to_ignore: List[str] = []
     params: dict = {}
     use_temp_data: bool = False
