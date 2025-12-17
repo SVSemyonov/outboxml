@@ -184,12 +184,3 @@ class CatboostShapAnalysis(Analysis):
             plot=False
         )
         return summary
-
-
-
-
-class CutNumberAnalysis(Analysis):
-    def __init__(self, data: pd.Series,):
-        self.data = data
-    def result(self):
-

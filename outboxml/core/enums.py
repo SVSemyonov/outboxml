@@ -77,7 +77,7 @@ class EncodingNames(str, Enum):
 
 class FeatureTypesForSelection(str, Enum):
     binary = "BINARY"#: ['EventCreatedByGIBDDFlag', 'E-Garant', < ... >]
-    categorical = "CATEGORIAL"#: ['CustomerImportance', 'DTPOSAGOType', < ... >]
+    categorical = "CATEGORСAL"#: ['CustomerImportance', 'DTPOSAGOType', < ... >]
     numeric = "NUMERIC"#: ['LossNumber', 'InsuredSum', 'LossDateTime', < ... >]
     to_drop = "TO_DROP"#: ['EventTypeDescription', 'InsuranceTypeName', < ... >]
     object =  "OBJECT"#: ['ContractNumber', 'VictimContractNumber', < ... >]

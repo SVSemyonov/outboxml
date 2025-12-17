@@ -9,7 +9,7 @@ from tqdm import tqdm
 from outboxml.analysis_tools import CorrelationMatrix, CatboostShapAnalysis,CVStability
 from outboxml.core.config_builders import feature_params, feature_type
 from outboxml.core.data_prepare import PrepareDatasetResult
-from outboxml.core.enums import FeaturesTypes, FeatureEngineering
+from outboxml.core.enums import FeaturesTypes, FeatureEngineering, FeatureTypesForSelection
 from outboxml.core.prepared_datasets import BasePrepareDataset
 from outboxml.core.pydantic_models import FeatureSelectionConfig, ModelConfig, FeatureModelConfig
 from outboxml.data_subsets import DataPreprocessor, ModelDataSubset
@@ -157,7 +157,7 @@ class BaseFS(FeatureSelection):
     def prepare_data(self, model_name: str=None)->ModelDataSubset:
         feature_params = {}
         full_data = self._data_preprocessor.dataset
-        self.features_for_model = self.feature_types()
+        self.features_for_model = self.feature_types(full_data)
         for feature in self.features_for_model:
             feature_params[feature] = self._prepare_feature(serie=full_data[feature])
 
@@ -167,14 +167,13 @@ class BaseFS(FeatureSelection):
                                                         'new_features': self.types_dict},
                                                   )
 
-    def feature_types(self)->dict:
+    def feature_types(self, data: pd.DataFrame)->dict:
 
         cutoff_1_category = self.parameters.cutoff_1_category
         cutoff_nan = self.parameters.cutoff_nan
         count_category = self.parameters.count_category
-        data = self._data_preprocessor.dataset
-        self.types_dict['NUMERIC'] = []
-        self.types_dict['CATEGORICAL'] = []
+        self.types_dict[FeatureTypesForSelection.numeric] = []
+        self.types_dict[FeatureTypesForSelection.categorical] = []
         # Цикл по колонкам датафрейма
         for col in tqdm(self._new_features_list):
             try:
@@ -185,12 +184,14 @@ class BaseFS(FeatureSelection):
             type = feature_type(serie=data[col], max_category_num=count_category, cutoff_1_category=cutoff_1_category,
                          cutoff_nan=cutoff_nan)
             if type == 'numerical':
-                self.types_dict['NUMERIC'].append(col)
+                self.types_dict[FeatureTypesForSelection.numeric].append(col)
             elif type == 'categorical':
-                self.types_dict['CATEGORICAL'].append(col)
+                self.types_dict[FeatureTypesForSelection.categorical].append(col)
             else:
+                if type not in self.types_dict.keys():
+                    self.types_dict[type] = []
                 self.types_dict[type].append(col)
-        features_for_model = self.types_dict['NUMERIC'] + self.types_dict['CATEGORICAL']
+        features_for_model = self.types_dict[FeatureTypesForSelection.numeric] + self.types_dict[FeatureTypesForSelection.categorical]
         for key, value in self.types_dict.items():
             logger.info(f"{key}:" + str(value))
         return features_for_model

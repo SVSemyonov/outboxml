@@ -76,7 +76,9 @@ class FeatureSelection(TestCase):
             max_corr_value=0.6,
             cv_diff_value=0.1,
             encoding_cat='WoE_cat_to_num',
-            encoding_num='WoE_num_to_num',
+            encoding_num='cut_num',
+            default_cat='_NAN_',
+            default_num='_MEDIAN_'
         )
 
     def test_new_features_list(self):
@@ -104,8 +106,8 @@ class FeatureSelection(TestCase):
                                                                             objective='binomial')
                       ).select_features(params={"iterations": 30}, model_name='first')
 
-        self.assertEqual(len(data.features_categorical), 1)
-        self.assertEqual(len(data.features_numerical), 4)
+        self.assertEqual(len(data.features_categorical), 2)
+        self.assertEqual(len(data.features_numerical), 3)
 
     def test_temp_files_BaseFS(self):
         self.dsManager._data_preprocessor._retro = True
@@ -121,6 +123,8 @@ class FeatureSelection(TestCase):
                                                 use_temp_data=True,
                                                 encoding_cat='WoE_cat_to_num',
                                                 encoding_num='WoE_num_to_num',
+                                                default_cat='_NAN_',
+                                                default_num = '_MEDIAN_'
                                             ),
                         data_preprocessor=self.dsManager._data_preprocessor,
                       prepare_data_interface=FeatureSelectionPrepareDataset(model_config=self.dsManager._models_configs[
@@ -129,8 +133,8 @@ class FeatureSelection(TestCase):
                                                                             objective='binomial')
                       ).select_features(params={"iterations": 30}, model_name='first')
 
-        self.assertEqual(len(data.features_categorical), 1)
-        self.assertEqual(len(data.features_numerical), 2)
+        self.assertEqual(len(data.features_categorical), 2)
+        self.assertEqual(len(data.features_numerical), 3)
 
 
 class HPTune(TestCase):

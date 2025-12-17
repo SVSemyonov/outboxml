@@ -161,7 +161,7 @@ def feature_params(serie: pd.Series,
                    avaliable_types: list=['numerical', 'categorical'],
                    encoding_cat: str=None,
                    encoding_num: str=None,
-                   default_cat: Literal['_NAN_'] = '_NAN_',
+                   default_cat: Literal['_NAN_']='_NAN_',
                    default_num: Literal['_MEAN_','_MEDIAN_', '_MIN_', '_MAX_', '_ZERO_'] = '_MEDIAN_',
                    )->dict:
 
@@ -196,13 +196,13 @@ def feature_params(serie: pd.Series,
                                           q2))
                                       }  # winsorize(serie, limits=[q1, q2], nan_policy='omit').data.max()}
         if default_num == FeatureEngineering.median:
-            feature_params['default'] = float(serie.dropna().median())
+            feature_params['default'] = float(serie.median(skipna=True))
         elif default_num == FeatureEngineering.mean:
-            feature_params['default'] = float(serie.dropna().mean())
+            feature_params['default'] = float(serie.mean(skipna=True))
         elif default_num == FeatureEngineering.min:
-            feature_params['default'] = float(serie.dropna().min())
+            feature_params['default'] = float(serie.min())
         elif default_num == FeatureEngineering.max:
-            feature_params['default'] = float(serie.dropna().min())
+            feature_params['default'] = float(serie.min())
         else:
             feature_params['default'] = 0.0
 

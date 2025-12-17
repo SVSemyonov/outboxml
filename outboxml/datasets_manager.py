@@ -443,18 +443,11 @@ class DataSetsManager:
             data = model.predict(X)
             prediction_series = pd.Series(data=np.expm1(data['yhat']), index=data.index)
             logger.info('Prophet finished')
-        elif is_classifier(model):
-            prediction_series = pd.Series(data=model.predict_proba(X)[:, 1], index=X.index)
+
         else:
-            try:
-                data = model.predict(X)
-                prediction_series = pd.Series(data=data, index=X.index)
-            except:
-                logger.info('Using label encoder for prediction')
-                le = LabelEncoder()
-                for column_name in X.columns:
-                    X[column_name] = le.fit_transform(X[column_name])
-                prediction_series = pd.Series(data=model.predict(X), index=X.index)
+            data = model.predict(X)
+            prediction_series = pd.Series(data=data, index=X.index)
+
         return prediction_series
 
     def _calculate_business_metric(self,) -> dict:
