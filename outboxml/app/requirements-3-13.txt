@@ -2,7 +2,7 @@ catboost==1.2.8
 loguru==0.7.2
 scikit-learn==1.7.2
 pydantic==2.12.4
-statsmodels==0.14.2
+statsmodels==0.14.5
 pyarrow==22.0.0
 SQLAlchemy>=2.0.31
 plotly==5.22.0
