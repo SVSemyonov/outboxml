@@ -63,7 +63,7 @@ class OptiBinningEncoder:
                 logger.error('Wrong type of X for binning')
         if (mapping is None) and (bins is None):
             if optbinning_params is None:
-                optbinning_params =  {}
+                optbinning_params =  {'max_n_bins': 5}
             else:
                 logger.info('User Optbinning params')
             optb = ContinuousOptimalBinning(name=self._name, dtype=self._type, **optbinning_params)

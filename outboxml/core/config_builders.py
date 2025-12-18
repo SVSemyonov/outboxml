@@ -138,6 +138,7 @@ class AllModelsConfigBuilder(ConfigBuilder):
                                                       separation=SeparationModelConfig(kind='random',
                                                                                       random_state=42,
                                                                                       test_train_proportion=0.2),
+                                                      data=DataConfig(targetslices=[])
 
                                                                      ))
         self.models_config = params.get('models_config', [ModelConfigBuilder(features=self.features).build()])

@@ -12,6 +12,7 @@ import select
 
 from outboxml.core.config_builders import AutoMLConfigBuilder, AllModelsConfigBuilder, feature_params, FeatureBuilder, \
     ModelConfigBuilder
+from outboxml.core.enums import ModelsParams, EncodingNames, FeatureEngineering
 from outboxml.core.utils import ResultPickle
 from outboxml.datasets_manager import DataSetsManager
 
@@ -79,32 +80,42 @@ def build_default_auto_ml_config(params:dict={}):
 
 def build_default_all_models_config(data:pd.DataFrame=None,
                                     model_name = 'example',
+                                    target_name: str=None,
                                     max_category_num: int = 20,
                                     category_proportion_cut_value: float=0.01,
                                     q1:float=0.001,
                                     q2:float=0.999,
-                                    **model_params
+                                    model_params:dict={},
+                                    features_params:dict={},
                                     ):
-    objective=model_params.get('objective', 'RMSE')
-    wrapper = model_params.get('wrapper', 'catboost')
+
+    objective=model_params.get('objective', ModelsParams.rmse)
+    wrapper = model_params.get('wrapper', ModelsParams.catboost)
+
+    encoding_cat=features_params.get('encoding_cat', EncodingNames.woe_cat)
+    encoding_num = features_params.get('encoding_cat', EncodingNames.woe_num)
+    default_cat = features_params.get('default_cat', FeatureEngineering.nan)
+    default_num = features_params.get('default_cat', FeatureEngineering.median)
 
     features =[]
     if data is not None:
+        if target_name is not None: data = data.drop(columns=target_name)
         for columns_name, series in data.items():
             params = feature_params(serie=series,
                                     max_category_num=max_category_num,
                                     depth=category_proportion_cut_value,
                                     q1=q1,
                                     q2=q2,
+                                    encoding_num=encoding_num,
+                                    encoding_cat=encoding_cat,
+                                    default_cat=default_cat,
+                                    default_num=default_num,
                                     )
             if params == {}:
                 logger.info('Dropping feature||' + str(series.name))
                 continue
             features.append(FeatureBuilder(**params).build())
-    config_params = {'models_config': [ModelConfigBuilder(name=model_name,
-                                                         features=features,
-                                                         wrapper=wrapper,
-                                                         objective=objective,
+    config_params = {'models_config': [ModelConfigBuilder(**model_params
                                                          ).build()]
                      }
 

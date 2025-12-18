@@ -17,10 +17,8 @@ class SeparationModelConfig(BaseModel):
 
 # TODO: remove class
 class DataConfig(BaseModel):
-    targetcolumns: List[List]  = None
-    extraColumns: Optional[List] = None
-    targetslices: Optional[List] = None
-#    extraDicts: Optional[List[ExtraDictConfig]] = None
+
+    targetslices: Optional[List]  = []
     queries: Optional[List[str]] = None
 
 
@@ -36,8 +34,8 @@ class DataModelConfig(BaseModel):
     extra_params: Optional[Dict] = None
     separation: Optional[SeparationModelConfig] = None
     extra_columns: Optional[List[str]] = None
-    targetslices: Optional[List] = None
-    data: Optional[DataConfig] = None  # TODO: remove
+    targetslices: Optional[List] = []
+    data: Optional[DataConfig]   # TODO: remove
 
 
 class RelativeFeatureModelConfig(BaseModel):
@@ -115,7 +113,7 @@ class ModelConfig(BaseModel):
     wrapper: Optional[str] = None
     column_target: Optional[str] = None
     column_exposure: Optional[str] = None
-    relative_features: Optional[List[RelativeFeatureModelConfig]] = None
+    relative_features: Optional[List[RelativeFeatureModelConfig]] = []
     features: List[FeatureModelConfig]
     intersections: Optional[List[IntersectionModelConfig]] = None
     params_catboost: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None

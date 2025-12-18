@@ -3,10 +3,6 @@
    "version": "1",
    "group_name": "example",
    "data_config": {
-      "project": null,
-      "version": null,
-      "processing": null,
-      "showGraphs": null,
       "source": "database",
       "table_name_source": "data_table_name",
       "local_name_source": null,
@@ -23,7 +19,6 @@
       "extra_columns": null,
      
       "data":{
-        "targetslices": [{"column": "HouseAge", "type": "categorical"}]
     } 
    },
    "models_configs": [
@@ -32,8 +27,6 @@
          "objective": "gamma",
          "wrapper": "glm",
          "column_target": "MedHouseVal",
-         "column_exposure": null,
-         "relative_features": [],
          "features": [
             {
                "name": "MedInc",
