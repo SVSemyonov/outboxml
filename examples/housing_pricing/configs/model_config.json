@@ -1,0 +1,186 @@
+{
+   "project": "house_pricing",
+   "version": "1",
+   "group_name": "example",
+   "data_config": {
+      "project": null,
+      "version": null,
+      "processing": null,
+      "showGraphs": null,
+      "source": "database",
+      "table_name_source": "data_table_name",
+      "local_name_source": null,
+      "extra_conditions": null,
+      "extra_params": null,
+      "separation": {
+         "kind": "random",
+         "random_state": 42,
+         "test_train_proportion": 0.2,
+         "train_period": null,
+         "test_period": null,
+         "period_column": null
+      },
+      "extra_columns": null,
+     
+      "data":{
+        "targetslices": [{"column": "HouseAge", "type": "categorical"}]
+    } 
+   },
+   "models_configs": [
+      {
+         "name": "price",
+         "objective": "gamma",
+         "wrapper": "glm",
+         "column_target": "MedHouseVal",
+         "column_exposure": null,
+         "relative_features": [],
+         "features": [
+            {
+               "name": "MedInc",
+               "default": 3.5347999999999997,
+               "replace": {
+                  "_TYPE_": "_NUM_"
+               },
+               "clip": {
+                  "min_value": 0.536,
+                  "max_value": 15.0001
+               },
+               "WoE_num_to_catber": null,
+               "fillna": null,
+               "encoding": "WoE_num_to_cat",
+               "optbinning_params": null,
+               "bins": null,
+               "mapping": null
+            },
+            {
+               "name": "HouseAge",
+               "default": 29.0,
+               "replace": {
+                  "_TYPE_": "_NUM_"
+               },
+               "clip": {
+                  "min_value": 2.0,
+                  "max_value": 52.0
+               },
+               "WoE_num_to_catber": null,
+               "fillna": null,
+               "encoding": "WoE_num_to_cat",
+               "optbinning_params": null,
+               "bins": null,
+               "mapping": null
+            },
+            {
+               "name": "AveRooms",
+               "default": 5.229128787878788,
+               "replace": {
+                  "_TYPE_": "_NUM_"
+               },
+               "clip": {
+                  "min_value": 1.7499018224806437,
+                  "max_value": 34.19969808542019
+               },
+               "WoE_num_to_catber": null,
+               "fillna": null,
+               "encoding": "WoE_num_to_cat",
+               "optbinning_params": null,
+               "bins": null,
+               "mapping": null
+            },
+            {
+               "name": "AveBedrms",
+               "default": 1.048780487804878,
+               "replace": {
+                  "_TYPE_": "_NUM_"
+               },
+               "clip": {
+                  "min_value": 0.6751866666666667,
+                  "max_value": 6.617231958763142
+               },
+               "WoE_num_to_catber": null,
+               "fillna": null,
+               "encoding": "WoE_num_to_cat",
+               "optbinning_params": null,
+               "bins": null,
+               "mapping": null
+            },
+            {
+               "name": "Population",
+               "default": 1166.0,
+               "replace": {
+                  "_TYPE_": "_NUM_"
+               },
+               "clip": {
+                  "min_value": 17.639,
+                  "max_value": 10372.681000000095
+               },
+               "WoE_num_to_catber": null,
+               "fillna": null,
+               "encoding": "WoE_num_to_cat",
+               "optbinning_params": null,
+               "bins": null,
+               "mapping": null
+            },
+            {
+               "name": "AveOccup",
+               "default": 2.818115654360196,
+               "replace": {
+                  "_TYPE_": "_NUM_"
+               },
+               "clip": {
+                  "min_value": 1.2987380918748712,
+                  "max_value": 13.630443486590115
+               },
+               "WoE_num_to_catber": null,
+               "fillna": null,
+               "encoding": "WoE_num_to_cat",
+               "optbinning_params": null,
+               "bins": null,
+               "mapping": null
+            },
+            {
+               "name": "Latitude",
+               "default": 34.26,
+               "replace": {
+                  "_TYPE_": "_NUM_"
+               },
+               "clip": {
+                  "min_value": 32.57,
+                  "max_value": 41.75361000000001
+               },
+               "WoE_num_to_catber": null,
+               "fillna": null,
+               "encoding": "WoE_num_to_cat",
+               "optbinning_params": null,
+               "bins": null,
+               "mapping": null
+            },
+            {
+               "name": "Longitude",
+               "default": -118.49,
+               "replace": {
+                  "_TYPE_": "_NUM_"
+               },
+               "clip": {
+                  "min_value": -124.18,
+                  "max_value": -114.64639
+               },
+               "WoE_num_to_catber": null,
+               "fillna": null,
+               "encoding": "WoE_num_to_cat",
+               "optbinning_params": null,
+               "bins": null,
+               "mapping": null
+            }
+          
+         ],
+         "intersections": null,
+         "params_catboost": null,
+         "params_xgb": null,
+         "params_glm": null,
+         "params": null,
+         "treatment_dict": null,
+         "cat_features_catboost": null,
+         "data_filter_condition": null
+      }
+   ]
+}
