@@ -9,7 +9,7 @@
         "cutoff_nan": 0.7,
         "max_corr_value":0.8,
         "metric_eval":  {"first": "neg_mean_absolute_error", "second":  "neg_mean_absolute_error"},
-        "cv_diff_value":  0.1,
+        "cv_diff_value":  null,
         "encoding_cat":  "WoE_cat_to_num",
         "encoding_num":  "WoE_num_to_num",
         "default_cat":  "_NAN_",

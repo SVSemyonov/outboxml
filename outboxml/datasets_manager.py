@@ -310,7 +310,7 @@ class DataSetsManager:
         """Fitting and calculating metrics for models. If 'need_fit' option then fit methods are calling for models
         Uf load_subsets_from_pickle option then loading previously saved datasubsets in enviroment"""
 
-        fitted = False
+        fitted = True
         logger.debug('Fitting model started')
         if models_dict is not None:
             models = models_dict
@@ -321,7 +321,7 @@ class DataSetsManager:
             if self._models_dict is None:
                 logger.info('Setting default models')
                 self.__load_models()
-                fitted = False
+                fitted = True
             models = self._models_dict
 
         if model_name is not None:
@@ -434,6 +434,10 @@ class DataSetsManager:
         return res
 
     def __get_fitted_models(self, models: dict, fitted: bool = False) -> dict:
+        if not fitted:
+            for model_name in models.keys():
+                data_subset = self.get_subset(model_name)
+                models[model_name].fit(data_subset.X_train, data_subset.y_train)
         return models
 
     def _predict(self, model, X):
