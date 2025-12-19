@@ -64,7 +64,8 @@ class FeatureModelConfig(BaseModel):
             for key, val in self.replace.items():
                 if (
                     key != FeatureEngineering.feature_type
-                    and val != FeatureEngineering.nan
+                    and val not in [FeatureEngineering.nan,  FeatureEngineering.median,
+                                    FeatureEngineering.mean, FeatureEngineering.max,   FeatureEngineering.min]
                 ):
                     try:
                         float(val)
@@ -87,10 +88,12 @@ class FeatureModelConfig(BaseModel):
     def check_default(self):
         # Numerical
         if self.replace.get(FeatureEngineering.feature_type) == FeatureEngineering.numerical:
-            if not isinstance(self.default, (float, int)):
-                raise ConfigError(f"{self.name}: invalid default value for numerical feature")
-            if not (isinstance(self.fillna, (float, int)) or self.fillna is None):
-                raise ConfigError(f"{self.name}: invalid fillna value for numerical feature")
+            if self.default not in [FeatureEngineering.nan, FeatureEngineering.median,
+                            FeatureEngineering.mean, FeatureEngineering.max, FeatureEngineering.min]:
+                if not isinstance(self.default, (float, int)):
+                    raise ConfigError(f"{self.name}: invalid default value for numerical feature")
+                if not (isinstance(self.fillna, (float, int)) or self.fillna is None):
+                    raise ConfigError(f"{self.name}: invalid fillna value for numerical feature")
 
         # Categorical
         else:

@@ -269,6 +269,8 @@ def feature_encoding_series(
                 logger.error(f"{feature.name} || Encoding error || Cannot convert to WoE || {str(e)}")
                 if raise_on_error:
                     raise ValueError(f"{feature.name} || Cannot convert to WoE")
+    elif feature.encoding == EncodingNames.cut_num:
+        pass #Encoding call in prepare_numerical_feature function
     else:
         logger.info("Unknown encoding || Return origin")
         if raise_on_error:
@@ -327,7 +329,8 @@ def feature_encoding(
             feature_value = map_num(feature_value, feature.mapping)
         except Exception as e:
             raise ValueError(f"{feature.name} || Cannot convert to WoE")
-
+    elif feature.encoding == EncodingNames.cut_num:
+        pass
     else:
         raise NotImplementedError(f"{feature.name} || Unknown encoding")
 
@@ -629,6 +632,9 @@ def prepare_numerical_feature_series(
             )
 
     # Группировка
+    if feature.encoding == EncodingNames.cut_num and feature.cut_number is None:
+        feature.cut_number = CutNumberEncoder().encode_data(feature_data)
+
     if feature.cut_number:
         val_splits = [-np.inf] + list([float(x) for x in feature.cut_number.split('_')]) + [np.inf]
         feature_data = pd.cut(feature_data, bins=val_splits).astype(str)

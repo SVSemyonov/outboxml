@@ -81,6 +81,9 @@ def build_default_auto_ml_config(params:dict={}):
 def build_default_all_models_config(data:pd.DataFrame=None,
                                     model_name = 'example',
                                     target_name: str=None,
+                                    group_name:str = 'example',
+                                    project:str = 'test',
+                                    version: str = '1',
                                     max_category_num: int = 20,
                                     category_proportion_cut_value: float=0.01,
                                     q1:float=0.001,
@@ -88,14 +91,14 @@ def build_default_all_models_config(data:pd.DataFrame=None,
                                     model_params:dict={},
                                     features_params:dict={},
                                     ):
+    model_params['name'] = model_name
+    model_params['objective'] = model_params.get('objective', 'RMSE')
+    model_params['wrapper'] = model_params.get('wrapper', 'catboost')
 
-    objective=model_params.get('objective', ModelsParams.rmse)
-    wrapper = model_params.get('wrapper', ModelsParams.catboost)
-
-    encoding_cat=features_params.get('encoding_cat', EncodingNames.woe_cat)
-    encoding_num = features_params.get('encoding_cat', EncodingNames.woe_num)
-    default_cat = features_params.get('default_cat', FeatureEngineering.nan)
-    default_num = features_params.get('default_cat', FeatureEngineering.median)
+    encoding_cat=features_params.get('encoding_cat', 'WoE_cat_num')
+    encoding_num = features_params.get('encoding_num', 'WoE_num_cat')
+    default_cat = features_params.get('default_cat', '_NAN_')
+    default_num = features_params.get('default_num', '_MEDIAN_')
 
     features =[]
     if data is not None:
@@ -115,8 +118,13 @@ def build_default_all_models_config(data:pd.DataFrame=None,
                 logger.info('Dropping feature||' + str(series.name))
                 continue
             features.append(FeatureBuilder(**params).build())
-    config_params = {'models_config': [ModelConfigBuilder(**model_params
-                                                         ).build()]
-                     }
+    model_params['features'] = features
+    config_params = {'group_name': group_name,
+                     'project': project,
+                     'version': version,
+
+                     'models_config': [ModelConfigBuilder(**model_params
+                                                                     ).build()]
+                                 }
 
     return AllModelsConfigBuilder(**config_params).build().model_dump_json(indent=3)

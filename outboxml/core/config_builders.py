@@ -28,7 +28,7 @@ class ModelConfigBuilder(ConfigBuilder):
         self.features: List[FeatureModelConfig] = params.get('features', [])
         self.column_target: Optional[str] = params.get('column_target')
         self.column_exposure: Optional[str] = params.get('column_exposure')
-        self.relative_features: Optional[List] = params.get('relative_features')
+        self.relative_features: Optional[List] = params.get('relative_features', [])
         self.intersections:[] = None
         self.params_catboost: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = params.get('params_catboost')
         self.params_glm:  Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = params.get('params_glm')
@@ -162,8 +162,8 @@ def feature_params(serie: pd.Series,
                    avaliable_types: list=['numerical', 'categorical'],
                    encoding_cat: str=None,
                    encoding_num: str=None,
-                   default_cat: Literal['_NAN_']='_NAN_',
-                   default_num: Literal['_MEAN_','_MEDIAN_', '_MIN_', '_MAX_', '_ZERO_'] = '_MEDIAN_',
+                   default_cat: str='_NAN_',
+                   default_num: str = '_MEDIAN_',
                    )->dict:
 
     feature_params = {}
@@ -196,41 +196,16 @@ def feature_params(serie: pd.Series,
                                       'max_value': float(serie.quantile(
                                           q2))
                                       }  # winsorize(serie, limits=[q1, q2], nan_policy='omit').data.max()}
-        if default_num == FeatureEngineering.median:
-            feature_params['default'] = float(serie.median(skipna=True))
-        elif default_num == FeatureEngineering.mean:
-            feature_params['default'] = float(serie.mean(skipna=True))
-        elif default_num == FeatureEngineering.min:
-            feature_params['default'] = float(serie.min())
-        elif default_num == FeatureEngineering.max:
-            feature_params['default'] = float(serie.min())
+        if default_num in [FeatureEngineering.median, FeatureEngineering.mean,
+                           FeatureEngineering.min, FeatureEngineering.max]:
+            feature_params['default'] = default_num
         else:
             feature_params['default'] = 0.0
 
         feature_params['encoding'] = encoding_num
-        if encoding_num == EncodingNames.cut_num:
-            opt_bins = calculate_optimal_bins(serie.dropna())
-            if opt_bins is not None:
-                result, bins = pd.qcut(serie, q=opt_bins, retbins=True, duplicates='drop')
-                logger.info('bins_for_feature||' + str(bins))
-                if len(bins) > 1:
-                    feature_params['cut_number'] = '_'.join(map(str, bins[:-1]))
-                else:
-                    feature_params['cut_number']  = str(bins)
     logger.info(feature_params)
     return feature_params
 
-
-def calculate_optimal_bins(data: pd.Series):
-    try:
-        n = len(data)
-        iqr = np.percentile(data, 75) - np.percentile(data, 25)
-        fd = int(np.ceil((max(data) - min(data)) / (2 * iqr / (n ** (1 / 3)))))
-
-        return min(5, fd)
-    except Exception as exc:
-        logger.error(f'No cut values for {data.name} return None||{str(exc)}')
-        return None
 
 def feature_type(serie: pd.Series, max_category_num: int= 20,
                    cutoff_nan: float=0.6,
