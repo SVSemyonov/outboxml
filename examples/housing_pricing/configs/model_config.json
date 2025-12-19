@@ -40,7 +40,7 @@
                },
                "WoE_num_to_catber": null,
                "fillna": null,
-               "encoding": "WoE_num_to_cat",
+               "encoding": "cut_num",
                "optbinning_params": null,
                "bins": null,
                "mapping": null

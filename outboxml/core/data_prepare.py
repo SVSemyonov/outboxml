@@ -110,14 +110,17 @@ class OptiBinningEncoder(Encoder):
 class CutNumberEncoder(Encoder):
     def __init__(self,
                  max_bins: int = 5,
-                 rule: str = 'Freedman-diaconis'):
+                 rule: str = 'Freedman-diaconis',
+                 round_decimals: int=2):
         self.max_bins = max_bins
+        self.round_decimals = round_decimals
         self.rule = rule
     def encode_data(self, serie: pd.Series):
         opt_bins = self.calculate_optimal_bins(serie.dropna())
         cut_number = None
         if opt_bins is not None:
             result, bins = pd.qcut(serie, q=opt_bins, retbins=True, duplicates='drop')
+            bins = np.round(bins, decimals=self.round_decimals)
             logger.info('bins_for_feature||' + str(bins))
             if len(bins) > 1:
                 cut_number = '_'.join(map(str, bins[:-1]))

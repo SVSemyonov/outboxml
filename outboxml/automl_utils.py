@@ -79,7 +79,6 @@ def build_default_auto_ml_config(params:dict={}):
     return AutoMLConfigBuilder(**params).build().model_dump_json(indent=3)
 
 def build_default_all_models_config(data:pd.DataFrame=None,
-                                    model_name = 'example',
                                     target_name: str=None,
                                     group_name:str = 'example',
                                     project:str = 'test',
@@ -91,14 +90,7 @@ def build_default_all_models_config(data:pd.DataFrame=None,
                                     model_params:dict={},
                                     features_params:dict={},
                                     ):
-    model_params['name'] = model_name
-    model_params['objective'] = model_params.get('objective', 'RMSE')
-    model_params['wrapper'] = model_params.get('wrapper', 'catboost')
 
-    encoding_cat=features_params.get('encoding_cat', 'WoE_cat_num')
-    encoding_num = features_params.get('encoding_num', 'WoE_num_cat')
-    default_cat = features_params.get('default_cat', '_NAN_')
-    default_num = features_params.get('default_num', '_MEDIAN_')
 
     features =[]
     if data is not None:
@@ -109,22 +101,20 @@ def build_default_all_models_config(data:pd.DataFrame=None,
                                     depth=category_proportion_cut_value,
                                     q1=q1,
                                     q2=q2,
-                                    encoding_num=encoding_num,
-                                    encoding_cat=encoding_cat,
-                                    default_cat=default_cat,
-                                    default_num=default_num,
+                                    **features_params
                                     )
             if params == {}:
                 logger.info('Dropping feature||' + str(series.name))
                 continue
             features.append(FeatureBuilder(**params).build())
-    model_params['features'] = features
+
     config_params = {'group_name': group_name,
                      'project': project,
                      'version': version,
-
-                     'models_config': [ModelConfigBuilder(**model_params
+                     'models_config': [ModelConfigBuilder(features=features,
+                                                          **model_params
                                                                      ).build()]
                                  }
 
-    return AllModelsConfigBuilder(**config_params).build().model_dump_json(indent=3)
+
+    return AllModelsConfigBuilder(**config_params).build()#.model_dump_json(indent=3)

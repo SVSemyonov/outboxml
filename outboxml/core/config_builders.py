@@ -141,8 +141,8 @@ class AllModelsConfigBuilder(ConfigBuilder):
                                                       data=DataConfig(targetslices=[])
 
                                                                      ))
-        self.models_config = params.get('models_config', [ModelConfigBuilder(features=self.features).build()])
 
+        self.models_config = params.get('models_config', [ModelConfigBuilder(features=self.features).build()])
 
     def build(self):
         return AllModelsConfig(project=self.project,
@@ -191,10 +191,10 @@ def feature_params(serie: pd.Series,
     elif type == 'numerical':
         if q1 or q2:
 
-            feature_params['clip'] = {'min_value': float(serie.quantile(q1)),
+            feature_params['clip'] = {'min_value': round(float(serie.quantile(q1)), 3),
                                       # winsorize(serie, limits=[q1, q2], nan_policy='omit').data.min(),
-                                      'max_value': float(serie.quantile(
-                                          q2))
+                                      'max_value': round(float(serie.quantile(
+                                          q2)),3)
                                       }  # winsorize(serie, limits=[q1, q2], nan_policy='omit').data.max()}
         if default_num in [FeatureEngineering.median, FeatureEngineering.mean,
                            FeatureEngineering.min, FeatureEngineering.max]:
