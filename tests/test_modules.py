@@ -13,7 +13,7 @@ from outboxml.core.data_prepare import OptiBinningEncoder, PrepareDatasetResult
 from outboxml.core.enums import ModelsParams
 from outboxml.core.predict import one_model_predict
 from outboxml.core.prepared_datasets import PrepareDataset
-from outboxml.core.pydantic_models import DataModelConfig
+from outboxml.core.pydantic_models import DataModelConfig, DataConfig
 from outboxml.dataset_retro import RetroDataset
 from outboxml.datasets_manager import DataSetsManager, DSManagerResult
 import pandas as pd
@@ -63,7 +63,9 @@ class TestTitanicDS(TestCase):
 
     def test_db_extractor(self):
         self.assertIsInstance(BaseExtractor(data_config=DataModelConfig(source='database',
-                                                  table_name_source='public."TitanicExample"')).extract_dataset(), pd.DataFrame)
+                                                                        table_name_source='public."TitanicExample"',
+                                                                        data=DataConfig())).extract_dataset(),
+                              pd.DataFrame)
 
     def test_DFs(self):
         subset = self.dsManager.get_subset(model_name='first')

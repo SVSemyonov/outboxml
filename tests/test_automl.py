@@ -337,8 +337,20 @@ class TestPredict(TestCase):
         data = pd.read_csv(path_to_data)
         self.assertIsInstance(AutoMLConfigBuilder().build(), AutoMLConfig)
         self.assertIsInstance(AllModelsConfigBuilder().build(), AllModelsConfig)
-        self.assertIsInstance(build_default_auto_ml_config({'group_name': 'test'}), str)
-        self.assertIsInstance(build_default_all_models_config(data=data), str)
+        self.assertIsInstance(build_default_auto_ml_config({'group_name': 'test'}), AutoMLConfig)
+        all_models_config = build_default_all_models_config(data=data,
+                                                              group_name='example',
+                                                              column_target='SURVIVED',
+                                                              model_params={'wrapper': 'catboost',
+                                                                            'name': 'titanic',
+                                                                            },
+                                                              features_params={'encoding_cat': 'WoE_cat_to_num',
+                                                                               'default_cat': '_NAN_'
+                                                                               })
+        self.assertIsInstance(all_models_config,AllModelsConfig)
+        self.assertEqual(all_models_config.models_configs[0].column_target,'SURVIVED', )
+        self.assertEqual(all_models_config.models_configs[0].features[0].default, '_MEDIAN_', )
+        self.assertEqual(all_models_config.models_configs[0].features[2].default, '_NAN_', )
 
 class TestRelease(TestCase):
     def setUp(self):

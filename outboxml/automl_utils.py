@@ -123,4 +123,4 @@ def build_default_all_models_config(data:pd.DataFrame=None,
                                                                      ).build()]
                                  }
 
-    return AllModelsConfigBuilder(**config_params).build()#.model_dump_json(indent=3)
+    return AllModelsConfigBuilder(**config_params).build()
