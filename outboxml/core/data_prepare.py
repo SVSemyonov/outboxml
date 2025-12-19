@@ -38,8 +38,12 @@ pl_numeric_dtypes = [
     pl.datatypes.UInt64,
 ]
 
+class Encoder:
+    def encode_data(self, *params):
+        pass
 
-class OptiBinningEncoder:
+
+class OptiBinningEncoder(Encoder):
     def __init__(self,
                  X: pd.Series,
                  y: pd.Series,
@@ -53,6 +57,7 @@ class OptiBinningEncoder:
         self._name = name
         self.mapping = {}
         self._train_ind = train_ind
+        self._default_optbinning_params =  {'max_n_bins': 5, 'max_n_prebins': 20, 'min_prebin_size': 0.05,}
 
     def encode_data(self, mapping: dict = None, bins: np.array = None, num_num: bool = False, optbinning_params: dict = None) -> tuple:
 
@@ -63,7 +68,7 @@ class OptiBinningEncoder:
                 logger.error('Wrong type of X for binning')
         if (mapping is None) and (bins is None):
             if optbinning_params is None:
-                optbinning_params =  {'max_n_bins': 5}
+                optbinning_params = self._default_optbinning_params
             else:
                 logger.info('User Optbinning params')
             optb = ContinuousOptimalBinning(name=self._name, dtype=self._type, **optbinning_params)
@@ -100,6 +105,45 @@ class OptiBinningEncoder:
             if len(mapping) == 1:
                 logger.warning('Invalid WoE optibinnig params for feature ' + self._name + '||[-inf, inf] interval')
         return mapping, bins
+
+
+class CutNumberEncoder(Encoder):
+    def __init__(self,
+                 max_bins: int = 5,
+                 rule: str = 'Freedman-diaconis'):
+        self.max_bins = max_bins
+        self.rule = rule
+    def encode_data(self, serie: pd.Series):
+        opt_bins = self.calculate_optimal_bins(serie.dropna())
+        cut_number = None
+        if opt_bins is not None:
+            result, bins = pd.qcut(serie, q=opt_bins, retbins=True, duplicates='drop')
+            logger.info('bins_for_feature||' + str(bins))
+            if len(bins) > 1:
+                cut_number = '_'.join(map(str, bins[:-1]))
+            else:
+                cut_number = str(bins)
+        return cut_number
+
+
+    def calculate_optimal_bins(self, data: pd.Series):
+        if self.rule == 'Freedman-diaconis':
+            return self._freedman_diaconis_rule(data)
+        else:
+            logger.error('Unknown rule for cut number||Returnin None')
+            return None
+
+
+    def _freedman_diaconis_rule(self, data: pd.Series):
+        try:
+            n = len(data)
+            iqr = np.percentile(data, 75) - np.percentile(data, 25)
+            fd = int(np.ceil((max(data) - min(data)) / (2 * iqr / (n ** (1 / 3)))))
+
+            return min(self.max_bins, fd)
+        except Exception as exc:
+            logger.error(f'No cut values for {data.name} return None||{str(exc)}')
+            return None
 
 
 class PrepareDatasetResult:
