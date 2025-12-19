@@ -76,10 +76,11 @@ def check_postgre_transaction(script: Callable, config, waiting_time=300):
 
 
 def build_default_auto_ml_config(params:dict={}):
-    return AutoMLConfigBuilder(**params).build().model_dump_json(indent=3)
+    return AutoMLConfigBuilder(**params).build()
 
 def build_default_all_models_config(data:pd.DataFrame=None,
-                                    target_name: str=None,
+                                    column_target: str=None,
+                                    column_exposure: str=None,
                                     group_name:str = 'example',
                                     project:str = 'test',
                                     version: str = '1',
@@ -94,7 +95,13 @@ def build_default_all_models_config(data:pd.DataFrame=None,
 
     features =[]
     if data is not None:
-        if target_name is not None: data = data.drop(columns=target_name)
+        if column_target is not None:
+            data = data.drop(columns=column_target)
+            model_params['column_target'] = column_target
+        if column_exposure is not None:
+            data = data.drop(columns=column_exposure)
+            model_params['column_exposure'] = column_exposure
+
         for columns_name, series in data.items():
             params = feature_params(serie=series,
                                     max_category_num=max_category_num,
@@ -115,6 +122,5 @@ def build_default_all_models_config(data:pd.DataFrame=None,
                                                           **model_params
                                                                      ).build()]
                                  }
-
 
     return AllModelsConfigBuilder(**config_params).build()#.model_dump_json(indent=3)

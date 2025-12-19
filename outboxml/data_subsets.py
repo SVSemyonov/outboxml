@@ -353,11 +353,12 @@ class DataPreprocessor:
                 if model.column_target is not None:
                     model_features[model.name].append(model.column_target)
                 relative_features = model.relative_features.copy()
-                for relative_feature in relative_features:
-                    if relative_feature.numerator not in model_features[model.name]:
-                        model_features[model.name].append(relative_feature.numerator)
-                    if relative_feature.denominator not in model_features[model.name]:
-                        model_features[model.name].append(relative_feature.denominator)
+                if model.relative_features is not None:
+                    for relative_feature in relative_features:
+                        if relative_feature.numerator not in model_features[model.name]:
+                            model_features[model.name].append(relative_feature.numerator)
+                        if relative_feature.denominator not in model_features[model.name]:
+                            model_features[model.name].append(relative_feature.denominator)
                 using_features = using_features + model_features[model.name]
             if self._extra_columns is not None:
                 self._data_columns = list(set(using_features + self._extra_columns))
