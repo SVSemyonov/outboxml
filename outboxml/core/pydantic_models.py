@@ -227,3 +227,26 @@ class MonitoringConfig(BaseModel):
     extrapolation_period: int = 12
     target_column: str
     data_source: str
+
+
+
+class UpdateRequest(BaseModel):
+    auto_ml_config: AutoMLConfig
+    all_model_config: AllModelsConfig
+    user_parameters: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None
+
+
+class MonitoringRequest(BaseModel):
+    all_model_config: AllModelsConfig
+    monitoring_config: MonitoringConfig
+    user_parameters: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None
+
+
+class AutoMLResultRequest(BaseModel):
+    main_model: str
+    request: Dict[str, bool]
+
+
+class MonitoringResultRequest(BaseModel):
+    main_model: str
+    request: Dict[str, bool]
