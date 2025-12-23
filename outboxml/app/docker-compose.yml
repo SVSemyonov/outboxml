@@ -96,14 +96,21 @@ services:
   fastapi:
     image: tiangolo/uvicorn-gunicorn-fastapi:python3.11
     container_name: fastapi
-    command: ["sh", "-c", "pip install -r requirements-3-13.txt main_app:app --host 0.0.0.0 --port 8000 --reload"]
+    command: >
+      sh -c "python -m pip cache purge &&
+      pip install --no-cache-dir -r /app/requirements.txt &&
+      uvicorn main_app:app --host 0.0.0.0 --port 8000 --reload
+      "
     ports:
-      - "8000:8000"
+    - "8000:8000"
     volumes:
-      - ./fastapi:/app
+    - ./fastapi:/app
+    - ../../outboxml:/app/outboxml  # Монтируем исходный код outboxml
     environment:
-      - MODULE_NAME=main
-      - VARIABLE_NAME=app
+    - MODULE_NAME=main_app
+    - VARIABLE_NAME=app
+    - PYTHONPATH=/app:/app/outboxml
+
     networks:
       - internal
     depends_on:
