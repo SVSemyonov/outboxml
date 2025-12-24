@@ -115,11 +115,10 @@ async def default_model_config(params: dict={}):
     try:
 
         response = build_default_all_models_config(data=None,
-                                    model_name = 'example',
-                                    max_category_num= 20,
-                                    category_proportion_cut_value=0.01,
-                                    q1=0.001,
-                                    q2=0.999,**params)
+                                                    max_category_num= 20,
+                                                    category_proportion_cut_value=0.01,
+                                                    q1=0.001,
+                                                    q2=0.999,**params)
         status_code = status.HTTP_200_OK
 
     except Exception as exc:
