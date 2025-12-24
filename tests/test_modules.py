@@ -24,7 +24,7 @@ from pathlib import Path
 
 from outboxml.extractors import BaseExtractor
 from outboxml.models import BaselineModels, ModelsWrapper, StatsmodelsModel, StatsModelsEstimator, CatboostModel, \
-    CatboostOverGLMModel, XgboostModel, GLMCatboostCombineModel
+    CatboostOverGLMModel, XgboostModel, GLMCatboostCombineModel, BaseWrapperModel
 
 test_configs_path = Path(__file__).resolve().parent/ "test_configs"
 test_data_path = Path(__file__).resolve().parent/"test_data"
@@ -364,6 +364,13 @@ class ModelsTest(TestCase):
         self.assertIsInstance(model, BaseEstimator)
         self.assertIsInstance(model.predict(X=self.subset.X_test), np.ndarray)
         self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+    def test_basewrapper_models(self):
+
+        models = ModelsWrapper(data_subsets={'first': self.subset},
+                               models_configs=[self.model_config],
+                               work_type_fit='CPU').models_dict()
+        self.assertIsInstance(models, dict)
 
 
 class TestPrepareDatasets(TestCase):
