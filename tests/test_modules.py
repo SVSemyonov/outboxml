@@ -13,7 +13,7 @@ from outboxml.core.data_prepare import OptiBinningEncoder, PrepareDatasetResult
 from outboxml.core.enums import ModelsParams
 from outboxml.core.predict import one_model_predict
 from outboxml.core.prepared_datasets import PrepareDataset
-from outboxml.core.pydantic_models import DataModelConfig
+from outboxml.core.pydantic_models import DataModelConfig, DataConfig
 from outboxml.dataset_retro import RetroDataset
 from outboxml.datasets_manager import DataSetsManager, DSManagerResult
 import pandas as pd
@@ -24,7 +24,7 @@ from pathlib import Path
 
 from outboxml.extractors import BaseExtractor
 from outboxml.models import BaselineModels, ModelsWrapper, StatsmodelsModel, StatsModelsEstimator, CatboostModel, \
-    CatboostOverGLMModel, XgboostModel, GLMCatboostCombineModel
+    CatboostOverGLMModel, XgboostModel, GLMCatboostCombineModel, BaseWrapperModel
 
 test_configs_path = Path(__file__).resolve().parent/ "test_configs"
 test_data_path = Path(__file__).resolve().parent/"test_data"
@@ -63,7 +63,9 @@ class TestTitanicDS(TestCase):
 
     def test_db_extractor(self):
         self.assertIsInstance(BaseExtractor(data_config=DataModelConfig(source='database',
-                                                  table_name_source='public."TitanicExample"')).extract_dataset(), pd.DataFrame)
+                                                                        table_name_source='public."TitanicExample"',
+                                                                        data=DataConfig())).extract_dataset(),
+                              pd.DataFrame)
 
     def test_DFs(self):
         subset = self.dsManager.get_subset(model_name='first')
@@ -362,6 +364,13 @@ class ModelsTest(TestCase):
         self.assertIsInstance(model, BaseEstimator)
         self.assertIsInstance(model.predict(X=self.subset.X_test), np.ndarray)
         self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+    def test_basewrapper_models(self):
+
+        models = ModelsWrapper(data_subsets={'first': self.subset},
+                               models_configs=[self.model_config],
+                               work_type_fit='CPU').models_dict()
+        self.assertIsInstance(models, dict)
 
 
 class TestPrepareDatasets(TestCase):

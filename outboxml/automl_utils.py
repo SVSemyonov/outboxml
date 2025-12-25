@@ -12,6 +12,7 @@ import select
 
 from outboxml.core.config_builders import AutoMLConfigBuilder, AllModelsConfigBuilder, feature_params, FeatureBuilder, \
     ModelConfigBuilder
+from outboxml.core.enums import ModelsParams, EncodingNames, FeatureEngineering
 from outboxml.core.utils import ResultPickle
 from outboxml.datasets_manager import DataSetsManager
 
@@ -75,37 +76,51 @@ def check_postgre_transaction(script: Callable, config, waiting_time=300):
 
 
 def build_default_auto_ml_config(params:dict={}):
-    return AutoMLConfigBuilder(**params).build().model_dump_json(indent=3)
+    return AutoMLConfigBuilder(**params).build()
 
 def build_default_all_models_config(data:pd.DataFrame=None,
-                                    model_name = 'example',
+                                    column_target: str=None,
+                                    column_exposure: str=None,
+                                    group_name:str = 'example',
+                                    project:str = 'test',
+                                    version: str = '1',
                                     max_category_num: int = 20,
                                     category_proportion_cut_value: float=0.01,
                                     q1:float=0.001,
                                     q2:float=0.999,
-                                    **model_params
+                                    model_params:dict={},
+                                    features_params:dict={},
                                     ):
-    objective=model_params.get('objective', 'RMSE')
-    wrapper = model_params.get('wrapper', 'catboost')
+
 
     features =[]
     if data is not None:
+        if column_target is not None:
+            data = data.drop(columns=column_target)
+            model_params['column_target'] = column_target
+        if column_exposure is not None:
+            data = data.drop(columns=column_exposure)
+            model_params['column_exposure'] = column_exposure
+
         for columns_name, series in data.items():
             params = feature_params(serie=series,
                                     max_category_num=max_category_num,
                                     depth=category_proportion_cut_value,
                                     q1=q1,
                                     q2=q2,
+                                    **features_params
                                     )
             if params == {}:
                 logger.info('Dropping feature||' + str(series.name))
                 continue
             features.append(FeatureBuilder(**params).build())
-    config_params = {'models_config': [ModelConfigBuilder(name=model_name,
-                                                         features=features,
-                                                         wrapper=wrapper,
-                                                         objective=objective,
-                                                         ).build()]
-                     }
 
-    return AllModelsConfigBuilder(**config_params).build().model_dump_json(indent=3)
+    config_params = {'group_name': group_name,
+                     'project': project,
+                     'version': version,
+                     'models_config': [ModelConfigBuilder(features=features,
+                                                          **model_params
+                                                                     ).build()]
+                                 }
+
+    return AllModelsConfigBuilder(**config_params).build()

@@ -38,10 +38,18 @@ class TestDataPrepare(TestCase):
                "name": "CBM",
                 "default": 13,
                 "clip": {"min_value": -1, "max_value": 13},
-                "replace": {"_TYPE_": "_NUM_", "M": -1, "2": 3, "-100": "_NAN_"}
+                "replace": {"_TYPE_": "_NUM_", "M": -1, "2": 3, "-100": "_NAN_"},
             }
         )
-
+        self.feature_model_config_numerical_cut_num = FeatureModelConfig.model_validate(
+            {
+                "name": "CBM",
+                "default": 13,
+                "clip": {"min_value": -1, "max_value": 13},
+                "replace": {"_TYPE_": "_NUM_", "M": -1, "2": 3, "-100": "_NAN_"},
+                "encoding": "cut_num"
+            }
+        )
         self.feature_model_config_numerical_cut = FeatureModelConfig.model_validate(
             {
                 "name": "CBM_cut",
@@ -69,6 +77,11 @@ class TestDataPrepare(TestCase):
         feature_data_replace_dict = pd.Series(
             [replace_numerical_values(v, self.feature_model_config_numerical) for v in feature_data]
         )
+        feature_data_replace_series_cut_num = replace_numerical_values_series(
+            feature_data, self.feature_model_config_numerical_cut_num)
+        assert_series_equal(feature_data_replace_series_cut_num,
+                            pd.Series([np.nan, "-2", -1, "1", 3, "14", np.nan, None]))
+
         assert_series_equal(feature_data_replace_series, feature_data_replace_dict)
         assert_series_equal(feature_data_replace_series, pd.Series([np.nan, -2.0, -1.0, 1.0, 3.0, 14.0, np.nan, np.nan]))
 
@@ -77,6 +90,7 @@ class TestDataPrepare(TestCase):
         feature_data_replace_series = replace_numerical_values_series(
             feature_data, self.feature_model_config_numerical
         )
+
         feature_data_replace_dict = pd.Series(
             [replace_numerical_values(v, self.feature_model_config_numerical) for v in feature_data]
         )

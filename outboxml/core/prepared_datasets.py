@@ -182,21 +182,21 @@ class PrepareDatasetPl(BasePrepareDataset):
 
 
 class FeatureSelectionPrepareDataset(BasePrepareDataset):
-    def __init__(self,
-                 model_config: ModelConfig,
-                 ):
+    def __init__(self, model_config: ModelConfig, group_name: str='example'):
+        super().__init__(group_name, model_config)
         self.model_config = model_config
         self._new_model_config = None
-    def prepare_dataset(self, data: pd.DataFrame,  index_train: pd.Index, index_test:pd.Index,
+    def prepare_dataset(self, data: pd.DataFrame,
+                        index_train: pd.Index, index_test:pd.Index,
                         target: pd.Series =None, new_features: dict = None, features_params: dict=None) -> PrepareDatasetResult:
         self._new_model_config = deepcopy(self.model_config)
         if new_features is not None:
             for feature_num in new_features[FeatureTypesForSelection.numeric]:
-                self._new_model_config.features.append(self._numerical_feature(feature_num, data[feature_num], features_params[feature_num])
+                self._new_model_config.features.append(FeatureBuilder(**features_params[feature_num]).build(),
                                     )
             for feature_cat in new_features[FeatureTypesForSelection.categorical]:
-                self._new_model_config.features.append(self._categorical_feature(feature_cat, data[feature_cat],features_params[feature_cat]))
-
+                self._new_model_config.features.append(FeatureBuilder(**features_params[feature_cat]).build(),
+                                                       )
         return prepare_dataset(
             group_name='feature_selection',
             data=data,
@@ -209,17 +209,6 @@ class FeatureSelectionPrepareDataset(BasePrepareDataset):
             corr_threshold=False,
             target=target
         )
-
-    def _numerical_feature(self, name, feature_values, feature_params) -> FeatureModelConfig:
-
-        return FeatureBuilder(name=name, feature_values=feature_values,
-                              type='numerical', **feature_params).build()
-
-    def _categorical_feature(self, name, feature_values, feature_params) -> FeatureModelConfig:
-
-        return FeatureBuilder(name=name, feature_values=feature_values,
-                              type='categorical', **feature_params).build()
-
 
 class TrainTestIndexes:
 

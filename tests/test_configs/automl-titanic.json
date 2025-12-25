@@ -13,6 +13,8 @@
         "use_temp_data": false,
         "encoding_cat":  "WoE_cat_to_num",
         "encoding_num":  "WoE_num_to_num",
+        "default_cat":  "_NAN_",
+        "default_num": "_MEDIAN_",
         "params": {"iterations": 30},
         "features_to_ignore":  ["general"]
   },

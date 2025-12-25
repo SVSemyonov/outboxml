@@ -17,10 +17,8 @@ class SeparationModelConfig(BaseModel):
 
 # TODO: remove class
 class DataConfig(BaseModel):
-    targetcolumns: List[List]  = None
-    extraColumns: Optional[List] = None
-    targetslices: Optional[List] = None
-#    extraDicts: Optional[List[ExtraDictConfig]] = None
+
+    targetslices: Optional[List]  = []
     queries: Optional[List[str]] = None
 
 
@@ -36,8 +34,8 @@ class DataModelConfig(BaseModel):
     extra_params: Optional[Dict] = None
     separation: Optional[SeparationModelConfig] = None
     extra_columns: Optional[List[str]] = None
-    targetslices: Optional[List] = None
-    data: Optional[DataConfig] = None  # TODO: remove
+    targetslices: Optional[List] = []
+    data: Optional[DataConfig]   # TODO: remove
 
 
 class RelativeFeatureModelConfig(BaseModel):
@@ -66,7 +64,8 @@ class FeatureModelConfig(BaseModel):
             for key, val in self.replace.items():
                 if (
                     key != FeatureEngineering.feature_type
-                    and val != FeatureEngineering.nan
+                    and val not in [FeatureEngineering.nan,  FeatureEngineering.median,
+                                    FeatureEngineering.mean, FeatureEngineering.max,   FeatureEngineering.min]
                 ):
                     try:
                         float(val)
@@ -89,10 +88,12 @@ class FeatureModelConfig(BaseModel):
     def check_default(self):
         # Numerical
         if self.replace.get(FeatureEngineering.feature_type) == FeatureEngineering.numerical:
-            if not isinstance(self.default, (float, int)):
-                raise ConfigError(f"{self.name}: invalid default value for numerical feature")
-            if not (isinstance(self.fillna, (float, int)) or self.fillna is None):
-                raise ConfigError(f"{self.name}: invalid fillna value for numerical feature")
+            if self.default not in [FeatureEngineering.nan, FeatureEngineering.median,
+                            FeatureEngineering.mean, FeatureEngineering.max, FeatureEngineering.min]:
+                if not isinstance(self.default, (float, int)):
+                    raise ConfigError(f"{self.name}: invalid default value for numerical feature")
+                if not (isinstance(self.fillna, (float, int)) or self.fillna is None):
+                    raise ConfigError(f"{self.name}: invalid fillna value for numerical feature")
 
         # Categorical
         else:
@@ -115,7 +116,7 @@ class ModelConfig(BaseModel):
     wrapper: Optional[str] = None
     column_target: Optional[str] = None
     column_exposure: Optional[str] = None
-    relative_features: Optional[List[RelativeFeatureModelConfig]] = None
+    relative_features: Optional[List[RelativeFeatureModelConfig]] = []
     features: List[FeatureModelConfig]
     intersections: Optional[List[IntersectionModelConfig]] = None
     params_catboost: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None
@@ -171,9 +172,12 @@ class FeatureSelectionConfig(BaseModel):
     cutoff_nan: float = 0.7,
     max_corr_value: float = 0.6
     metric_eval: dict = {'metric_name': 0}
-    cv_diff_value: float = 0.05
+    cv_diff_value:  Optional[float] = None
     encoding_cat: str = 'WoE_cat_to_num'
     encoding_num: str = 'WoE_num_to_num'
+    default_cat: str = '_NAN_',
+    default_num: str = '_MEDIAN_',
+    depth: float = 0.01
     features_to_ignore: List[str] = []
     params: dict = {}
     use_temp_data: bool = False
@@ -223,3 +227,26 @@ class MonitoringConfig(BaseModel):
     extrapolation_period: int = 12
     target_column: str
     data_source: str
+
+
+
+class UpdateRequest(BaseModel):
+    auto_ml_config: AutoMLConfig
+    all_model_config: AllModelsConfig
+    user_parameters: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None
+
+
+class MonitoringRequest(BaseModel):
+    all_model_config: AllModelsConfig
+    monitoring_config: MonitoringConfig
+    user_parameters: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None
+
+
+class AutoMLResultRequest(BaseModel):
+    main_model: str
+    request: Dict[str, bool]
+
+
+class MonitoringResultRequest(BaseModel):
+    main_model: str
+    request: Dict[str, bool]

@@ -169,7 +169,7 @@ class GLMCatboostCombineModel(BaseWrapperModel):
             self,
             model_name: str,
             wrapper: Literal[
-                ModelsParams.glm, ModelsParams.glm_without_scaler, ModelsParams.catboost],
+                ModelsParams.glm, ModelsParams.glm_without_scaler, ModelsParams.catboost, ModelsParams.xgboost],
             min_max_scaler,
             model,
             features_numerical: Optional[List[str]] = None,
@@ -362,8 +362,8 @@ class ModelsWrapper(BaseWrapperModel):
             device = 'cpu'
             if work_type_fit == 'GPU':
                 device = 'cuda'
-            result_model = XgboostModel(data_subset=data_subset, model_config=model_config, work_type_fit=device)
-            result_model.fit()
+            result_model = XgboostModel(data_subset=data_subset, model_config=model_config, work_type_fit=device).fit()
+
         # CatboostOverGlm
         if wrapper == ModelsParams.catboost_over_glm:
             result_model = CatboostOverGLMModel(data_subset=data_subset, model_config=model_config, sm_model=model, work_type_fit=work_type_fit)

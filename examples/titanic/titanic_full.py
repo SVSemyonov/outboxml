@@ -85,9 +85,7 @@ def parameters_for_optuna_all_models(trial):
 
 
 def main():
-    lgr = LogisticRegression()
-    rf = RandomForestRegressor()
-    models_dict = {'first': rf, 'second': lgr}
+
     auto_ml = AutoMLManager(auto_ml_config=auto_ml_config,
                             models_config=config_name,
                             business_metric=TitanicMetric(),
@@ -97,10 +95,8 @@ def main():
                                                                               use_exposure=False,
                                                                               metric_function=mean_absolute_error,
                                                                               direction='minimize'),
-                            save_temp=False,
                             grafana_connection=grafana_db_connection,
                             hp_tune=True,
-                            models_dict=models_dict,
                             retro=True
                             )
     auto_ml.update_models(send_mail=False, parameters_for_optuna={'first': parameters_for_optuna_all_models,
