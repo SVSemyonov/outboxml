@@ -16,14 +16,34 @@ from outboxml.extractors import Extractor
 
 
 class BasePrepareDataset(ABC):
+    """
+    Base class for dataset's preparation instructions.
+    """
+
     @abstractmethod
     def prepare_dataset(self, **params) -> PrepareDatasetResult:
+        """
+        :return: An instance of the PrepareDatasetResult class.
+        """
         pass
 
 
-
-
 class PrepareDataset(BasePrepareDataset):
+    """
+    Class for dataset's preparation instructions.
+    It contains parameters for dataset preparation: config, preprocessing and postprocessing functions.
+    It does not contain data.
+
+    :param check_prepared: Whether to check prepared dataset.
+    :param calc_corr: Whether to calculate correlation matrix. (Deprecated)
+    :param save_data: Whether to save prepared dataset.
+    :param corr_threshold: Threshold for correlation matrix. (Deprecated)
+    :param model_config: Model's config.
+    :param data_pred_prep_func: Function for preprocessing of data before preparation.
+    :param data_post_prep_func: Function for postprocessing of prepared data.
+    :param group_name: Models' group name.
+    """
+
     def __init__(
             self,
             check_prepared: bool = True,
@@ -47,6 +67,17 @@ class PrepareDataset(BasePrepareDataset):
     def prepare_dataset(
             self, data: pd.DataFrame, train_ind: pd.Index, test_ind: pd.Index, target: pd.Series = None
     ) -> PrepareDatasetResult:
+        """
+        Prepares dataset.
+
+        :param data: Dataset.
+        :param train_ind: Indices of training subset.
+        :param test_ind: Indices of testing subset.
+        :param target: Target's values.
+
+        :return: An instance of the PrepareDatasetResult class.
+        """
+
         if self._model_config.data_filter_condition is not None:
             data = data.query(self._model_config.data_filter_condition)
 

@@ -1,4 +1,5 @@
 from datetime import datetime
+from loguru import logger
 import mlflow
 import os
 import pickle
@@ -11,6 +12,17 @@ from outboxml.core.utils import ResultPickle
 
 
 class EnsembleResult:
+    """
+    Class for storing one part of the models' ensemble.
+    The final structure of the pickle file is List[EnsembleResult].
+
+    :param model_name: The name of the model, it should be in all elements of `models`.
+    :param models: List[(condition: str, group_name: str, model: Any)].
+
+    Condition should be a valid string for pandas.query().
+    Group_name is a name of models' group that should be applied for the given condition.
+    Model is a fitted model object.
+    """
 
     def __init__(self, model_name: str, models: List[Tuple[str, str, Any]]):
         self.model_name: str = model_name
@@ -18,11 +30,13 @@ class EnsembleResult:
 
 
 class Ensemble:
+    """
+    Class for creating and saving models' ensemble.
+
+    :param config: Object that should contain `prod_models_path`, `results_path` and if mlflow is used `mlflow_tracking_uri`, `mlflow_experiment`.
+    """
 
     def __init__(self, config=None):
-        """
-        :param config: `config` should contain `prod_models_path`, `results_path` and if mlflow is used `mlflow_tracking_uri`, `mlflow_experiment`
-        """
         self.config = config
         self.ensemble_name: Optional[str] = None
         self.models_names: Optional[List[str]] = None
@@ -32,12 +46,19 @@ class Ensemble:
 
     def make_ensemble(self, ensemble_name: str, models_names: List[str], groups: List[Tuple[str, str]]) -> None:
         """
-        Make an ensemble of models groups.
+        Make an ensemble of models' groups.
+
         :param ensemble_name: Ensemble name.
-        :param models_names: Models names, e.g. [`frequency`, `severity`].
-        :param groups: List[(condition, group_name)], conditions should be valid for pandas.query().
+        :param models_names: Models names that should be present in all groups.
+        :param groups: List[(condition: str, group_name: str)].
+
+        Condition should be a valid string for pandas.query().
+        Group_name is a name of models' group that should be applied for the given condition.
+
         :return: None
         """
+
+        logger.info(f"making ensemble {ensemble_name} ...")
 
         if self.is_maked:
             raise EnsembleError("ensemble is already maked")
@@ -79,7 +100,8 @@ class Ensemble:
                 unique_group_names.add(group_name)
 
             if group_name not in self.all_groups:
-                self.load_group(group_name)
+                self._load_group(group_name)
+                logger.info(f"loaded group `{group_name}`")
 
         self.result_pickle = []
         for name in self.models_names:
@@ -96,17 +118,18 @@ class Ensemble:
             )
 
         self.is_maked = True
+        logger.info(f"ensemble {ensemble_name} is maked")
 
-    def load_group(self, group_name):
+    def _load_group(self, group_name):
         try:
             with open(os.path.join(self.config.prod_models_path, f"{group_name}.pickle"), "rb") as f:
                 group = pickle.load(f)
         except FileNotFoundError:
             raise EnsembleError(f"file `{group_name}.pickle` is not found in {self.config.prod_models_path}")
-        self.validate_group(group, group_name)
+        self._validate_group(group, group_name)
         self.all_groups.update({group_name: group})
 
-    def validate_group(self, group: List, group_name: str) -> None:
+    def _validate_group(self, group: List, group_name: str) -> None:
 
         if not isinstance(group, list):
             raise EnsembleError(f"invalid group `{group_name}`")
@@ -133,19 +156,28 @@ class Ensemble:
                 raise EnsembleError(f"no `{name}` model in group `{group_name}`")
 
     def save_ensemble(self, to_mlflow: bool = False) -> None:
+        """
+        Saves maked ensemble's pickle to a local file and optionally to MLFlow.
+
+        :param to_mlflow: Whether to save the ensemble to MLFlow.
+
+        :return: None
+        """
 
         if not self.is_maked:
             raise EnsembleError("ensemble is not maked")
 
-        # Сохранение пикла для сервиса локально
-        now_time = datetime.utcnow()
+        # Save pickle file locally
+        now_time = datetime.now()
         result_pickle_name = ResultPickle().generate_name(self.ensemble_name, now_time)
         with open(os.path.join(self.config.results_path, result_pickle_name), "wb") as f:
             pickle.dump(self.result_pickle, f)
+        logger.info(f"saved ensemble to `{result_pickle_name}`")
 
-        # Сохранение пикла для сервиса в MLFlow
+        # Save pickle file to MLFlow
         if to_mlflow:
             mlflow.set_tracking_uri(self.config.mlflow_tracking_uri)
             mlflow.set_experiment(self.config.mlflow_experiment)
             with mlflow.start_run(run_name=result_pickle_name.replace(".pickle", "")):
                 mlflow.log_artifact(os.path.join(self.config.results_path, result_pickle_name))
+        logger.info(f"saved ensemble to MLFlow")
