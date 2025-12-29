@@ -19,8 +19,10 @@ from outboxml.extractors import Extractor
 class BasePrepareDataset(ABC):
     """
     Base class for dataset's preparation instructions.
-    """
 
+    :param group_name: Models' group name.
+    :param model_config: Model's config.
+    """
 
     def __init__(self, group_name: str, model_config: Optional[ModelConfig] = None):
         self.group_name = group_name
@@ -63,7 +65,7 @@ class PrepareDataset(BasePrepareDataset):
     It contains parameters for dataset preparation: config, preprocessing and postprocessing functions.
     It does not contain data.
 
-    :param check_prepared: Whether to check prepared dataset.
+    :param check_prepared: Whether to check prepared dataset, True by default.
     :param calc_corr: Whether to calculate correlation matrix. (Deprecated)
     :param save_data: Whether to save prepared dataset.
     :param corr_threshold: Threshold for correlation matrix. (Deprecated)
@@ -96,7 +98,7 @@ class PrepareDataset(BasePrepareDataset):
             self, data: pd.DataFrame, train_ind: pd.Index, test_ind: pd.Index, target: pd.Series = None
     ) -> PrepareDatasetResult:
         """
-        Prepares dataset.
+        Prepares dataset in Pandas format.
 
         :param data: Dataset.
         :param train_ind: Indices of training subset.
@@ -151,6 +153,18 @@ class PrepareDataset(BasePrepareDataset):
 
 
 class PrepareDatasetPl(BasePrepareDataset):
+    """
+    Class for preparation instructions for dataset in Polars format.
+    It contains parameters for dataset preparation: config, preprocessing and postprocessing functions.
+    It does not contain data.
+
+    :param group_name: Models' group name.
+    :param model_config: Model's config.
+    :param data_pred_prep_func: Function for preprocessing of data before preparation.
+    :param data_post_prep_func: Function for postprocessing of prepared data.
+    :param check_prepared: Whether to check prepared dataset, True by default.
+    """
+
     def __init__(
             self,
             group_name: str,
@@ -167,6 +181,14 @@ class PrepareDatasetPl(BasePrepareDataset):
     def prepare_dataset(
             self, data: pl.DataFrame, target: pl.DataFrame | None = None
     ) -> PrepareDatasetResult:
+        """
+        Prepares dataset in Polars format.
+
+        :param data: Dataset.
+        :param target: Target's values.
+
+        :return: An instance of the PrepareDatasetResult class.
+        """
 
         if self._model_config.data_filter_condition is not None:
             data = data.filter(self._model_config.data_filter_condition)
@@ -244,12 +266,23 @@ class FeatureSelectionPrepareDataset(BasePrepareDataset):
         )
 
 class TrainTestIndexes:
+    """
+    Class for train/test separation. Features' values should be Pandas' DataFrame.
+
+    :param X: Features' values.
+    :param separation_config: Separation's config.
+    """
 
     def __init__(self, X: pd.DataFrame, separation_config: SeparationModelConfig):
         self.X: pd.DataFrame = X
         self._separation_config = separation_config
 
     def train_test_indexes(self):
+        """
+        Splits indices into train and test subsets.
+
+        :return: Tuple of train and test indices.
+        """
 
         if self._separation_config.kind == SeparationParams.rand:
             logger.info("Random separation")
@@ -275,12 +308,23 @@ class TrainTestIndexes:
 
 
 class TrainTestIndexesPl:
+    """
+    Class for train/test separation. Dataset should be Polars' DataFrame.
+
+    :param dataset: Dataset.
+    :param separation_config: Separation's config.
+    """
 
     def __init__(self, dataset: pl.DataFrame, separation_config: SeparationModelConfig):
         self.dataset: pl.DataFrame = dataset
         self._separation_config = separation_config
 
     def train_test_split(self) -> pl.DataFrame:
+        """
+        Splits dataset into train and test subsets.
+
+        :return: Dataset with the split column `is_train_obml`.
+        """
 
         if "is_train_obml" in self.dataset.columns:
             logger.info("Separation polars already exists")
@@ -315,17 +359,34 @@ class TrainTestIndexesPl:
 
 
 class BaseSeparation(ABC):
+    """
+    Base class for train/test separation.
+    """
+
     @abstractmethod
     def train_test_indexes(self, *params):
         pass
 
 
 class RandomSeparation(BaseSeparation):
+    """
+    Class for train/test separation based on random splitting. Features' values should be Pandas' DataFrame.
+
+    :param separation_config: Separation's config.
+    """
 
     def __init__(self, separation_config: SeparationModelConfig):
         self._separation_config = separation_config
 
     def train_test_indexes(self, X: pd.DataFrame):
+        """
+        Splits indices into train and test subsets.
+
+        :param X: Features' values.
+
+        :return: Tuple of train and test indices.
+        """
+
         train, test = train_test_split(
             X,
             test_size=self._separation_config.test_train_proportion,
@@ -338,11 +399,23 @@ class RandomSeparation(BaseSeparation):
 
 
 class RandomSeparationPl(BaseSeparation):
+    """
+    Class for train/test separation based on random splitting. Dataset should be Polars' DataFrame.
+
+    :param separation_config: Separation's config.
+    """
 
     def __init__(self, separation_config: SeparationModelConfig):
         self._separation_config = separation_config
 
     def train_test_indexes(self, dataset: pl.DataFrame) -> pl.DataFrame:
+        """
+        Splits dataset into train and test subsets.
+
+        :param dataset: Dataset.
+
+        :return: Dataset with the split column `is_train_obml`.
+        """
         return (
             dataset
             .with_columns(
@@ -356,11 +429,24 @@ class RandomSeparationPl(BaseSeparation):
 
 
 class DateSeparation(BaseSeparation):
+    """
+    Class for train/test separation based on date splitting. Features' values should be Pandas' DataFrame.
+
+    :param separation_config: Separation's config.
+    """
 
     def __init__(self, separation_config: SeparationModelConfig):
         self._separation_config = separation_config
 
     def train_test_indexes(self, X: pd.DataFrame):
+        """
+        Splits indices into train and test subsets.
+
+        :param X: Features' values.
+
+        :return: Tuple of train and test indices.
+        """
+
         column_period = self._separation_config.period_column[0]
         train_ind = X.loc[X[column_period].between(*self._separation_config.train_period)].index
         test_ind = X.loc[X[column_period].between(*self._separation_config.test_period)].index
@@ -369,11 +455,24 @@ class DateSeparation(BaseSeparation):
 
 
 class DateSeparationPl(BaseSeparation):
+    """
+    Class for train/test separation based on date splitting. Dataset should be Polars' DataFrame.
+
+    :param separation_config: Separation's config.
+    """
 
     def __init__(self, separation_config: SeparationModelConfig):
         self._separation_config = separation_config
 
     def train_test_indexes(self, dataset: pl.DataFrame) -> pl.DataFrame:
+        """
+        Splits dataset into train and test subsets.
+
+        :param dataset: Dataset.
+
+        :return: Dataset with the split column `is_train_obml`.
+        """
+
         column_period = self._separation_config.period_column[0]
 
         return (
@@ -390,14 +489,9 @@ class DateSeparationPl(BaseSeparation):
 
 
 class UserSeparation(BaseSeparation):
+    """
+    Class for train/test separation based on user's logic.
+    """
+
     def train_test_indexes(self):
         pass
-
-
-
-# dataset
-# targets_columns_names
-# self.X
-# self,Y
-# self.extra_columns
-# self.index_train_

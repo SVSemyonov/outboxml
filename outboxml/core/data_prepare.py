@@ -38,7 +38,11 @@ pl_numeric_dtypes = [
     pl.datatypes.UInt64,
 ]
 
+
 class Encoder:
+    """
+    Base class for encoders.
+    """
     def encode_data(self, *params):
         pass
 
@@ -52,6 +56,8 @@ class OptiBinningEncoder(Encoder):
     :param type: The feature's type, `numerical` and `categorical` are supported.
     :param name: The feature's name.
     :param train_ind: Indices of training subset.
+
+    Default optbinning_params: min_prebin_size=0.05, max_n_bins=5, max_n_prebins=20.
     """
 
     def __init__(self,
@@ -82,9 +88,7 @@ class OptiBinningEncoder(Encoder):
         :param mapping: External map values, not calculated if given.
         :param bins: External bins, not calculated if given.
         :param num_num: Calculates mappings for bins of numerical feature if True.
-        :param optbinning_params: External optbinning params.
-
-        Default optbinning_params: min_prebin_size=0.001, max_n_bins=100, max_n_prebins=100.
+        :param optbinning_params: External optbinning params. Set default params if None.
 
         :return: Tuple of mappings and bins.
         """
@@ -136,6 +140,14 @@ class OptiBinningEncoder(Encoder):
 
 
 class CutNumberEncoder(Encoder):
+    """
+    Class for create and apply cut encoding. The valuable strategy is Freedman-diaconis.
+
+    :param max_bins: Maximum number of bins, 5 by default.
+    :param rule: Cut rule, 'Freedman-diaconis' by default.
+    :param round_decimals: Rounding decimals, 2 by default.
+    """
+
     def __init__(self,
                  max_bins: int = 5,
                  rule: str = 'Freedman-diaconis',
@@ -143,7 +155,16 @@ class CutNumberEncoder(Encoder):
         self.max_bins = max_bins
         self.round_decimals = round_decimals
         self.rule = rule
+
     def encode_data(self, serie: pd.Series):
+        """
+        Creates bins.
+
+        :param serie: Feature's values.
+
+        :return: Bins.
+        """
+
         opt_bins = self.calculate_optimal_bins(serie.dropna())
         cut_number = None
         if opt_bins is not None:
@@ -181,7 +202,7 @@ class PrepareDatasetResult:
     """
     Class for prepared dataset.
 
-    :param data: Pandas' DataFrame with prepared features' values.
+    :param data: Pandas' or Polars' DataFrame with prepared features' values.
     :param features_numerical: List of numerical features' names.
     :param features_categorical: List of categorical features' names.
     :param model_config: Model's config.
@@ -207,6 +228,14 @@ class PrepareDatasetResult:
 
 
 def map_num(v: Union[int, float], mapping: Dict[pd.IntervalIndex, str]) -> Optional[str]:
+    """
+    Apply mapping to value.
+
+    :param v: Feature's value.
+    :param mapping: Mapping.
+
+    :return: Encoded value.
+    """
     for k, m in mapping.items():
         if (k.left < v) and (v <= k.right):
             return m
@@ -339,13 +368,13 @@ def feature_encoding(
         feature: FeatureModelConfig,
 ) -> Union[int, float]:
     """
-        Encode feature's one value.
+    Encode feature's one value.
 
-        :param feature_value: Feature's value.
-        :param feature: Feature's config.
+    :param feature_value: Feature's value.
+    :param feature: Feature's config.
 
-        :return: Encoded value.
-        """
+    :return: Encoded value.
+    """
 
     if feature.encoding == EncodingNames.to_float:
         try:
@@ -556,6 +585,18 @@ def prepare_relative_feature_series_pl(
         denominator_name: str,
         default_value: Union[float, int],
 ) -> pl.LazyFrame:
+    """
+    Prepare relative feature's data, the input numerator's and denominator's types should be Polars' LazyFrame.
+
+    :param data: Features' values in Polars' LazyFrame format.
+    :param feature_name: Feature's name.
+    :param numerator_name: Numerator column's name.
+    :param denominator_name: Denominator column's name.
+    :param default_value: Default value for NaNs and infinities.
+
+    :return: LazyFrame with calculated values.
+    """
+
     if not isinstance(default_value, (int, float)):
         raise ConfigError("Invalid default value for relative feature")
     return (
@@ -672,6 +713,15 @@ def prepare_categorical_feature_pl(
         feature: FeatureModelConfig,
         data_dtypes: Dict[str, pl.DataType],
 ) -> pl.LazyFrame:
+    """
+    Prepare values in categorical feature's data, the input type should be Polars' LazyFrame.
+
+    :param feature_data: Feature's values in Polars' LazyFrame format.
+    :param feature: Feature's config.
+    :param data_dtypes: Features' types.
+
+    :return: Polars' LazyFrame with prepared values.
+    """
 
     dict_replace_temp = dict_replace(feature=feature, dtype=FeaturesTypes.categorical)
     fill_null_value = feature.fillna if feature.fillna else feature.default
@@ -885,7 +935,7 @@ def prepare_dataset(
         raise_on_encoding_error: bool = False
 ) -> PrepareDatasetResult:
     """
-    Prepare dataset. Input data should be Pandas' DataFrame or dict of feature and value pairs.
+    Prepare dataset. Input data should be Pandas' or Polars' DataFrame or dict of feature and value pairs.
 
     :param group_name: Models' group name.
     :param data: Input data.
@@ -1037,7 +1087,7 @@ def prepare_dataset(
         features_numerical = [feature for feature in features_all if
                               (data[feature].dtype != 'object' and data[feature].dtype != 'category')]
 
-    # Изменения типа выходных данных
+    # Change output data types
     # TODO: добавить в конфиг автоматическое определение размера категорий
     if modify_dtypes and not as_dict:
         for column in features_all:
