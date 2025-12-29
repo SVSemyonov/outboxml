@@ -1,3 +1,4 @@
+"""Module for implementation service of models."""
 import asyncio
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
@@ -30,13 +31,20 @@ async def main_predict(
         second_features_values: Optional[List[Dict]] = None,
         async_mode: bool = True,
 ) -> Dict:
-    """
-    :param config: `config` should contain `prod_models_path`
-    :param group_name: name of the main model
-    :param features_values: data for main model
-    :param second_group_name: name of second model
-    :param second_features_values: data for second model
-    :param async_mode:
+    """Calc model predictions.
+
+    :param config: Config module. Should contain `prod_models_path`.
+    :type config: module`
+    :param group_name: Name of the main model.
+    :type group_name: str
+    :param features_values: Data for main model.
+    :type features_values: list[dict], pandas.DataFrame
+    :param second_group_name: Name of second model.
+    :type second_group_name: str
+    :param second_features_values: Data for second model.
+    :type second_features_values: list[dict], pandas.DataFrame
+    :param async_mode: Flag to use async mode.
+    :type async_mode: bool
     """
 
     predict_tasks = []
@@ -107,12 +115,47 @@ async def main_predict(
 
 @app.get("/api/health")
 async def health_route():
+    """Check service running.
+
+    :return: Service response in JSON format.
+    :rtype: JSONResponse
+
+    .. rubric:: Example
+
+    import requests
+
+    response = requests.post(url='https://service_url/api/health')
+    """
     return JSONResponse(content=jsonable_encoder({"health": True}), status_code=status.HTTP_200_OK)
 
 
 @app.post("/api/predict")
 async def predict_route(service_request: ServiceRequest):
+    """Request models predictions.
 
+    :param service_request: Service request
+    :type service_request: ServiceRequest
+    :return: Service response in JSON format.
+    :rtype: JSONResponse
+
+    .. rubric:: Example
+
+    import requests
+
+    request_data = {
+        'main_model': 'titanic'
+        'main_request': [{
+            'FEATURE1': 100,
+            'FEATIRE2': 200
+        }]
+    }
+
+    response = requests.post(
+        url='https://service_url/api/predict',
+        headers={'Content-Type': 'application/json'},
+        json=request_data
+    )
+    """
     try:
         group_name = service_request.main_model
         features_values = service_request.main_request
