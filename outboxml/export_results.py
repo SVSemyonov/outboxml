@@ -327,7 +327,8 @@ class ResultExport:
 
     @staticmethod
     def df_for_graphs(result: DSManagerResult, features: list = None, use_exposure: bool = False,
-                      only_test: bool = True) -> tuple:
+                      only_test: bool = True) -> \
+                     (pd.DataFrame, list, list):
         """
         Construct dataframe with results and lists of feature names.
 
@@ -579,17 +580,16 @@ class GrafanaExport:
         :param connection: Custom SQLAlchemy engine connection, defaults to None (uses env config)
         :type connection: sqlalchemy.engine.Engine, optional
 
-        :raises ValueError: If the input DataFrame is empty
         :raises Exception: If database connection fails
         """
         self.df = df
         if self.df.empty:
-            raise ValueError('Empty dataframe to load')
+            raise logger.error('Empty dataframe to load')
         self.table_name = table_name
         self.schema = schema
         self.__connection = None
         
-        logger.debug('Connecting to db..')
+        logger.debug('Connecting to db...')
         if connection is not None:
             self.__connection = connection
         else:
