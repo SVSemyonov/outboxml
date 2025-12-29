@@ -1,11 +1,19 @@
+from array import array
+from copy import deepcopy
 from unittest import TestCase
 from unittest import main
 
+import numpy as np
+from catboost import CatBoostRegressor
 from sklearn.base import BaseEstimator
+from statsmodels.genmod.generalized_linear_model import GLMResultsWrapper
+import statsmodels.formula.api as sf
 
-from outboxml.core.data_prepare import OptiBinningEncoder
+from outboxml.core.data_prepare import OptiBinningEncoder, PrepareDatasetResult
+from outboxml.core.enums import ModelsParams
+from outboxml.core.predict import one_model_predict
 from outboxml.core.prepared_datasets import PrepareDataset
-from outboxml.core.pydantic_models import DataModelConfig
+from outboxml.core.pydantic_models import DataModelConfig, DataConfig
 from outboxml.dataset_retro import RetroDataset
 from outboxml.datasets_manager import DataSetsManager, DSManagerResult
 import pandas as pd
@@ -15,7 +23,8 @@ from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from pathlib import Path
 
 from outboxml.extractors import BaseExtractor
-from outboxml.models import BaselineModels, ModelsWrapper
+from outboxml.models import BaselineModels, ModelsWrapper, StatsmodelsModel, StatsModelsEstimator, CatboostModel, \
+    CatboostOverGLMModel, XgboostModel, GLMCatboostCombineModel, BaseWrapperModel
 
 test_configs_path = Path(__file__).resolve().parent/ "test_configs"
 test_data_path = Path(__file__).resolve().parent/"test_data"
@@ -54,7 +63,9 @@ class TestTitanicDS(TestCase):
 
     def test_db_extractor(self):
         self.assertIsInstance(BaseExtractor(data_config=DataModelConfig(source='database',
-                                                  table_name_source='public."TitanicExample"')).extract_dataset(), pd.DataFrame)
+                                                                        table_name_source='public."TitanicExample"',
+                                                                        data=DataConfig())).extract_dataset(),
+                              pd.DataFrame)
 
     def test_DFs(self):
         subset = self.dsManager.get_subset(model_name='first')
@@ -127,6 +138,12 @@ class TestTitanicDS(TestCase):
         self.assertEqual(len(model_res.data_subset.features_categorical), 0)
         self.assertEqual(len(model_res.data_subset.features_numerical), 4)
 
+        result = one_model_predict(group_name='test', model_result=model_res,
+                          features_values=data.iloc[0].to_dict())
+        self.assertIsInstance(result, dict)
+        self.assertIsInstance(result['result'], dict)
+        self.assertIsInstance(result['df'], dict)
+        self.assertIsInstance(result['version_model'], dict)
 
     def test_default_models(self):
         self.dsManager.get_subset(model_name='first')
@@ -156,7 +173,231 @@ class DSRetro(RetroDataset):
 
 
 
+class ModelsTest(TestCase):
+    def setUp(self):
+        self.dsManager = DataSetsManager(config_name=config_name,
+                                         )
+        self.subset = self.dsManager.get_subset(model_name='first')
+        self.model_config = self.dsManager._models_configs[0]
 
+    def test_stats_models(self):
+        model = StatsmodelsModel(data_subset=self.subset,
+                         model_config=self.model_config,
+                         ).fit()
+        model._wrapper = 'glm'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.params, pd.Series)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+    def test_catboost_model(self):
+        model = CatboostModel(data_subset=self.subset,
+                                 model_config=self.model_config,
+                                 ).fit()
+        model._wrapper = 'catboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.get_feature_importance(), np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+    def test_objective_catboost(self):
+        model_config = deepcopy(self.model_config)
+        model_config.objective = ModelsParams.rmsewithuncertainty
+        model = CatboostModel(data_subset=self.subset,
+                              model_config=model_config,
+                              ).fit()
+
+        model._wrapper = 'catboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.get_feature_importance(), np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+        model_config = deepcopy(self.model_config)
+
+        model_config.objective = ModelsParams.gamma
+        model = CatboostModel(data_subset=self.subset,
+                              model_config=model_config,
+                              ).fit()
+        model._wrapper = 'catboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.get_feature_importance(), np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+        model_config = deepcopy(self.model_config)
+
+        model_config.objective = ModelsParams.rmse
+        model = CatboostModel(data_subset=self.subset,
+                              model_config=model_config,
+                              ).fit()
+        model._wrapper = 'catboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.get_feature_importance(), np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+        model_config.objective = ModelsParams.binary
+        model = CatboostModel(data_subset=self.subset,
+                              model_config=model_config,
+                              ).fit()
+        model._wrapper = 'catboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.get_feature_importance(), np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+
+    def test_catboostoverglm_model(self):
+        model = CatboostOverGLMModel(data_subset=self.subset,
+                                     sm_model=StatsmodelsModel(data_subset=self.subset,
+                                                                 model_config=self.model_config,
+                                                                 ).fit(),
+                                 model_config=self.model_config,
+                                 )
+        model.fit()
+        model._wrapper = 'catboost_over_glm'
+        self.assertIsInstance(model, CatboostOverGLMModel)
+        self.assertIsInstance(model._model_sm, GLMResultsWrapper )
+        self.assertIsInstance(model._model_ctb, CatBoostRegressor)
+        self.assertIsInstance(model._model_ctb.get_feature_importance(), np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+    def test_statsmodels_estimator_model(self):
+        model = StatsModelsEstimator(datasubset=self.subset,
+                                     sm_model=sf.glm,
+                                     model_config=self.model_config,
+                                     )
+        sm=model.fit(self.subset.X_train, self.subset.y_train)
+        self.assertIsInstance(model, BaseEstimator)
+        self.assertIsInstance(sm.params, pd.Series )
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+    def test_xgboost_model(self):
+        model = XgboostModel(data_subset=self.subset,
+                                 model_config=self.model_config,
+                                work_type_fit='cpu' ).fit()
+        model._wrapper = 'xgboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.feature_importances_, np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+    def test_objective_xgboost(self):
+        model_config = deepcopy(self.model_config)
+        model_config.objective = ModelsParams.rmsewithuncertainty
+        model = XgboostModel(data_subset=self.subset,
+                              model_config=model_config,
+                             work_type_fit='cpu'
+                             ).fit()
+
+        model._wrapper = 'xgboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.feature_importances_, np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+        model_config = deepcopy(self.model_config)
+
+        model_config.objective = ModelsParams.gamma
+        model = XgboostModel(data_subset=self.subset,
+                              model_config=model_config,
+                             work_type_fit='cpu'
+                             ).fit()
+        model._wrapper = 'xgboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.feature_importances_, np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+        model_config = deepcopy(self.model_config)
+
+        model_config.objective = ModelsParams.rmse
+        model = XgboostModel(data_subset=self.subset,
+                              model_config=model_config,
+                              work_type_fit='cpu'
+                              ).fit()
+        model._wrapper = 'xgboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.feature_importances_, np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+        model_config.objective = ModelsParams.binary
+        model = XgboostModel(data_subset=self.subset,
+                              model_config=model_config,
+                             work_type_fit='cpu'
+                              ).fit()
+        model._wrapper = 'xgboost'
+        self.assertIsInstance(model, GLMCatboostCombineModel)
+        self.assertIsInstance(model.model.feature_importances_, np.ndarray)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), pd.Series)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+    def test_baseline_models(self):
+        model = BaselineModels(dataset=self.subset,
+                               model_name='first',
+                               model_number=1).choose_model()
+        self.assertIsInstance(model, BaseEstimator)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), np.ndarray)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+        model = BaselineModels(dataset=self.subset,
+                               model_name='first',
+                               model_number=2).choose_model()
+        self.assertIsInstance(model, BaseEstimator)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), np.ndarray)
+        self.assertEqual(model.predict(X=self.subset.X_test).sum(), 0) #mode
+
+        model = BaselineModels(dataset=self.subset,
+                               model_name='first',
+                               model_number=3).choose_model()
+        self.assertIsInstance(model, BaseEstimator)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), np.ndarray)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+        model = BaselineModels(dataset=self.subset,
+                               model_name='first',
+                               model_number=4).choose_model()
+        self.assertIsInstance(model, BaseEstimator)
+        self.assertIsInstance(model.predict(X=self.subset.X_test), np.ndarray)
+        self.assertGreater(model.predict(X=self.subset.X_test).sum(), 0)
+
+    def test_basewrapper_models(self):
+
+        models = ModelsWrapper(data_subsets={'first': self.subset},
+                               models_configs=[self.model_config],
+                               work_type_fit='CPU').models_dict()
+        self.assertIsInstance(models, dict)
+
+
+class TestPrepareDatasets(TestCase):
+    def setUp(self):
+        self.dsManager = DataSetsManager(config_name=config_name,
+                                         )
+        self.subset = self.dsManager.get_subset(model_name='first')
+        self.model_config = self.dsManager._models_configs[0]
+
+    def test_prepare_dataset(self):
+        pr_d = PrepareDataset(check_prepared=True,
+                       calc_corr=True,
+                       corr_threshold=0.8,
+                       save_data=False,
+                       model_config=self.model_config,
+                       group_name='test')
+        self.assertIsInstance(pr_d.prepare_dataset(
+            data=self.dsManager.dataset,
+            test_ind=self.dsManager._data_preprocessor.index_test,
+            train_ind=self.dsManager._data_preprocessor.index_train,
+
+        ), PrepareDatasetResult)
+        model_config = deepcopy(self.model_config)
+        pr_d.update_model_config(features_to_drop=['SEX'])
+        self.assertEqual(len(pr_d.get_model_config().features),2)
+        pr_d.update_model_config(features_to_append=[model_config.features[2]])
+        self.assertEqual(len(pr_d.get_model_config().features),3)
 
 if __name__ == '__main__':
     main()

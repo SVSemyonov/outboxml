@@ -1,5 +1,6 @@
 import pandas as pd
 from pandas.api.types import is_integer_dtype, is_float_dtype
+import polars as pl
 import numpy as np
 from typing import Tuple, List, Dict, Optional, Union
 from typing_extensions import Literal
@@ -22,7 +23,27 @@ from outboxml.core.errors import ConfigError
 from outboxml.core.enums import EncodingNames
 
 
-class OptiBinningEncoder:
+pl_numeric_dtypes = [
+    pl.datatypes.Decimal,
+    pl.datatypes.Float32,
+    pl.datatypes.Float64,
+    pl.datatypes.Int8,
+    pl.datatypes.Int16,
+    pl.datatypes.Int32,
+    pl.datatypes.Int64,
+    pl.datatypes.Int128,
+    pl.datatypes.UInt8,
+    pl.datatypes.UInt16,
+    pl.datatypes.UInt32,
+    pl.datatypes.UInt64,
+]
+
+class Encoder:
+    def encode_data(self, *params):
+        pass
+
+
+class OptiBinningEncoder(Encoder):
     """
     Class for create and apply encodings. Uses ContinuousOptimalBinning method from the optbinning library.
 
@@ -46,6 +67,7 @@ class OptiBinningEncoder:
         self._name = name
         self.mapping = {}
         self._train_ind = train_ind
+        self._default_optbinning_params =  {'max_n_bins': 5, 'max_n_prebins': 20, 'min_prebin_size': 0.05,}
 
     def encode_data(
             self,
@@ -74,7 +96,7 @@ class OptiBinningEncoder:
                 logger.error('Wrong type of X for binning')
         if (mapping is None) and (bins is None):
             if optbinning_params is None:
-                optbinning_params =  {'min_prebin_size': 0.001, 'max_n_bins': 100, 'max_n_prebins': 100}
+                optbinning_params = self._default_optbinning_params
             else:
                 logger.info('User Optbinning params')
             optb = ContinuousOptimalBinning(name=self._name, dtype=self._type, **optbinning_params)
@@ -113,6 +135,48 @@ class OptiBinningEncoder:
         return mapping, bins
 
 
+class CutNumberEncoder(Encoder):
+    def __init__(self,
+                 max_bins: int = 5,
+                 rule: str = 'Freedman-diaconis',
+                 round_decimals: int=2):
+        self.max_bins = max_bins
+        self.round_decimals = round_decimals
+        self.rule = rule
+    def encode_data(self, serie: pd.Series):
+        opt_bins = self.calculate_optimal_bins(serie.dropna())
+        cut_number = None
+        if opt_bins is not None:
+            result, bins = pd.qcut(serie, q=opt_bins, retbins=True, duplicates='drop')
+            bins = np.round(bins, decimals=self.round_decimals)
+            logger.info('bins_for_feature||' + str(bins))
+            if len(bins) > 1:
+                cut_number = '_'.join(map(str, bins[:-1]))
+            else:
+                cut_number = str(bins)
+        return cut_number
+
+
+    def calculate_optimal_bins(self, data: pd.Series):
+        if self.rule == 'Freedman-diaconis':
+            return self._freedman_diaconis_rule(data)
+        else:
+            logger.error('Unknown rule for cut number||Returnin None')
+            return None
+
+
+    def _freedman_diaconis_rule(self, data: pd.Series):
+        try:
+            n = len(data)
+            iqr = np.percentile(data, 75) - np.percentile(data, 25)
+            fd = int(np.ceil((max(data) - min(data)) / (2 * iqr / (n ** (1 / 3)))))
+
+            return min(self.max_bins, fd)
+        except Exception as exc:
+            logger.error(f'No cut values for {data.name} return None||{str(exc)}')
+            return None
+
+
 class PrepareDatasetResult:
     """
     Class for prepared dataset.
@@ -127,14 +191,14 @@ class PrepareDatasetResult:
 
     def __init__(
             self,
-            data: pd.DataFrame,
+            data: pd.DataFrame | pl.DataFrame,
             features_numerical: Optional[List[str]],
             features_categorical: Optional[List[str]],
             model_config: ModelConfig,
             corr_df: Optional[pd.DataFrame] = None,
             encoding_map: Optional[dict] = None
     ):
-        self.data: pd.DataFrame = data
+        self.data: pd.DataFrame | pl.DataFrame = data
         self.features_numerical: Optional[List[str]] = features_numerical
         self.features_categorical: Optional[List[str]] = features_categorical
         self.model_config: ModelConfig = model_config
@@ -142,12 +206,11 @@ class PrepareDatasetResult:
         self.encoding_map = encoding_map
 
 
-def map_num(v: Union[int, float], bins: List[float], mapping: Dict[pd.IntervalIndex, str]) -> Optional[str]:
-    for i, j in zip(bins[:-1], bins[1:]):
-        if (i < v) and (v <= j):
-            for k, m in mapping.items():
-                if k.left == i:
-                    return m
+def map_num(v: Union[int, float], mapping: Dict[pd.IntervalIndex, str]) -> Optional[str]:
+    for k, m in mapping.items():
+        if (k.left < v) and (v <= k.right):
+            return m
+    logger.warning(f"Value {v} is not in mapping.")
     return None
 
 
@@ -261,6 +324,8 @@ def feature_encoding_series(
                 logger.error(f"{feature.name} || Encoding error || Cannot convert to WoE || {str(e)}")
                 if raise_on_error:
                     raise ValueError(f"{feature.name} || Cannot convert to WoE")
+    elif feature.encoding == EncodingNames.cut_num:
+        pass #Encoding call in prepare_numerical_feature function
     else:
         logger.info("Unknown encoding || Return origin")
         if raise_on_error:
@@ -314,7 +379,7 @@ def feature_encoding(
                     list(pd.IntervalIndex.from_arrays(feature.bins[:-1], feature.bins[1:]).astype(str))
                 )
             }
-            feature_value = map_num(feature_value, feature.bins, mapping)
+            feature_value = map_num(feature_value, mapping)
         except Exception as e:
             raise ValueError(f"{feature.name} || Cannot convert to WoE")
 
@@ -324,10 +389,11 @@ def feature_encoding(
         try:
             if not isinstance(feature_value, (float, int)):
                 feature_value = float(feature_value)
-            feature_value = map_num(feature_value, feature.bins, feature.mapping)
+            feature_value = map_num(feature_value, feature.mapping)
         except Exception as e:
             raise ValueError(f"{feature.name} || Cannot convert to WoE")
-
+    elif feature.encoding == EncodingNames.cut_num:
+        pass
     else:
         raise NotImplementedError(f"{feature.name} || Unknown encoding")
 
@@ -483,6 +549,26 @@ def prepare_relative_feature_series(
     return (numerator / denominator).replace([-np.inf, np.inf], np.nan).fillna(default_value)
 
 
+def prepare_relative_feature_series_pl(
+        data: pl.LazyFrame,
+        feature_name: str,
+        numerator_name: str,
+        denominator_name: str,
+        default_value: Union[float, int],
+) -> pl.LazyFrame:
+    if not isinstance(default_value, (int, float)):
+        raise ConfigError("Invalid default value for relative feature")
+    return (
+        data
+        .with_columns(
+            pl.when(pl.col(denominator_name) == 0)
+            .then(pl.lit(default_value))
+            .otherwise(pl.col(numerator_name) / pl.col(denominator_name))
+            .alias(feature_name)
+        )
+    )
+
+
 def prepare_relative_feature(
         numerator: Union[float, int],
         denominator: Union[float, int],
@@ -577,6 +663,41 @@ def prepare_categorical_feature_series(
             feature_data.fillna(feature.fillna, inplace=True)
         else:
             feature_data.fillna(feature.default, inplace=True)
+
+    return feature_data
+
+
+def prepare_categorical_feature_pl(
+        feature_data: pl.LazyFrame,
+        feature: FeatureModelConfig,
+        data_dtypes: Dict[str, pl.DataType],
+) -> pl.LazyFrame:
+
+    dict_replace_temp = dict_replace(feature=feature, dtype=FeaturesTypes.categorical)
+    fill_null_value = feature.fillna if feature.fillna else feature.default
+
+    feature_data = (
+        feature_data
+        .with_columns(
+            pl.when(
+                ~pl.col(feature.name).is_in(dict_replace_temp)
+                & pl.col(feature.name).is_not_null()
+                & pl.col(feature.name).is_not_nan()
+            )
+            .then(pl.lit(feature.default))
+            .when(
+                (pl.col(feature.name).is_null())
+                | (pl.col(feature.name).is_nan())
+            )
+            .then(pl.lit(fill_null_value))
+            .when(
+                data_dtypes[feature.name] in pl_numeric_dtypes
+            )
+            .then(pl.col(feature.name).cast(pl.String).replace(dict_replace_temp))
+            .otherwise(pl.col(feature.name).str.to_uppercase().replace(dict_replace_temp))
+            .alias(feature.name)
+        )
+    )
 
     return feature_data
 
@@ -677,6 +798,9 @@ def prepare_numerical_feature_series(
             )
 
     # Cut values
+    if feature.encoding == EncodingNames.cut_num and feature.cut_number is None:
+        feature.cut_number = CutNumberEncoder().encode_data(feature_data)
+
     if feature.cut_number:
         val_splits = [-np.inf] + list([float(x) for x in feature.cut_number.split('_')]) + [np.inf]
         feature_data = pd.cut(feature_data, bins=val_splits).astype(str)
@@ -732,7 +856,7 @@ def prepare_numerical_feature(
                 list(pd.IntervalIndex.from_arrays(val_splits[:-1], val_splits[1:]).astype(str))
             )
         }
-        feature_value = map_num(feature_value, val_splits, mapping)
+        feature_value = map_num(feature_value, mapping)
 
     return feature_value
 
@@ -747,7 +871,7 @@ def prepare_numerical_feature(
 
 def prepare_dataset(
         group_name: str,
-        data: Union[Dict, pd.DataFrame],
+        data: Union[Dict, pd.DataFrame, pl.DataFrame],
         train_ind: Optional[pd.Index],
         test_ind: Optional[pd.Index],
         model_config: ModelConfig,
@@ -781,12 +905,17 @@ def prepare_dataset(
     """
 
     as_dict: bool = False
+    as_polars: bool = False
     if isinstance(data, dict):
         as_dict = True
+    elif isinstance(data, pl.DataFrame):
+        as_polars = True
+        lazy_data: pl.LazyFrame = data.lazy()
     elif isinstance(data, pd.DataFrame):
         pd.options.mode.chained_assignment = None
     else:
-        raise TypeError("Invalid data type")
+        logger.error(f"Invalid data type {type(data)}")
+        raise TypeError(f"Invalid data type {type(data)}")
 
     if model_config.relative_features:
         for relative_feature in model_config.relative_features:
@@ -796,6 +925,16 @@ def prepare_dataset(
                     denominator=data[relative_feature.denominator],
                     default_value=relative_feature.default
                 )
+
+            elif as_polars:
+                data = prepare_relative_feature_series_pl(
+                    data=lazy_data,
+                    feature_name=relative_feature.name,
+                    numerator_name=relative_feature.numerator,
+                    denominator_name=relative_feature.denominator,
+                    default_value=relative_feature.default
+                )
+
             else:
                 data[relative_feature.name] = prepare_relative_feature_series(
                     numerator=data[relative_feature.numerator],
@@ -935,9 +1074,13 @@ def prepare_dataset(
 
     if as_dict:
         data = pd.DataFrame([data])
+    elif as_polars:
+        data = data.collect()
+    else:
+        data = data[features_all]
 
     return PrepareDatasetResult(
-        data=data[features_all],
+        data=data,
         features_numerical=features_numerical,
         features_categorical=features_categorical,
         model_config=model_config,

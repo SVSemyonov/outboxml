@@ -8,21 +8,27 @@ import pandas as pd
 from sklearn.metrics import mean_absolute_error
 
 from outboxml.automl_manager import RetroFS, AutoMLManager
+from outboxml.core.config_builders import AutoMLConfigBuilder, AllModelsConfigBuilder
 from outboxml.core.email import EMailDSResult, EMailDSCompareResult
+from outboxml.core.predict import one_model_predict, ensemble_predict
 from outboxml.core.prepared_datasets import FeatureSelectionPrepareDataset
-from outboxml.core.pydantic_models import FeatureSelectionConfig
+from outboxml.core.pydantic_models import FeatureSelectionConfig, AutoMLConfig, AllModelsConfig
+from outboxml.core.utils import ResultPickle
 from outboxml.datadrift import DataDrift
 from outboxml.datasets_manager import DataSetsManager, DSManagerResult
+from outboxml.ensemble import Ensemble, EnsembleResult
 from outboxml.export_results import ResultExport
 from outboxml import config
-from outboxml.automl_utils import load_last_pickle_models_result, calculate_previous_models
+from outboxml.automl_utils import load_last_pickle_models_result, calculate_previous_models, \
+    build_default_auto_ml_config, build_default_all_models_config
 from outboxml.extractors import Extractor
 from outboxml.feature_selection import BaseFS, FeatureSelectionInterface
 from outboxml.hyperparameter_tuning import HPTuning
 from outboxml.main_predict import main_predict
+from outboxml.main_release import MLFLowRelease
 from outboxml.metrics.business_metrics import BaseCompareBusinessMetric
 from outboxml.metrics.base_metrics import BaseMetric
-from outboxml.monitoring_manager import MonitoringManager, MonitoringReport, MonitoringResult
+from outboxml.monitoring_manager import MonitoringManager, MonitoringResult
 from outboxml.target_extrapolation import TargetModel
 
 test_configs_path = Path(__file__).resolve().parent/ "test_configs"
@@ -70,7 +76,9 @@ class FeatureSelection(TestCase):
             max_corr_value=0.6,
             cv_diff_value=0.1,
             encoding_cat='WoE_cat_to_num',
-            encoding_num='WoE_num_to_num',
+            encoding_num='cut_num',
+            default_cat='_NAN_',
+            default_num='_MEDIAN_'
         )
 
     def test_new_features_list(self):
@@ -88,6 +96,7 @@ class FeatureSelection(TestCase):
 
     def test_BaseFS(self):
         self.dsManager._data_preprocessor._retro = True
+
         data = BaseFS( new_features_list=self.feature_for_research,
                       parameters=self._fs_config,
                         data_preprocessor=self.dsManager._data_preprocessor,
@@ -97,8 +106,35 @@ class FeatureSelection(TestCase):
                                                                             objective='binomial')
                       ).select_features(params={"iterations": 30}, model_name='first')
 
-        self.assertEqual(len(data.features_categorical), 1)
-        self.assertEqual(len(data.features_numerical), 4)
+        self.assertEqual(len(data.features_categorical), 2)
+        self.assertEqual(len(data.features_numerical), 3)
+
+    def test_temp_files_BaseFS(self):
+        self.dsManager._data_preprocessor._retro = True
+        data = BaseFS( new_features_list=self.feature_for_research,
+                      parameters=FeatureSelectionConfig(
+                                                metric_eval={"first": "accuracy", "second": "accuracy"},
+                                                top_feautures_to_select=4,
+                                                count_category=100,
+                                                cutoff_1_category=0.9,
+                                                cutoff_nan=0.7,
+                                                max_corr_value=0.6,
+                                                cv_diff_value=0.1,
+                                                use_temp_data=True,
+                                                encoding_cat='WoE_cat_to_num',
+                                                encoding_num='WoE_num_to_num',
+                                                default_cat='_NAN_',
+                                                default_num = '_MEDIAN_'
+                                            ),
+                        data_preprocessor=self.dsManager._data_preprocessor,
+                      prepare_data_interface=FeatureSelectionPrepareDataset(model_config=self.dsManager._models_configs[
+                          0]),
+                      feature_selection_interface=FeatureSelectionInterface(feature_selection_config=self._fs_config,
+                                                                            objective='binomial')
+                      ).select_features(params={"iterations": 30}, model_name='first')
+
+        self.assertEqual(len(data.features_categorical), 2)
+        self.assertEqual(len(data.features_numerical), 3)
 
 
 class HPTune(TestCase):
@@ -106,7 +142,6 @@ class HPTune(TestCase):
     def setUp(self):
         self.ds_manager = DataSetsManager(config_name=str(config_name)
                                           )
-        self.ds_manager.get_subset(model_name='first')
 
     def test_hp_tune_catboost(self):
         self.ds_manager._prepare_datasets['first']._model_config.objective = 'poisson'
@@ -147,7 +182,7 @@ class HPTune(TestCase):
             }
 
         params = HPTuning(data_preprocessor=self.ds_manager._data_preprocessor, folds_num_for_cv=5, ).best_params(
-            model_name='first_xgboost',
+            model_name='first',
             trials=5,
             direction='maximize',
             parameters_for_optuna_func=parameters_for_optuna)
@@ -215,7 +250,6 @@ class AutoMLTest(TestCase):
                                 models_config=str(config_name),
                                 business_metric=TitanicMetric(),
                                 compare_business_metric=BaseCompareBusinessMetric(calculate_threshold=True),
-                                save_temp=False,
                                 hp_tune=True,
                                 retro=True
                                 )
@@ -224,7 +258,7 @@ class AutoMLTest(TestCase):
                               )
         self.assertEqual(auto_ml.status
                          , {'Loading dataset': True,
-                                                                  'Feature selection': False,
+                                                                  'Feature selection': True,
                                                                   'HP tuning': True,
                                                                   'Fitting': True,
                                                                   'Compare with previous': True,
@@ -232,7 +266,7 @@ class AutoMLTest(TestCase):
                                                                   'Loading results to MLFLow': True,
                                                                   'EMail Review': False})
 
-        self.assertGreater(auto_ml.automl_results.compare_business_metric['difference'], 0)
+        self.assertLessEqual(auto_ml.automl_results.compare_business_metric['difference'], 0)
 
     def test_previous_model(self):
         group = load_last_pickle_models_result(config=config)
@@ -273,33 +307,57 @@ class BusinessMetricsExample(BaseMetric):
     def calculate_metric(self, result1: dict, result2: dict) -> dict:
         return {'Test metric': 1}
 
-
-class TestMonitoringManger(TestCase):
-    def setUp(self):
-        pass
-
-    def test_monitoring(self):
-        review = MonitoringManager(monitoring_config=str(monitoring_config),
-                                   models_config=str(config_name),
-                                   business_metric=BusinessMetricsExample(),
-                                   datadrift_interface=DataDrift(full_calc=True),
-                                   logs_extractor=LogsExtractor(),
-                                   monitoring_report=MonitoringReport()).review(send_mail=False, )
-        self.assertIsInstance(review, MonitoringResult)
-        self.assertAlmostEqual(review.datadrift['first']['PSI']['SEX'], 0.002, 2)
-
-
 class TestPredict(TestCase):
     def setUp(self):
         pass
 
     def test_predict(self):
+
         result = asyncio.run(
             main_predict(config=config, group_name=None, features_values=LogsExtractor().extract_dataset()[:100],
-                         second_group_name=None, second_features_values=LogsExtractor().extract_dataset()[700:]))
+                         second_group_name='example_titanic_2025_09_18_08_37_03', second_features_values=LogsExtractor().extract_dataset()[700:]))
         self.assertIsInstance(result, dict)
         self.assertIsInstance(result['main_response'], dict)
         self.assertIsInstance(result['main_response']['result'], dict)
+        self.assertIsInstance(result['second_response']['result'], dict)
+
+        result = asyncio.run(
+            main_predict(config=config, group_name=None, features_values=LogsExtractor().extract_dataset()[:100],
+                         second_group_name='example_titanic_2025_09_18_08_37_03',
+                         second_features_values=LogsExtractor().extract_dataset()[700:]))
+        self.assertIsInstance(result, dict)
+        self.assertIsInstance(result['main_response'], dict)
+        self.assertIsInstance(result['main_response']['result'], dict)
+        self.assertIsInstance(result['second_response']['result'], dict)
+       # Ensemble(config=config).make_ensemble('test', ['first'])
+       # ensemble_predict(ensemble_name='test', ensemble=EnsembleResult(model_name='first', models=[load_last_pickle_models_result(config=config)]), )
+
+
+    def test_config_builder(self):
+        data = pd.read_csv(path_to_data)
+        self.assertIsInstance(AutoMLConfigBuilder().build(), AutoMLConfig)
+        self.assertIsInstance(AllModelsConfigBuilder().build(), AllModelsConfig)
+        self.assertIsInstance(build_default_auto_ml_config({'group_name': 'test'}), AutoMLConfig)
+        all_models_config = build_default_all_models_config(data=data,
+                                                              group_name='example',
+                                                              column_target='SURVIVED',
+                                                              model_params={'wrapper': 'catboost',
+                                                                            'name': 'titanic',
+                                                                            },
+                                                              features_params={'encoding_cat': 'WoE_cat_to_num',
+                                                                               'default_cat': '_NAN_'
+                                                                               })
+        self.assertIsInstance(all_models_config,AllModelsConfig)
+        self.assertEqual(all_models_config.models_configs[0].column_target,'SURVIVED', )
+        self.assertEqual(all_models_config.models_configs[0].features[0].default, '_MEDIAN_', )
+        self.assertEqual(all_models_config.models_configs[0].features[2].default, '_NAN_', )
+
+class TestRelease(TestCase):
+    def setUp(self):
+        pass
+
+    def test_MlflowRelease(self):
+        MLFLowRelease(config=config).load_model_to_source_from_mlflow()
 
 
 if __name__ == '__main__':

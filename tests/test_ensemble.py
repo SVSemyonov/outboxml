@@ -95,6 +95,7 @@ class TestEnsemble(TestCase):
         self.assertIsInstance(self.ensemble.result_pickle, list)
         self.assertEqual(len(self.ensemble.result_pickle), 2)
         self.assertIsInstance(self.ensemble.result_pickle[0], EnsembleResult)
+
         self.assertEqual(self.ensemble.result_pickle[0].model_name, "K")
         self.assertEqual(self.ensemble.result_pickle[0].models, [
             ("a>b", "x", {
