@@ -10,9 +10,10 @@ from sklearn.base import is_classifier
 import pandas as pd
 import numpy as np
 from loguru import logger
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, Literal
 from sklearn.preprocessing import LabelEncoder
 
+from outboxml.monitoring_result import DataContext
 from outboxml.core.enums import ModelsParams
 from outboxml.data_subsets import DataPreprocessor, ModelDataSubset
 from outboxml.dataset_retro import RetroDataset
@@ -21,7 +22,7 @@ from outboxml.core.data_prepare import prepare_dataset
 from outboxml.core.pydantic_models import AllModelsConfig, DataModelConfig, ModelConfig
 from outboxml.extractors import Extractor, BaseExtractor, SimpleExtractor
 from outboxml.metrics.base_metrics import BaseMetric, BaseMetrics
-from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes
+from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes, PrepareDatasetPl
 from outboxml.metrics.processor import ModelMetrics
 from outboxml.models import DefaultModels
 from outboxml import config
@@ -226,14 +227,18 @@ class DataSetsManager:
             business_metric: Optional[BaseMetric] = None,
             use_baseline_model: int = 0,
             retro_changes: Optional[RetroDataset] = None,
-            external_config=None,
-            use_temp_files: bool=False,
+            external_config = None,
+            use_temp_files: bool = False,
+            prepare_engine: Literal['pandas', 'polars'] = 'pandas',
     ):
         if external_config is None:
             self._external_config = config
         else:
             self._external_config = external_config
+        self._work_type_fit = self._external_config.work_type_fit
+        self._work_type_hptune = self._external_config.work_type_hptune
         self._use_temp_files = use_temp_files
+        self._prepare_engine = prepare_engine
         self._exposure = {}
         self._all_models_config_name: Union[str, Dict] = config_name
         self._results: Dict[str, DSManagerResult] = {}
@@ -305,7 +310,7 @@ class DataSetsManager:
         """Fitting and calculating metrics for models. If 'need_fit' option then fit methods are calling for models
         Uf load_subsets_from_pickle option then loading previously saved datasubsets in enviroment"""
 
-        fitted = False
+        fitted = True
         logger.debug('Fitting model started')
         if models_dict is not None:
             models = models_dict
@@ -316,7 +321,7 @@ class DataSetsManager:
             if self._models_dict is None:
                 logger.info('Setting default models')
                 self.__load_models()
-                fitted = False
+                fitted = True
             models = self._models_dict
 
         if model_name is not None:
@@ -332,11 +337,13 @@ class DataSetsManager:
             data_subset = self.get_subset(model_name)
             predictions_train = self._predict(model, data_subset.X_train)
             predictions_test = self._predict(model, data_subset.X_test)
+
             metrics[model_name] = ModelMetrics(data_config=self.data_config,
                                                model_config=self._prepare_datasets[model_name].get_model_config(),
                                                data_subset=data_subset,
                                                ).result_dict(predictions={'train': predictions_train,
                                                                           'test': predictions_test})
+
 
 
             self._results[model_name] = DSManagerResult(model_name=model_name,
@@ -358,7 +365,7 @@ class DataSetsManager:
     def check_datadrift(self, model_name: str) -> pd.DataFrame:
         """Method for checking datadrift between train and test. Using DataDrift library"""
         subset = self.get_subset(model_name)
-        report = DataDrift().report(train_data=subset.X_train, test_data=subset.X_test, )
+        report = DataDrift(full_calc=False).review(DataContext(X_train=subset.X_train, X_test=subset.X_test))
 
         return report
 
@@ -386,7 +393,8 @@ class DataSetsManager:
                     model_result = DSManagerResult.from_pickle_model_result(model_result=model_result,
                                                                             all_model_config=self._all_models_config)
 
-        model_config = model_result.model_config
+        model_config = deepcopy(model_result.model_config)
+        model_config.column_exposure = None
         model = model_result.model
         features_numerical = model_result.data_subset.features_numerical
         features_categorical = model_result.data_subset.features_categorical
@@ -400,12 +408,10 @@ class DataSetsManager:
                                        data_config=self.data_config,
                                        prepare_engine='pandas',)
         data_subset = preproc.get_subset(model_name, from_pickle=False)
-        data
         output_model = model
         prediction = model.predict(data_subset.X[chain(features_numerical, features_categorical)])
         if isinstance(prediction, np.ndarray):
             prediction = pd.Series(prediction, index=data_subset.X.index)
-        print(prediction)
 
         metrics = ModelMetrics(model_config=model_config,
                                data_subset=data_subset,
@@ -429,15 +435,9 @@ class DataSetsManager:
 
     def __get_fitted_models(self, models: dict, fitted: bool = False) -> dict:
         if not fitted:
-            logger.info('Fitting')
-            for model_name, model in models.items():
-                try:
-                    model.fit()
-                except:
-                    logger.debug('User-defined model needs X, Y for train. Using datasubsets')
-                    data_subset = self.get_subset(model_name)
-                    model.fit(data_subset.X_train, data_subset.y_train)
-                    logger.debug('Model ' + str(model_name) + ' is fitted')
+            for model_name in models.keys():
+                data_subset = self.get_subset(model_name)
+                models[model_name].fit(data_subset.X_train, data_subset.y_train)
         return models
 
     def _predict(self, model, X):
@@ -447,18 +447,11 @@ class DataSetsManager:
             data = model.predict(X)
             prediction_series = pd.Series(data=np.expm1(data['yhat']), index=data.index)
             logger.info('Prophet finished')
-        elif is_classifier(model):
-            prediction_series = pd.Series(data=model.predict_proba(X)[:, 1], index=X.index)
+
         else:
-            try:
-                data = model.predict(X)
-                prediction_series = pd.Series(data=data, index=X.index)
-            except:
-                logger.info('Using label encoder for prediction')
-                le = LabelEncoder()
-                for column_name in X.columns:
-                    X[column_name] = le.fit_transform(X[column_name])
-                prediction_series = pd.Series(data=model.predict(X), index=X.index)
+            data = model.predict(X)
+            prediction_series = pd.Series(data=data, index=X.index)
+
         return prediction_series
 
     def _calculate_business_metric(self,) -> dict:
@@ -526,13 +519,25 @@ class DataSetsManager:
     def __load_prepare_datasets(self):
 
         i = 0
-        if self._prepare_datasets is None:
+        if self._prepare_datasets is None and self._prepare_engine == "pandas":
             self._prepare_datasets = {}
             logger.info("Load models prepare datasets")
             for model_config in self._models_configs:
                 self._prepare_datasets[model_config.name] = PrepareDataset(model_config=model_config,
                                                                            check_prepared=True,
                                                                            group_name=self.group_name)
+
+        elif self._prepare_datasets is None and self._prepare_engine == "polars":
+            self._prepare_datasets = {}
+            logger.info("Load models prepare datasets with polars")
+            for model_config in self._models_configs:
+                self._prepare_datasets[model_config.name] = PrepareDatasetPl(
+                    group_name=self.group_name, model_config=model_config, check_prepared=True
+                )
+
+        elif self._prepare_datasets is None:
+            logger.error("Unknown prepare engine")
+            raise ValueError("Unknown prepare engine")
 
         else:
             logger.info("User models prepare datasets")
@@ -549,7 +554,8 @@ class DataSetsManager:
                                               data_subsets=self._data_preprocessor.data_subsets(),
                                               models_configs=self._models_configs,
                                               group_name=self.group_name,
-                                              baseline_model=self._use_baseline_model).load_default()
+                                              baseline_model=self._use_baseline_model,
+                                              work_type_fit=self._work_type_fit).load_default()
 
     def __init_retro(self):
         logger.debug('Initializing retro')
@@ -579,6 +585,7 @@ class DataSetsManager:
                                                    dataset=self._extractor,
                                                    external_config=self._external_config,
                                                    version=self.version,
+                                                   prepare_engine=self._prepare_engine,
                                                    use_saved_files=self._use_temp_files,
                                                    data_config=self.data_config,
                                                    retro=self._retro

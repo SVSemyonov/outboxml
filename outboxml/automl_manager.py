@@ -1,6 +1,7 @@
 import json
 import os
 import pickle
+import shutil
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -181,12 +182,13 @@ class AutoMLManager(DataSetsManager):
                  retro: bool = True,
                  hp_tune: bool = True,
                  async_mode: bool = False,
-                 save_temp: bool = False,
+                 use_temp_files: bool = False,
                  model_timeout_seconds: int = None,
                  grafana_connection=None,
                  models_dict: dict=None
                  ):
-        super().__init__(config_name=models_config, extractor=extractor, external_config=external_config)
+        super().__init__(config_name=models_config, extractor=extractor,
+                         external_config=external_config, use_temp_files=use_temp_files)
         self.models_dict = models_dict
         self.timeout = model_timeout_seconds
         self._business_metric = business_metric
@@ -196,7 +198,6 @@ class AutoMLManager(DataSetsManager):
             self._compare_business_metric = BaseCompareBusinessMetric()
         self.__grafana_connection = grafana_connection
         self._async_mode = async_mode
-        self._save_temp = save_temp
         self.features_list_to_exclude = []
         self._auto_ml_config = auto_ml_config
         self._feature_selection_config = None
@@ -231,18 +232,17 @@ class AutoMLManager(DataSetsManager):
     def update_models(self, send_mail: bool = False, parameters_for_optuna: dict = None):
         self._init_logger()
         email = AutoMLReviewEMail(config=self._external_config)
-     #   try:
-        self.load_dataset()
-        self.status['Loading dataset'] = True
-        self.feature_selection()
-
-        if self._hp_tune:
-            new_hp = self.hp_tuning(parameters_for_optuna)
-            self.automl_results.new_hp = new_hp
-            self.__update_hyperparameters(new_hp)
-            self.status['HP tuning'] = True
-            self.automl_results.run_time['hp_tuning'] = datetime.now()
         try:
+
+            self.status['Loading dataset'] = True
+            self.feature_selection()
+
+            if self._hp_tune:
+                new_hp = self.hp_tuning(parameters_for_optuna)
+                self.automl_results.new_hp = new_hp
+                self.__update_hyperparameters(new_hp)
+                self.status['HP tuning'] = True
+                self.automl_results.run_time['hp_tuning'] = datetime.now()
             results = self.fit_models(models_dict=self.models_dict)
             self.status['Fitting'] = True
             self.automl_results.run_time['fitting'] = datetime.now()
@@ -297,6 +297,8 @@ class AutoMLManager(DataSetsManager):
                 new_prepared_data = feature_selector.select_features(params=self._feature_selection_config.params,
                                                                      model_name=model.name)
                 self._data_preprocessor.save_subset_to_pickle(model_name=model.name, data_subset=new_prepared_data, rewrite=True)
+
+                logger.info('Result subset saving to version||' + self._data_preprocessor._version)
                 self._data_preprocessor._use_saved_files = True
                 self.automl_results.new_features[model.name] = feature_selector.result_features
 
@@ -322,7 +324,8 @@ class AutoMLManager(DataSetsManager):
                                               scoring_fun=self._hp_tuning_config.metric_score[model.name],
                                               folds_num_for_cv=self._hp_tuning_config.cv_folds_num,
                                               objective=model.objective,
-                                              random_state=self.config.data_config.separation.random_state
+                                              random_state=self.config.data_config.separation.random_state,
+                                              work_type=self._work_type_hptune,
                                               ).best_params(model_name=model.name,
                                                             parameters_for_optuna_func=parameters_for_optuna_func,
                                                             timeout=self.timeout)
@@ -330,6 +333,7 @@ class AutoMLManager(DataSetsManager):
 
             except Exception as exc:
                 self.errors['HP tuning'] = exc
+                logger.error(str(exc))
                 logger.info('Returning {}')
         return new_hp
 
@@ -588,6 +592,22 @@ class AutoMLManager(DataSetsManager):
         if log_path.exists():
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             new_name = f"log_{timestamp}.log"
-            os.rename(log_path, log_path.parent / new_name)
+            try:
+                os.rename(log_path, log_path.parent / new_name)
+            except (PermissionError, OSError) as e:
+                # File is used by another process, create a new log file with a unique name
+                logger.warning(f"Failed to rename log.log: {e}. Creating a new file with timestamp.")
+                new_log_path = log_path.parent / new_name
+                # If a file with this name already exists, add an additional suffix
+                counter = 1
+                while new_log_path.exists():
+                    new_name = f"log_{timestamp}_{counter}.log"
+                    new_log_path = log_path.parent / new_name
+                    counter += 1
+                # Try to copy contents if possible
+                try:
+                    shutil.copy2(log_path, new_log_path)
+                except:
+                    pass  # If copying fails, just continue
 
         logger.add(Path(str(self._external_config.results_path) + '/log.log'))

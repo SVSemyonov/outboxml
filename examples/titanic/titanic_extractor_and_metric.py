@@ -51,7 +51,6 @@ def main():
                             external_config=config,
                             extractor=TitanicExampleExtractor(path_to_file=path_to_data),
                             compare_business_metric=BaseCompareBusinessMetric(),
-                            save_temp=False,
                             hp_tune=False,
                             retro=False
                             )

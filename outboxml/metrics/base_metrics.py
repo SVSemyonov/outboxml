@@ -56,9 +56,9 @@ class BaseMetrics(BaseMetric):
                                                                  (y_pred_exp > cutoff).astype(int),
                                                                  sample_weight=self._exposure), 4),
                         'recall_score': round(recall_score(self._y_true,
-                                                           (y_pred_exp > cutoff).astype(int),
+                                                           y_pred_exp,
                                                            sample_weight=self._exposure), 4),
-                        'gini': round(2 * roc_auc_score(self._y_true, (y_pred_exp > cutoff).astype(int),
+                        'gini': round(2 * roc_auc_score(self._y_true, y_pred_exp,
                                                    sample_weight=self._exposure) - 1, 4)
                         }
             elif model_type == ModelTypes.clustering:

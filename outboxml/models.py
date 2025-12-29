@@ -40,7 +40,8 @@ class DefaultModels:
                  dataset: pd.DataFrame,
                  data_subsets: Dict[str, ModelDataSubset],
                  models_configs: List[ModelConfig],
-                 baseline_model: int = 0
+                 baseline_model: int = 0,
+                 work_type_fit: str = 'CPU'
                  ):
         self.group_name = group_name
         self.dataset = dataset
@@ -48,6 +49,7 @@ class DefaultModels:
         self.models_configs = models_configs
         self.baseline_model = baseline_model
         self.models_names = []
+        self._work_type_fit = work_type_fit
 
     def load_default(self) -> dict:
         for model in self.models_configs:  # self.data_config.data.targetcolumns:
@@ -76,7 +78,8 @@ class DefaultModels:
         if not all((wrapper == '' or wrapper == None) for wrapper in wrapper_list):
 
             models_dict = ModelsWrapper(data_subsets=self.data_subsets,
-                                        models_configs=self.models_configs).models_dict()
+                                        models_configs=self.models_configs,
+                                        work_type_fit=self._work_type_fit).models_dict()
             try:
                 logger.info('Models in accordance with config||Wrapper models are setting')
             except:
@@ -98,7 +101,7 @@ class BaselineModels:
         self.model_name = model_name
         self.__model_number = model_number
 
-    def choose_model(self) -> BaseWrapperModel:
+    def choose_model(self) -> BaseEstimator:
         if self.__model_number == 1:
             model = RandomForestClassifierModel(dataset=self.__dataset,
                                                 model_name=self.model_name,
@@ -156,7 +159,7 @@ class BaseLineModel(BaseWrapperModel):
         self._model_name = model_name
         self.__strategy = strategy
 
-    def fit(self):
+    def fit(self)->BaseEstimator:
         model = DummyRegressor(strategy=self.__strategy).fit(self.__dataset.X_train, self.__dataset.y_train)
         return model
 
@@ -166,7 +169,7 @@ class GLMCatboostCombineModel(BaseWrapperModel):
             self,
             model_name: str,
             wrapper: Literal[
-                ModelsParams.glm, ModelsParams.glm_without_scaler, ModelsParams.catboost],
+                ModelsParams.glm, ModelsParams.glm_without_scaler, ModelsParams.catboost, ModelsParams.xgboost],
             min_max_scaler,
             model,
             features_numerical: Optional[List[str]] = None,
@@ -201,6 +204,13 @@ class GLMCatboostCombineModel(BaseWrapperModel):
             elif isinstance(self.model, CatBoostClassifier):
                 prediction = self.model.predict_proba(X[chain(features_numerical, features_categorical)])[:, 1]
 
+        elif self._wrapper == ModelsParams.xgboost:
+            features = list(chain(self.features_numerical, self.features_categorical))
+            if isinstance(self.model, XGBRegressor):
+                prediction = self.model.predict(X[chain(features_numerical, features_categorical)])
+            elif isinstance(self.model, XGBClassifier):
+                prediction = self.model.predict_proba(X[chain(features_numerical, features_categorical)])[:, 1]
+
         if isinstance(prediction, np.ndarray):
             prediction = pd.Series(prediction, index=X.index)
 
@@ -215,7 +225,8 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
 
                  model_config: ModelConfig,
                  sm_model: GLMCatboostCombineModel,
-                 data_subset: Any,
+                 data_subset: ModelDataSubset,
+                 work_type_fit: str='CPU',
                  ):
         self.model_config = model_config
         self.sm_model = sm_model
@@ -233,6 +244,7 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
         self._model_sm = self.sm_model.model
         self._model_ctb = None
         self._min_max_scaler = self.sm_model.min_max_scaler
+        self.work_type_fit = work_type_fit
 
     def fit(self, X=None, y=None, **params):
         if X is not None and y is not None:
@@ -300,6 +312,7 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
             y_train_ctb = y_train / y_train_pred_glm
         model_ctb = catboost_wrapper(
             objective=catboost_objective,
+            task_type=self.work_type_fit,
             **params_catboost if params_catboost else {},
         )
 
@@ -316,24 +329,25 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
 
 class ModelsWrapper(BaseWrapperModel):
 
-    def __init__(self, data_subsets:Dict[str,ModelDataSubset], models_configs: List[ModelConfig]):
+    def __init__(self, data_subsets:Dict[str,ModelDataSubset], models_configs: List[ModelConfig], work_type_fit: str = 'CPU'):
         self._data_subsets = data_subsets
         self._models_configs = models_configs
         self._models_dict = {}
-
+        self._work_type_fit = work_type_fit
     def fit(self):
         for model in self._models_configs:
             logger.info('Fitting model ' + model.name + '||' + str(model.wrapper))
             self._models_dict[model.name] = self.__fit_one_model(data_subset=self._data_subsets[model.name],
                                                                  wrapper=model.wrapper,
-                                                                 model_config=model)
+                                                                 model_config=model,
+                                                                 work_type_fit=self._work_type_fit)
 
     def models_dict(self, *params) -> Dict:
         self.fit()
         return self._models_dict
 
     @staticmethod
-    def __fit_one_model(data_subset, wrapper: str, model_config: ModelConfig):
+    def __fit_one_model(data_subset, wrapper: str, model_config: ModelConfig, work_type_fit: str = 'CPU'):
 
         # GLM Модель
         if wrapper in (ModelsParams.glm, ModelsParams.glm_without_scaler, ModelsParams.catboost_over_glm):
@@ -341,14 +355,18 @@ class ModelsWrapper(BaseWrapperModel):
             result_model = model
         # CatBoost
         elif wrapper == ModelsParams.catboost:
-            model = CatboostModel(data_subset=data_subset, model_config=model_config).fit()
+            model = CatboostModel(data_subset=data_subset, model_config=model_config, work_type_fit=work_type_fit).fit()
             result_model = model
+        # XGBoost
         elif wrapper == ModelsParams.xgboost:
-            result_model = XgboostModel(data_subset=data_subset, model_config=model_config)
-            result_model.fit()
+            device = 'cpu'
+            if work_type_fit == 'GPU':
+                device = 'cuda'
+            result_model = XgboostModel(data_subset=data_subset, model_config=model_config, work_type_fit=device).fit()
+
         # CatboostOverGlm
         if wrapper == ModelsParams.catboost_over_glm:
-            result_model = CatboostOverGLMModel(data_subset=data_subset, model_config=model_config, sm_model=model)
+            result_model = CatboostOverGLMModel(data_subset=data_subset, model_config=model_config, sm_model=model, work_type_fit=work_type_fit)
             result_model.fit()
 
         return result_model
@@ -356,7 +374,7 @@ class ModelsWrapper(BaseWrapperModel):
 
 class StatsmodelsModel(BaseWrapperModel):
 
-    def __init__(self, data_subset, model_config: ModelConfig):
+    def __init__(self, data_subset: ModelDataSubset, model_config: ModelConfig):
         self.model_name: str = data_subset.model_name
 
         self.objective: Literal[ModelsParams.poisson, ModelsParams.gamma] = model_config.objective
@@ -461,7 +479,7 @@ class StatsmodelsModel(BaseWrapperModel):
 
 class CatboostModel(BaseWrapperModel):
 
-    def __init__(self, data_subset, model_config: ModelConfig):
+    def __init__(self, data_subset, model_config: ModelConfig, work_type_fit: str = 'CPU'):
         self.model_name: str = data_subset.model_name
         self.objective: Literal[ModelsParams.poisson, ModelsParams.gamma, ModelsParams.binary] = model_config.objective
         logger.info('Model objective||' + str(self.objective))
@@ -472,6 +490,7 @@ class CatboostModel(BaseWrapperModel):
         self.features_categorical: Optional[List[str]] = data_subset.features_categorical
         self.exposure_train: Optional[pd.Series] = data_subset.exposure_train
         self.params_catboost: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = model_config.params_catboost
+        self._work_type_fit: str = work_type_fit
 
     def fit(self):
         features_numerical = self.features_numerical if self.features_numerical else []
@@ -519,6 +538,7 @@ class CatboostModel(BaseWrapperModel):
                 y_train_ctb = self.y_train
         model_ctb = catboost_wrapper(
             objective=catboost_objective,
+            task_type=self._work_type_fit,
             **self.params_catboost if self.params_catboost else {},
         )
         X_train = self.X_train.copy()
@@ -539,7 +559,7 @@ class CatboostModel(BaseWrapperModel):
                                        )
 
 class XgboostModel(BaseWrapperModel):
-    def __init__(self, data_subset, model_config: ModelConfig):
+    def __init__(self, data_subset, model_config: ModelConfig, work_type_fit: str='CPU'):
         self.model_name: str = data_subset.model_name
         self.objective: Literal[ModelsParams.poisson, ModelsParams.gamma, ModelsParams.binary] = model_config.objective
         logger.info('Model objective||' + str(self.objective))
@@ -551,6 +571,7 @@ class XgboostModel(BaseWrapperModel):
         self.exposure_train: Optional[pd.Series] = data_subset.exposure_train
         self.params_xgb: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = model_config.params_xgb
         self.model_xgb = None
+        self._work_type_fit = work_type_fit
 
     def fit(self):
         features = list(chain(self.features_numerical, self.features_categorical))
@@ -586,30 +607,25 @@ class XgboostModel(BaseWrapperModel):
         model_xgb = xgboost_wrapper(
             objective=xgboost_objective,
             enable_categorical=True,
+            device=self._work_type_fit,
             **self.params_xgb if self.params_xgb else {},
         )
 
         model_xgb.fit(self.X_train[features], y_train_xgb)
+        return GLMCatboostCombineModel(model_name=self.model_name,
+                                       wrapper=self.wrapper,
+                                       min_max_scaler=None,
+                                       model=model_xgb,
+                                       features_numerical=self.features_numerical,
+                                       features_categorical=self.features_categorical,
+                                       )
 
-        self.model_xgb = model_xgb
-
-    def predict(self, X: pd.DataFrame) -> pd.Series:
-        features = list(chain(self.features_numerical, self.features_categorical))
-        if isinstance(self.model_xgb, XGBRegressor):
-            prediction = self.model_xgb.predict(X[features])
-        elif isinstance(self.model, XGBClassifier):
-            prediction = self.model.predict_proba(X[features])[:, 1]
-
-        if isinstance(prediction, np.ndarray):
-            prediction = pd.Series(prediction, index=X.index)
-
-        return prediction
 
 class StatsModelsEstimator(RegressorMixin, BaseEstimator):
     def __init__(self,
                  sm_model,
                  model_config: ModelConfig,
-                 datasubset: Any, ):
+                 datasubset: ModelDataSubset, ):
         self.sm_model = sm_model
         self.model_config = model_config
         self.datasubset = datasubset
