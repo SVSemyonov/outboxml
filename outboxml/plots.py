@@ -28,7 +28,7 @@ class DataframeForPlots:
         pass
 
     def df_for_plots(self, result: DSManagerResult, features: list = None, 
-                     use_exposure: bool = False, only_test: bool = False) -> tuple:
+                     use_exposure: bool = False, only_test: bool = False) -> (pd.DataFrame, list, list):
         """
         Construct a dataframe with results for plotting.
         
@@ -189,7 +189,7 @@ class MLPlot:
             logger.info('Cohort plot ' + self._model1_name)
             figure = self.cohort_plot(cut_min_value, cut_max_value, samples, cohort_base)
         else:
-            raise ValueError('Unknown plot type!')
+            raise 'Unknown plot type!'
         return figure
 
     def cohort_plot(self, cut_min_value: float, cut_max_value: float, samples=100.0, cohort_base: str = 'model'):
@@ -397,7 +397,6 @@ class FactorsPlot:
         """
         y_graph = y_graph.copy()
         
-        # Plot categorical features
         for feature in features_categorical:
             if use_exposure:
                 plot_columns = [feature, 'exposure', 'y_prediction', 'y_true']
@@ -406,7 +405,6 @@ class FactorsPlot:
             y = y_graph[plot_columns].groupby(feature, observed=False).sum().sort_values(by=feature)
             y.plot(kind='bar', title=model_name, xlabel=feature)
 
-        # Plot numerical features
         for feature in features_numerical:
             if use_exposure:
                 plot_columns = [feature, 'y_prediction', 'y_true']
@@ -465,19 +463,16 @@ class MetricsPlot:
         features = features_numerical + features_categorical
 
         for feature in features:
-            # Determine which columns to include based on exposure presence
             if 'exposure' in y_graph.columns:
                 plot_columns = [feature, 'exposure', 'y_prediction', 'y_true']
             else:
                 plot_columns = [feature, 'y_prediction', 'y_true']
             
-            # Group data by feature (categorical) or bins (numerical)
             if feature in features_categorical:
                 y = y_graph[plot_columns].groupby(feature, observed=False)
             else:
                 y = y_graph[plot_columns].groupby(pd.cut(y_graph[feature], bins=bins), observed=False)
             
-            # Calculate metrics for each group
             metrics = {}
             for group, name in y:
                 if 'exposure' not in plot_columns:
@@ -486,12 +481,10 @@ class MetricsPlot:
                     exposure = name['exposure']
                 metrics[group] = BaseMetrics(name['y_true'], name['y_prediction'], exposure).calculate_metric()
             
-            # Create DataFrame from metrics and plot
             metrics_df = pd.DataFrame(metrics).transpose()
             metrics_df.index.name = str(feature)
             metrics_df.plot(title=model_name, xlabel=feature)
             
-            # Accumulate results
             metrics_res = pd.concat([metrics_res, metrics_df])
             metrics_res = pd.concat([metrics_res, metrics_df])
         
@@ -690,7 +683,7 @@ class CompareModelsPlot:
                                                 cut_max_value=cut_max_value,
                                                 samples=samples, )
         else:
-            raise ValueError('Unknown plot type')
+            raise logger.error('Unknown plot type')
         return figure
 
     def _factors_plots(self):
@@ -1030,7 +1023,7 @@ class CompareModelsPlot:
 
 class PlotlyWrapper:
     """Wrapper class for standardizing Plotly graph styles and configurations."""
-    
+   
     def __init__(self, model_name: str,
                  plotly_params: dict = None):
         """
