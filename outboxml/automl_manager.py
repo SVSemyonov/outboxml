@@ -1,6 +1,7 @@
 import json
 import os
 import pickle
+import shutil
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -591,6 +592,22 @@ class AutoMLManager(DataSetsManager):
         if log_path.exists():
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             new_name = f"log_{timestamp}.log"
-            os.rename(log_path, log_path.parent / new_name)
+            try:
+                os.rename(log_path, log_path.parent / new_name)
+            except (PermissionError, OSError) as e:
+                # File is used by another process, create a new log file with a unique name
+                logger.warning(f"Failed to rename log.log: {e}. Creating a new file with timestamp.")
+                new_log_path = log_path.parent / new_name
+                # If a file with this name already exists, add an additional suffix
+                counter = 1
+                while new_log_path.exists():
+                    new_name = f"log_{timestamp}_{counter}.log"
+                    new_log_path = log_path.parent / new_name
+                    counter += 1
+                # Try to copy contents if possible
+                try:
+                    shutil.copy2(log_path, new_log_path)
+                except:
+                    pass  # If copying fails, just continue
 
         logger.add(Path(str(self._external_config.results_path) + '/log.log'))
