@@ -19,28 +19,33 @@ from outboxml.monitoring_result import MonitoringResult, DataContext, Monitoring
 
 
 class MonitoringManager:
-    """класс для проведения процесса мониторинга для выбранной модели.
+    """
+    Orchestrator class for executing model monitoring pipeline.
 
-    Для работы необходимы два конфиг-файла:
-    конфиг мониторинга и конфиг модели. Дополнительно прописываются экстракторы для получения логов и данных с обучения.
-    Также экстрактор для экстраполяции таргета. Расчёт датадрифта производится по стандратному интерфейсу.
-    Возможна передача пользовательского интерфейса DataDrift
+    This class manages the full monitoring lifecycle:
+    loading configurations, extracting data and logs,
+    running monitoring checks, exporting results,
+    and sending notifications.
 
-    Также необходима перегрузка метода review для пользовательской формы отчета
+    Attributes
+    ----------
+    monitoring_service : MonitoringService
+        Service responsible for executing monitoring checks.
+    result : MonitoringResult
+        Object storing monitoring results.
+    logs : pandas.DataFrame or None
+        Extracted production logs.
 
-    Parameters:
-         monitoring_config: конфиг для мониторинга
-         models_config: конфиг модели для обучения
-         external_config: конфиг для почты и др. подключений
-         logs_extractor: Extractor - экстрактор логов
-         data_extractor: Extractor - экстрактор данных обучения модели
-         target_extractor: Extractor - экстрактор для экстраполяции таргета
-         monitoring_report: MonitoringReport - форма отчета для мониторина. По умолчанию отчет по датадрифту
-         target_extrapolation_models: dict - слоаврь моделей вида {model_name: TargetModel}
-         grafana_connection: подключения для загрузки данных в БД, передается в pd.to_sql()
-         business_metric: BaseMetric - Метрика для расчёта качества модели
-         email: EMailMonitoring - интерфейс для отправки письма
+    .. rubric:: Examples
 
+    Example usage::
+
+    manager = MonitoringManager(
+        monitoring_config='configs/monitoring_test_config.json',
+        models_config='configs/config_example_titanic.json',
+        data_extractor=TitanicExampleExtractor(),
+        logs_extractor=LogsExtractor()
+    )
     """
 
     def __init__(self,
@@ -54,6 +59,36 @@ class MonitoringManager:
                  business_metric: BaseMetric = None,
                  email: EMailMonitoring = None,
                  ):
+        """
+        Initializes monitoring manager.
+
+        :param monitoring_config: Monitoring configuration or path to config file.
+        :type monitoring_config: dict or str
+
+        :param models_config: Model training configuration or path to config file.
+        :type models_config: dict or str
+
+        :param external_config: External configuration (email, connections, etc.).
+        :type external_config: module or None
+
+        :param logs_extractor: Extractor for production logs.
+        :type logs_extractor: Extractor or None
+
+        :param data_extractor: Extractor for training data.
+        :type data_extractor: Extractor or None
+
+        :param target_extractor: Extractor for target extrapolation.
+        :type target_extractor: Extractor or None
+
+        :param grafana_connection: Database connection for Grafana export.
+        :type grafana_connection: Any
+
+        :param business_metric: Business metric for model quality evaluation.
+        :type business_metric: BaseMetric or None
+
+        :param email: Email interface for notifications.
+        :type email: EMailMonitoring or None
+        """
         self._monitoring_config = monitoring_config
         self._models_config = models_config
         self._target_extractor = target_extractor
@@ -87,6 +122,27 @@ class MonitoringManager:
     def review(self,
                send_mail: bool = True,
                to_grafana: bool = True) -> MonitoringResult:
+        """
+        Executes monitoring process.
+
+        This method performs the full monitoring cycle:
+        data extraction, model preparation, monitoring checks,
+        report generation, export, and notifications.
+
+        :param send_mail: Whether to send email notification.
+        :type send_mail: bool
+
+        :param to_grafana: Whether to export results to Grafana.
+        :type to_grafana: bool
+
+        :return: Monitoring result object.
+        :rtype: MonitoringResult
+
+        .. rubric:: Examples
+
+        Example usage::
+        manager.review(send_mail=True, to_grafana=True)
+        """
         if self.logs is None:
             self.logs = self._logs_extractor.extract_dataset()
             logger.debug('Logs are loaded')
@@ -138,6 +194,15 @@ class MonitoringManager:
             raise ValidationError(e)
 
     def _grafana_report(self, report: pd.DataFrame, table_name: str) -> None:
+        """
+        Exports monitoring report to Grafana database.
+
+        :param report: Monitoring report data.
+        :type report: pandas.DataFrame
+
+        :param table_name: Target database table name.
+        :type table_name: str
+        """
         try:
             GrafanaExport(df=report, connection=self.__grafana_connection,
                           table_name=table_name).load_data_to_db()
@@ -147,6 +212,12 @@ class MonitoringManager:
 
 
     def _define_dataset_name(self):
+        """
+        Determines dataset name based on data source.
+
+        :return: Dataset name.
+        :rtype: str
+        """
         if self._monitoring_config.data_source in ['csv', 'parquet']:
             dataset_name = os.path.basename(os.path.splitext(self._ds_manager.data_config.local_name_source)[0])
         else:
