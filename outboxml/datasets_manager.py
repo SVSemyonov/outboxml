@@ -60,6 +60,23 @@ class DSManagerResult:
                  predictions: dict = None,
                  metrics: dict = None,
                  ):
+        """Initialize DSManagerResult instance.
+        
+        :param model_name: Name of the model.
+        :type model_name: str
+        :param model: Trained model object.
+        :type model: Any
+        :param data_subset: Object containing train/test data subsets.
+        :type data_subset: ModelDataSubset
+        :param model_config: Configuration object for the model.
+        :type model_config: ModelConfig, optional
+        :param config: Configuration object for all models.
+        :type config: AllModelsConfig, optional
+        :param predictions: Dictionary with 'train' and 'test' keys containing predictions.
+        :type predictions: dict, optional
+        :param metrics: Dictionary with 'train' and 'test' keys containing metrics.
+        :type metrics: dict, optional
+        """
         if predictions is None:
             self.predictions = {'train': None, 'test': None}
         else:
@@ -75,16 +92,41 @@ class DSManagerResult:
         self.model_config = model_config
 
     def load_metrics(self, metrics: dict, ds_type: str = None):
+        """Load metrics into the result object.
+        
+        :param metrics: Dictionary containing metrics to load.
+        :type metrics: dict
+        :param ds_type: Dataset type ('train' or 'test'). If None, replaces all metrics.
+        :type ds_type: str, optional
+        """
         if ds_type is not None:
             self.metrics[ds_type] = metrics
         else:
             self.metrics = metrics
 
     def load_predictions(self, df: Union[pd.DataFrame, pd.Series], ds_type: str):
+        """Load predictions into the result object.
+        
+        :param df: DataFrame or Series containing predictions.
+        :type df: Union[pd.DataFrame, pd.Series]
+        :param ds_type: Dataset type ('train' or 'test').
+        :type ds_type: str
+        """
         self.predictions[ds_type] = df
 
     def dict_for_prod_export(self, ):
-        """Конверте DSManagerResult в пикл"""
+        """Convert DSManagerResult to dictionary for pickle export to production service.
+        
+        :return: Dictionary containing model configuration, model object, and feature lists.
+        :rtype: dict
+        
+        .. rubric:: Examples
+        
+        >>> result = DSManagerResult(...)
+        >>> export_dict = result.dict_for_prod_export()
+        >>> export_dict.keys()
+        dict_keys(['model_config', 'model', 'min_max_scaler', 'features_numerical', 'features_categorical'])
+        """
         model = self.model
         model_results = {
             "model_config": self.model_config.model_dump(),
@@ -98,7 +140,23 @@ class DSManagerResult:
 
     @classmethod
     def from_pickle_model_result(cls, model_result: dict, all_model_config: AllModelsConfig, ):
-        """Конвертер пикла в DSManagerResult. Используется библиотечный вид модели (wrapper)"""
+        """Convert pickle dictionary to DSManagerResult object.
+        
+        Uses library model wrapper format.
+        
+        :param model_result: Dictionary loaded from pickle file containing model data.
+        :type model_result: dict
+        :param all_model_config: Configuration object for all models.
+        :type all_model_config: AllModelsConfig
+        :return: DSManagerResult instance created from pickle data.
+        :rtype: DSManagerResult
+        
+        .. rubric:: Examples
+        
+        >>> with open('model.pickle', 'rb') as f:
+        ...     model_result = pickle.load(f)
+        >>> result = DSManagerResult.from_pickle_model_result(model_result, all_models_config)
+        """
 
         model_config = model_result['model_config']
         model_name = model_result['model_config']['name']
@@ -117,19 +175,39 @@ class DSManagerResult:
 
     @property
     def X(self):
+        """Get combined feature matrix from train and test sets.
+        
+        :return: DataFrame containing all features.
+        :rtype: pd.DataFrame
+        """
         return pd.concat([self.data_subset.X_train, self.data_subset.X_test])
 
     @property
     def y(self):
+        """Get combined target values from train and test sets.
+        
+        :return: Series containing all target values.
+        :rtype: pd.Series
+        """
         return pd.concat([self.data_subset.y_train, self.data_subset.y_test])
 
     @property
     def y_pred(self):
+        """Get combined predictions from train and test sets.
+        
+        :return: Series containing all predictions.
+        :rtype: pd.Series
+        """
         y_pred = pd.concat([self.predictions['train'], self.predictions['test']])
         return y_pred
 
     @property
     def exposure(self):
+        """Get combined exposure values from train and test sets.
+        
+        :return: Series containing all exposure values.
+        :rtype: pd.Series
+        """
         exposure = pd.concat([self.data_subset.exposure_train, self.data_subset.exposure_test])
         return exposure
 
@@ -231,6 +309,38 @@ class DataSetsManager:
             use_temp_files: bool = False,
             prepare_engine: Literal['pandas', 'polars'] = 'pandas',
     ):
+        """Initialize DataSetsManager instance.
+        
+        :param config_name: Path to config file or validated config dictionary (AllModelsConfig).
+        :type config_name: Union[str, Dict]
+        :param extractor: User-defined extractor object inheriting from Extractor interface.
+                         Main method extract_dataset() should return pandas DataFrame.
+                         Extractor should contain check_object() method for data validation.
+                         Use library RTDMExtractor or ActuarExtractor for database connections.
+        :type extractor: Optional[Extractor]
+        :param prepared_datasets: Dictionary with model names as keys and PrepareDataset objects as values.
+                                 Wrapper of prepare_dataset function. PreparedDataset by default uses
+                                 model_config features and has no prep and post prep functions.
+        :type prepared_datasets: Optional[Dict[str, PrepareDataset]]
+        :param models_dict: Dictionary with model names as keys and Model objects as values.
+                           Models should inherit from Model class and have fit(), predict() methods.
+                           By default model is chosen by group and project name.
+        :type models_dict: Optional[Dict]
+        :param business_metric: User-defined business metric inheriting from BaseMetric.
+                               Main method is calculate_metric().
+        :type business_metric: Optional[BaseMetric]
+        :param use_baseline_model: Baseline model selection. 0 - no baseline, 1 - RandomForestRegressor,
+                                   2 - DummyRegressor median, 3 - mean.
+        :type use_baseline_model: int
+        :param retro_changes: RetroDataset object for retro analysis.
+        :type retro_changes: Optional[RetroDataset]
+        :param external_config: External configuration object. If None, uses default config.
+        :type external_config: Any, optional
+        :param use_temp_files: Whether to use temporary files for data subsets.
+        :type use_temp_files: bool
+        :param prepare_engine: Engine to use for data preparation ('pandas' or 'polars').
+        :type prepare_engine: Literal['pandas', 'polars']
+        """
         if external_config is None:
             self._external_config = config
         else:
@@ -269,10 +379,20 @@ class DataSetsManager:
 
     @property
     def dataset(self):
+        """Get the loaded dataset.
+        
+        :return: DataFrame containing the loaded dataset.
+        :rtype: pd.DataFrame
+        """
         return self._data_preprocessor.dataset
 
     @property
     def config(self):
+        """Get configuration with updated model configs from results.
+        
+        :return: Deep copy of all models configuration with updated model configs.
+        :rtype: AllModelsConfig
+        """
         config_to_return = deepcopy(self._all_models_config)
         if self._results != {}:
             updated_models_configs = []
@@ -283,11 +403,35 @@ class DataSetsManager:
         return config_to_return
 
     def get_result(self) -> Dict[str, DSManagerResult]:
+        """Get dictionary of all model results.
+        
+        :return: Dictionary with model names as keys and DSManagerResult objects as values.
+        :rtype: Dict[str, DSManagerResult]
+        
+        .. rubric:: Examples
+        
+        >>> results = ds_manager.get_result()
+        >>> results['model1'].metrics
+        {'train': {...}, 'test': {...}}
+        """
         return self._results
 
     def load_dataset(self, data: pd.DataFrame = None) -> pd.DataFrame:
-        """Load data from source due to config or user-defined extractor object. Use .env file or external config for extracor
-        Also you can load dataset by parameter data"""
+        """Load data from source according to config or user-defined extractor object.
+        
+        Uses .env file or external config for extractor. Can also load dataset directly via parameter.
+        
+        :param data: Optional DataFrame to load directly. If provided, uses SimpleExtractor.
+        :type data: pd.DataFrame, optional
+        :return: Loaded dataset as DataFrame.
+        :rtype: pd.DataFrame
+        
+        .. rubric:: Examples
+        
+        >>> dataset = ds_manager.load_dataset()
+        >>> # or
+        >>> dataset = ds_manager.load_dataset(data=my_dataframe)
+        """
 
         logger.debug("Dataset loading")
         if data is not None:
@@ -297,18 +441,54 @@ class DataSetsManager:
         return data
 
     def get_subset(self, model_name):
+        """Get data subset for specified model.
+        
+        :param model_name: Name of the model. If None, uses default model name.
+        :type model_name: str, optional
+        :return: ModelDataSubset object containing train/test data for the model.
+        :rtype: ModelDataSubset
+        
+        .. rubric:: Examples
+        
+        >>> subset = ds_manager.get_subset('model1')
+        >>> subset.X_train.shape
+        (800, 10)
+        """
         if model_name is None: model_name = self._default_name
         logger.debug('Model ' + model_name + ' || Subset export')
         return self._data_preprocessor.get_subset(model_name)
 
     @property
     def data_subsets(self, ):
+        """Get all data subsets for all models.
+        
+        :return: Dictionary with model names as keys and ModelDataSubset objects as values.
+        :rtype: dict
+        """
         return self._data_preprocessor.data_subsets()
 
     def fit_models(self, models_dict: dict = None, need_fit: bool = False, model_name: str = None,
                   ) -> dict:
-        """Fitting and calculating metrics for models. If 'need_fit' option then fit methods are calling for models
-        Uf load_subsets_from_pickle option then loading previously saved datasubsets in enviroment"""
+        """Fit models and calculate metrics.
+        
+        If 'need_fit' is True, fit methods are called for models.
+        If load_subsets_from_pickle option is enabled, loads previously saved datasubsets.
+        
+        :param models_dict: Optional dictionary of models to fit. If None, uses default models.
+        :type models_dict: dict, optional
+        :param need_fit: Whether to fit models. If False, assumes models are already fitted.
+        :type need_fit: bool
+        :param model_name: Optional name of specific model to fit. If None, fits all models.
+        :type model_name: str, optional
+        :return: Dictionary with model names as keys and metrics dictionaries as values.
+        :rtype: dict
+        
+        .. rubric:: Examples
+        
+        >>> metrics = ds_manager.fit_models(need_fit=True)
+        >>> metrics['model1']['train']['full']
+        {'mae': 0.1234, 'rmse': 0.5678, 'r2': 0.9012}
+        """
 
         fitted = True
         logger.debug('Fitting model started')
@@ -363,7 +543,20 @@ class DataSetsManager:
 
 
     def check_datadrift(self, model_name: str) -> pd.DataFrame:
-        """Method for checking datadrift between train and test. Using DataDrift library"""
+        """Check data drift between train and test datasets.
+        
+        Uses DataDrift library for analysis.
+        
+        :param model_name: Name of the model to check drift for.
+        :type model_name: str
+        :return: DataFrame containing data drift analysis results.
+        :rtype: pd.DataFrame
+        
+        .. rubric:: Examples
+        
+        >>> drift_report = ds_manager.check_datadrift('model1')
+        >>> drift_report.head()
+        """
         subset = self.get_subset(model_name)
         report = DataDrift(full_calc=False).review(DataContext(X_train=subset.X_train, X_test=subset.X_test))
 
@@ -375,9 +568,25 @@ class DataSetsManager:
                       model_result=None,
                       full_output: bool = True,
                       ) -> DSManagerResult:
-        """Method for constructing DSManagerResult for external model or data.
-        Use model_result as dict from service or DSManagerResult
-        Use full_output option to get only prediction vector of full output"""
+        """Construct DSManagerResult for external model or data prediction.
+        
+        :param data: DataFrame with data to make predictions on.
+        :type data: pd.DataFrame
+        :param model_name: Name of the model to use for prediction.
+        :type model_name: str
+        :param model_result: Optional model result as dict from service or DSManagerResult object.
+                            If None, uses inner results.
+        :type model_result: dict or DSManagerResult, optional
+        :param full_output: Whether to return full output with metrics or only predictions.
+        :type full_output: bool
+        :return: DSManagerResult object containing predictions and optionally metrics.
+        :rtype: DSManagerResult
+        
+        .. rubric:: Examples
+        
+        >>> result = ds_manager.model_predict(data=new_data, model_name='model1')
+        >>> result.predictions['test'].head()
+        """
         logger.debug('Prediction for external data||' + model_name)
         if model_result is None:
             logger.info('No external model||Using inner results')
@@ -434,6 +643,15 @@ class DataSetsManager:
         return res
 
     def __get_fitted_models(self, models: dict, fitted: bool = False) -> dict:
+        """Get fitted models, fitting them if necessary.
+        
+        :param models: Dictionary of models to fit.
+        :type models: dict
+        :param fitted: Whether models are already fitted.
+        :type fitted: bool
+        :return: Dictionary of fitted models.
+        :rtype: dict
+        """
         if not fitted:
             for model_name in models.keys():
                 data_subset = self.get_subset(model_name)
@@ -441,6 +659,17 @@ class DataSetsManager:
         return models
 
     def _predict(self, model, X):
+        """Make predictions using the model.
+        
+        Handles special case for Prophet models.
+        
+        :param model: Trained model object with predict method.
+        :type model: Any
+        :param X: Feature matrix for prediction.
+        :type X: pd.DataFrame
+        :return: Series of predictions with same index as X.
+        :rtype: pd.Series
+        """
         if X is None: return None
         if type(model).__name__ == 'Prophet':
             logger.info('Prophet in work..')
@@ -455,6 +684,11 @@ class DataSetsManager:
         return prediction_series
 
     def _calculate_business_metric(self,) -> dict:
+        """Calculate business metric if business_metric is configured.
+        
+        :return: Dictionary with business metric results.
+        :rtype: dict
+        """
         metric = {}
         try:
             if self._business_metric is not None:
@@ -468,6 +702,11 @@ class DataSetsManager:
         return metric
 
     def __load_all_models_config(self):
+        """Load and validate all models configuration from file or dict.
+        
+        :raises FileNotFoundError: If config file is not found.
+        :raises ValidationError: If config validation fails.
+        """
 
         if isinstance(self._all_models_config_name, dict):
             logger.info("All models config from dict")
@@ -505,6 +744,10 @@ class DataSetsManager:
         logger.info("Config is loaded")
 
     def __load_targets_names(self):
+        """Load target column names from model configs and set random state.
+        
+        Extracts unique target and exposure column names from all model configurations.
+        """
 
         self.random_state = self.data_config.separation.random_state
 
@@ -517,6 +760,13 @@ class DataSetsManager:
         ))
 
     def __load_prepare_datasets(self):
+        """Load or create PrepareDataset objects for all models.
+        
+        Creates default PrepareDataset objects if not provided by user.
+        Supports both pandas and polars engines.
+        
+        :raises ValueError: If prepare engine is unknown.
+        """
 
         i = 0
         if self._prepare_datasets is None and self._prepare_engine == "pandas":
@@ -549,6 +799,10 @@ class DataSetsManager:
         self._default_name = list(self._prepare_datasets.keys())[0]
 
     def __load_models(self):
+        """Load default models if models_dict is not provided.
+        
+        Uses DefaultModels class to create models based on configurations.
+        """
         if self._models_dict is None:
             self._models_dict = DefaultModels(dataset=self.dataset,
                                               data_subsets=self._data_preprocessor.data_subsets(),
@@ -558,12 +812,20 @@ class DataSetsManager:
                                               work_type_fit=self._work_type_fit).load_default()
 
     def __init_retro(self):
+        """Initialize retro analysis if retro_changes is configured.
+        
+        Sets up retro dataset and modifies model configs for retro analysis.
+        """
         logger.debug('Initializing retro')
         self._retro_dataset = self._retro_changes.get_retro_dataset()
         self._models_configs = self._retro_changes.models_config_for_retro(models_config=self._models_configs,
                                                                            target_columns_names=self.targets_columns_names)
 
     def _init_dsmanager(self):
+        """Initialize DataSetsManager by loading configs, datasets, and extractors.
+        
+        This is the main initialization method called in __init__.
+        """
         logger.debug('Initializing DSManager')
         self.__load_all_models_config()
         self.__load_targets_names()

@@ -16,22 +16,61 @@ from outboxml.core.pydantic_models import DataModelConfig
 
 
 class BaseMetric(ABC):
+    """Abstract base class for metric calculation.
+    
+    All metric classes should inherit from this class and implement calculate_metric method.
+    """
 
     @abstractmethod
     def calculate_metric(self, *params) -> dict:
+        """Calculate metrics based on provided parameters.
+        
+        :param *params: Variable number of parameters depending on implementation.
+        :return: Dictionary containing calculated metrics.
+        :rtype: dict
+        """
         pass
 
 
 class BaseMetrics(BaseMetric):
+    """Class for calculating standard metrics for different model types.
+    
+    Supports regression, classification, and clustering model types.
+    Calculates metrics with optional exposure weighting.
+    """
+    
     def __init__(self,
                  y_pred: np.array,
                  y_true: np.array = None,
                  exposure=None):
+        """Initialize BaseMetrics instance.
+        
+        :param y_pred: Array of predicted values.
+        :type y_pred: np.array
+        :param y_true: Array of true values. Optional for clustering models.
+        :type y_true: np.array, optional
+        :param exposure: Array of exposure/weight values for weighted metrics.
+        :type exposure: np.array, optional
+        """
         self._y_true = y_true
         self._y_pred = y_pred
         self._exposure = exposure
 
     def calculate_metric(self, model_type: str='regression' ) -> dict:
+        """Calculate metrics based on model type.
+        
+        :param model_type: Type of model ('regression', 'classification', or 'clustering').
+        :type model_type: str
+        :return: Dictionary containing metrics specific to model type.
+        :rtype: dict
+        
+        .. rubric:: Examples
+        
+        >>> base_metrics = BaseMetrics(y_pred=pred, y_true=actual, exposure=weights)
+        >>> metrics = base_metrics.calculate_metric(model_type='regression')
+        >>> metrics
+        {'mae': 0.1234, 'rmse': 0.5678, 'r2': 0.9012}
+        """
         if self._exposure is not None:
             y_pred_exp = self._y_pred * self._exposure
         else:

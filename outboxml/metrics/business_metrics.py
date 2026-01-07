@@ -9,11 +9,28 @@ from outboxml.metrics.base_metrics import BaseMetric
 
 
 class BaseBusinessMetricConverter:
+    """Converter class for preparing data for business metric calculations.
+    
+    Handles data preparation including exposure weighting and DataFrame conversion.
+    """
+    
     def __init__(self,
                  use_exposure: bool=True):
+        """Initialize BaseBusinessMetricConverter instance.
+        
+        :param use_exposure: Whether to use exposure weighting in calculations.
+        :type use_exposure: bool
+        """
         self.use_exposure = use_exposure
 
     def _model_data(self, data, ):
+        """Extract and prepare model data for metric calculation.
+        
+        :param data: DSManagerResult object containing model predictions and data subsets.
+        :type data: DSManagerResult
+        :return: DataFrame with features, true values, predictions, and optionally exposure.
+        :rtype: pd.DataFrame
+        """
         exposure_test = data.data_subset.exposure_test
         exposure_train = data.data_subset.exposure_train
         logger.info('Collecting data for plots')
@@ -33,6 +50,24 @@ class BaseBusinessMetricConverter:
         return y_graph
 
     def convert_to_df(self, result1: dict, result2: dict = None, model_name: str = None):
+        """Convert model results to DataFrame for comparison.
+        
+        :param result1: Dictionary with model results (DSManagerResult objects).
+        :type result1: dict
+        :param result2: Optional second dictionary with model results for comparison.
+        :type result2: dict, optional
+        :param model_name: Name of the model to extract. If None, uses first key from result1.
+        :type model_name: str, optional
+        :return: DataFrame with predictions and true values for comparison.
+        :rtype: pd.DataFrame
+        
+        .. rubric:: Examples
+        
+        >>> converter = BaseBusinessMetricConverter(use_exposure=True)
+        >>> df = converter.convert_to_df(result1, result2, model_name='model1')
+        >>> df.columns
+        Index(['first_model_prediction', 'y_true', 'second_model_prediction'], dtype='object')
+        """
         if model_name is None:
             model_name = list(result1.keys())[0]
         data = deepcopy(result1[model_name])
@@ -47,12 +82,30 @@ class BaseBusinessMetricConverter:
 
 
 class BaseCompareBusinessMetric(BaseMetric):
+    """Class for comparing business metrics between two models.
+    
+    Calculates metrics with optional threshold optimization and model comparison.
+    """
+    
     def __init__(self,
                  metric_function: Callable = mean_absolute_error,
                  metric_converter: BaseBusinessMetricConverter = None,
                  calculate_threshold=True,
                  use_exposure: bool=True,
                  direction: str='minimize'):
+        """Initialize BaseCompareBusinessMetric instance.
+        
+        :param metric_function: Function to calculate the metric (e.g., mean_absolute_error).
+        :type metric_function: Callable
+        :param metric_converter: Converter object for data preparation. If None, creates default converter.
+        :type metric_converter: BaseBusinessMetricConverter, optional
+        :param calculate_threshold: Whether to automatically calculate optimal threshold.
+        :type calculate_threshold: bool
+        :param use_exposure: Whether to use exposure weighting in calculations.
+        :type use_exposure: bool
+        :param direction: Optimization direction - 'minimize' or 'maximize'.
+        :type direction: str
+        """
 
         self.metric_function = metric_function
         self._calculate_threshold = calculate_threshold
@@ -68,6 +121,25 @@ class BaseCompareBusinessMetric(BaseMetric):
             self.direction = direction
 
     def calculate_metric(self, result1: dict, result2: dict=None, threshold=[0.8, 1.2]) -> dict:
+        """Calculate business metric for model comparison.
+        
+        :param result1: Dictionary with first model results (DSManagerResult objects).
+        :type result1: dict
+        :param result2: Optional dictionary with second model results for comparison.
+        :type result2: dict, optional
+        :param threshold: Threshold values for filtering predictions. Can be list/tuple of two values or None.
+        :type threshold: list, tuple, or None
+        :return: Dictionary with metric results for both models and their difference.
+        :rtype: dict
+        :raises Exception: If threshold format is incorrect.
+        
+        .. rubric:: Examples
+        
+        >>> metric = BaseCompareBusinessMetric(metric_function=mean_absolute_error)
+        >>> result = metric.calculate_metric(result1, result2, threshold=[0.8, 1.2])
+        >>> result['difference']
+        0.05
+        """
         logger.debug('Compare business metric||Calculating')
         logger.debug('Compare business metric||'+ self.direction)
         second_model_metric_results = None
@@ -128,6 +200,25 @@ class BaseCompareBusinessMetric(BaseMetric):
         return self.result
 
     def find_threshold(self, df: pd.DataFrame, model_name: str, metric_function: Callable):
+        """Find optimal threshold value for metric calculation.
+        
+        Tests multiple threshold values and returns the one that minimizes the metric.
+        
+        :param df: DataFrame with true values and predictions.
+        :type df: pd.DataFrame
+        :param model_name: Name of the column containing predictions.
+        :type model_name: str
+        :param metric_function: Function to calculate the metric.
+        :type metric_function: Callable
+        :return: Optimal threshold value that minimizes the metric.
+        :rtype: float
+        
+        .. rubric:: Examples
+        
+        >>> threshold = metric.find_threshold(df, 'first_model_prediction', mean_absolute_error)
+        >>> threshold
+        1.15
+        """
         buckets = 100
         first_model_data = df[["y_true", model_name]]
 
