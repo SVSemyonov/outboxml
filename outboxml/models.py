@@ -22,17 +22,48 @@ from outboxml.data_subsets import ModelDataSubset
 
 
 class BaseWrapperModel(ABC):
-    """Абстрактный класс для библиотечных моделей внутри фреймворка"""
+    """
+    Abstract base class for all model wrappers inside the framework.
+
+    This class defines a common interface for all models
+    that are used within the system.
+    """
 
     @abstractmethod
     def fit(self, **params):
+        """
+        Fits the model using provided parameters.
+
+        :param params: Arbitrary keyword arguments for model fitting.
+        :type params: dict
+
+        :return: Trained model instance.
+        :rtype: Any
+        """
         pass
 
 
 class DefaultModels:
     """
-    Класс для вызова библиотечных моделей.
-    Вызывается из datasetsmanager при отсутствии пользовательских моделей на входе.
+    Factory class for loading default or baseline models.
+
+    This class is used when no custom user-defined models
+    are provided in the configuration.
+
+    Attributes
+    ----------
+    group_name : str
+        Name of the model group.
+    dataset : pandas.DataFrame
+        Full dataset used for training.
+    data_subsets : Dict[str, ModelDataSubset]
+        Prepared datasets for each model.
+    models_configs : List[ModelConfig]
+        Configuration objects for models.
+    baseline_model : int
+        Identifier of baseline model.
+    models_names : list[str]
+        Names of loaded models.
     """
 
     def __init__(self,
@@ -43,6 +74,27 @@ class DefaultModels:
                  baseline_model: int = 0,
                  work_type_fit: str = 'CPU'
                  ):
+        """
+        Initializes the default models loader.
+
+        :param group_name: Name of the model group.
+        :type group_name: str
+
+        :param dataset: Full dataset used for training.
+        :type dataset: pandas.DataFrame
+
+        :param data_subsets: Mapping of model names to prepared data subsets.
+        :type data_subsets: Dict[str, ModelDataSubset]
+
+        :param models_configs: List of model configurations.
+        :type models_configs: List[ModelConfig]
+
+        :param baseline_model: Identifier of baseline model to use.
+        :type baseline_model: int
+
+        :param work_type_fit: Hardware type used for training ("CPU" or "GPU").
+        :type work_type_fit: str
+        """
         self.group_name = group_name
         self.dataset = dataset
         self.data_subsets = data_subsets
@@ -52,6 +104,19 @@ class DefaultModels:
         self._work_type_fit = work_type_fit
 
     def load_default(self) -> dict:
+        """
+        Loads and initializes models according to configuration.
+
+        If baseline models are specified, baseline models are loaded.
+        Otherwise, wrapper-based models are initialized.
+
+        :return: Dictionary of trained models.
+        :rtype: dict
+
+        .. rubric:: Examples
+
+        >>> models = DefaultModels(...).load_default()
+        """
         for model in self.models_configs:  # self.data_config.data.targetcolumns:
             self.models_names.append(model.name)
         if self.baseline_model > 0:
@@ -93,15 +158,45 @@ class DefaultModels:
 
 
 class BaselineModels:
+    """
+    Factory for creating simple baseline models.
+
+    Attributes
+    ----------
+    model_name : str
+        Name of the model.
+    """
     def __init__(self,
                  dataset,
                  model_name: str,
                  model_number: int):
+        """
+        Initializes baseline model selector.
+
+        :param dataset: Dataset wrapper containing train data.
+        :type dataset: ModelDataSubset
+
+        :param model_name: Name of the model.
+        :type model_name: str
+
+        :param model_number: Baseline model identifier.
+        :type model_number: int
+        """
         self.__dataset = dataset
         self.model_name = model_name
         self.__model_number = model_number
 
     def choose_model(self) -> BaseEstimator:
+        """
+        Selects and trains a baseline model.
+
+        :return: Trained baseline estimator.
+        :rtype: sklearn.base.BaseEstimator
+
+        .. rubric:: Examples
+
+        >>> model = BaselineModels(dataset, "model_1", 2).choose_model()
+        """
         if self.__model_number == 1:
             model = RandomForestClassifierModel(dataset=self.__dataset,
                                                 model_name=self.model_name,
@@ -129,16 +224,38 @@ class BaselineModels:
 
 
 class RandomForestClassifierModel(BaseWrapperModel):
-    """Random forest regressor """
+    """
+    Random Forest regression model wrapper.
+
+    Attributes
+    ----------
+    _model_name : str
+        Name of the model.
+    """
 
     def __init__(self,
                  dataset, model_name: str = 'general'):
+        """
+        Initializes Random Forest model.
+
+        :param dataset: Dataset wrapper with training data.
+        :type dataset: ModelDataSubset
+
+        :param model_name: Name of the model.
+        :type model_name: str
+        """
         self.__dataset = dataset
         self._model_name = model_name
         self._models_dict = {self._model_name: None
                              }
 
     def fit(self):
+        """
+        Trains the Random Forest model.
+
+        :return: Trained RandomForestRegressor.
+        :rtype: sklearn.ensemble.RandomForestRegressor
+        """
         train_data = self.__dataset.X_train.copy()
         y_train = self.__dataset.y_train.copy()
         le = LabelEncoder()
@@ -150,21 +267,64 @@ class RandomForestClassifierModel(BaseWrapperModel):
 
 
 class BaseLineModel(BaseWrapperModel):
-    """Dummy regressor baseline"""
+    """
+    Dummy regressor baseline model.
+
+    Attributes
+    ----------
+    _model_name : str
+        Name of the model.
+    """
 
     def __init__(self,
                  dataset, model_name: str = 'general',
                  strategy: str = 'median'):
+        """
+        Initializes dummy baseline model.
+
+        :param dataset: Dataset wrapper with training data.
+        :type dataset: ModelDataSubset
+
+        :param model_name: Name of the model.
+        :type model_name: str
+
+        :param strategy: Strategy used by DummyRegressor.
+        :type strategy: str
+        """
         self.__dataset = dataset
         self._model_name = model_name
         self.__strategy = strategy
 
     def fit(self)->BaseEstimator:
+        """
+        Fits the dummy regressor.
+
+        :return: Trained DummyRegressor.
+        :rtype: sklearn.dummy.DummyRegressor
+        """
         model = DummyRegressor(strategy=self.__strategy).fit(self.__dataset.X_train, self.__dataset.y_train)
         return model
 
 
 class GLMCatboostCombineModel(BaseWrapperModel):
+    """
+    Unified prediction wrapper for GLM, CatBoost, and XGBoost models.
+
+    Attributes
+    ----------
+    model_name : str
+        Name of the model.
+    wrapper : ModelsParams
+        Type of underlying model.
+    model : Any
+        Trained underlying model instance.
+    features_numerical : list[str] or None
+        Numerical feature names.
+    features_categorical : list[str] or None
+        Categorical feature names.
+    min_max_scaler : MinMaxScaler or None
+        Scaler used for numerical features.
+    """
     def __init__(
             self,
             model_name: str,
@@ -175,6 +335,27 @@ class GLMCatboostCombineModel(BaseWrapperModel):
             features_numerical: Optional[List[str]] = None,
             features_categorical: Optional[List[str]] = None,
     ):
+        """
+        Initializes combined model wrapper.
+
+        :param model_name: Name of the model.
+        :type model_name: str
+
+        :param wrapper: Model wrapper type.
+        :type wrapper: ModelsParams
+
+        :param min_max_scaler: Scaler used for numerical features.
+        :type min_max_scaler: sklearn.preprocessing.MinMaxScaler or None
+
+        :param model: Trained underlying model.
+        :type model: Any
+
+        :param features_numerical: List of numerical feature names.
+        :type features_numerical: list[str] or None
+
+        :param features_categorical: List of categorical feature names.
+        :type features_categorical: list[str] or None
+        """
         self.model_name = model_name
         self._wrapper = wrapper
         self.min_max_scaler = min_max_scaler
@@ -183,6 +364,19 @@ class GLMCatboostCombineModel(BaseWrapperModel):
         self.features_categorical = features_categorical
 
     def predict(self, X: pd.DataFrame) -> pd.Series:
+        """
+        Generates predictions for the given dataset.
+
+        :param X: Input features.
+        :type X: pandas.DataFrame
+
+        :return: Model predictions.
+        :rtype: pandas.Series
+
+        .. rubric:: Examples
+
+        >>> preds = model.predict(df)
+        """
         features_numerical = self.features_numerical if self.features_numerical else []
         features_categorical = self.features_categorical if self.features_categorical else []
 
@@ -221,6 +415,19 @@ class GLMCatboostCombineModel(BaseWrapperModel):
 
 
 class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
+    """
+    Hybrid model that trains CatBoost on top of GLM predictions.
+
+    This model uses a previously trained GLM as a baseline and
+    fits a CatBoost model to learn multiplicative corrections.
+
+    Attributes
+    ----------
+    model_config : ModelConfig
+        Configuration of the model.
+    work_type_fit : str
+        Hardware type used for training.
+    """
     def __init__(self,
 
                  model_config: ModelConfig,
@@ -228,6 +435,21 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
                  data_subset: ModelDataSubset,
                  work_type_fit: str='CPU',
                  ):
+        """
+        Initializes CatBoost-over-GLM model.
+
+        :param model_config: Configuration object for the model.
+        :type model_config: ModelConfig
+
+        :param sm_model: Trained GLM wrapper model.
+        :type sm_model: GLMCatboostCombineModel
+
+        :param data_subset: Dataset subset used for training.
+        :type data_subset: ModelDataSubset
+
+        :param work_type_fit: Hardware type used for training ("CPU" or "GPU").
+        :type work_type_fit: str
+        """
         self.model_config = model_config
         self.sm_model = sm_model
         self.data_subset = data_subset
@@ -247,6 +469,25 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
         self.work_type_fit = work_type_fit
 
     def fit(self, X=None, y=None, **params):
+        """
+        Fits CatBoost model using GLM predictions as a baseline.
+
+        :param X: Optional training features.
+        :type X: pandas.DataFrame or None
+
+        :param y: Optional target values.
+        :type y: pandas.Series or None
+
+        :param params: Additional CatBoost parameters.
+        :type params: dict
+
+        :return: None
+        :rtype: None
+
+        .. rubric:: Examples
+
+        >>> model.fit()
+        """
         if X is not None and y is not None:
             self._X_train = X
             self._y_train = y
@@ -270,6 +511,19 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
         logger.debug('Wrapper model||Catboost over glm is fitted')
 
     def predict(self, X):
+        """
+        Generates predictions using GLM baseline multiplied by CatBoost correction.
+
+        :param X: Input features.
+        :type X: pandas.DataFrame
+
+        :return: Final model predictions.
+        :rtype: pandas.Series
+
+        .. rubric:: Examples
+
+        >>> preds = model.predict(df)
+        """
         glm_prediction = self.__predict_glm(X)
 
         prediction = glm_prediction * self._model_ctb.predict(
@@ -328,8 +582,31 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
 
 
 class ModelsWrapper(BaseWrapperModel):
+    """
+    Factory class for fitting multiple models based on configuration.
 
+    Attributes
+    ----------
+    _data_subsets : Dict[str, ModelDataSubset]
+        Prepared datasets for each model.
+    _models_configs : List[ModelConfig]
+        Configuration objects for models.
+    _models_dict : dict
+        Dictionary of trained models.
+    """
     def __init__(self, data_subsets:Dict[str,ModelDataSubset], models_configs: List[ModelConfig], work_type_fit: str = 'CPU'):
+        """
+        Initializes models wrapper.
+
+        :param data_subsets: Mapping of model names to datasets.
+        :type data_subsets: Dict[str, ModelDataSubset]
+
+        :param models_configs: List of model configurations.
+        :type models_configs: List[ModelConfig]
+
+        :param work_type_fit: Hardware type used for training.
+        :type work_type_fit: str
+        """
         self._data_subsets = data_subsets
         self._models_configs = models_configs
         self._models_dict = {}
@@ -343,6 +620,12 @@ class ModelsWrapper(BaseWrapperModel):
                                                                  work_type_fit=self._work_type_fit)
 
     def models_dict(self, *params) -> Dict:
+        """
+        Fits all configured models and returns them.
+
+        :return: Dictionary of trained models.
+        :rtype: dict
+        """
         self.fit()
         return self._models_dict
 
@@ -373,8 +656,33 @@ class ModelsWrapper(BaseWrapperModel):
 
 
 class StatsmodelsModel(BaseWrapperModel):
+    """
+    Wrapper for fitting Generalized Linear Models (GLM) using statsmodels.
+
+    Attributes
+    ----------
+    model_name : str
+        Name of the model.
+    objective : ModelsParams
+        Objective function of the model.
+    wrapper : ModelsParams
+        Wrapper type.
+    features_numerical : list[str] or None
+        Numerical features.
+    features_categorical : list[str] or None
+        Categorical features.
+    """
 
     def __init__(self, data_subset: ModelDataSubset, model_config: ModelConfig):
+        """
+        Initializes statsmodels GLM wrapper.
+
+        :param data_subset: Dataset subset containing training data.
+        :type data_subset: ModelDataSubset
+
+        :param model_config: Model configuration.
+        :type model_config: ModelConfig
+        """
         self.model_name: str = data_subset.model_name
 
         self.objective: Literal[ModelsParams.poisson, ModelsParams.gamma] = model_config.objective
@@ -395,6 +703,16 @@ class StatsmodelsModel(BaseWrapperModel):
             self.__stats_models_params = self.glm_params
 
     def fit(self):
+        """
+        Fits a GLM model using statsmodels and returns a unified wrapper.
+
+        :return: Wrapped GLM model with unified predict interface.
+        :rtype: GLMCatboostCombineModel
+
+        .. rubric:: Examples
+
+        >>> glm_model = StatsmodelsModel(ds, config).fit()
+        """
         features_numerical = self.features_numerical if self.features_numerical else []
         features_categorical = self.features_categorical if self.features_categorical else []
 
@@ -478,8 +796,31 @@ class StatsmodelsModel(BaseWrapperModel):
 
 
 class CatboostModel(BaseWrapperModel):
+    """
+    Wrapper for training CatBoost models.
 
+    Attributes
+    ----------
+    model_name : str
+        Name of the model.
+    objective : ModelsParams
+        Objective function.
+    wrapper : ModelsParams
+        Wrapper type.
+    """
     def __init__(self, data_subset, model_config: ModelConfig, work_type_fit: str = 'CPU'):
+        """
+        Initializes CatBoost model wrapper.
+
+        :param data_subset: Dataset subset with training data.
+        :type data_subset: ModelDataSubset
+
+        :param model_config: Model configuration.
+        :type model_config: ModelConfig
+
+        :param work_type_fit: Hardware type used for training ("CPU" or "GPU").
+        :type work_type_fit: str
+        """
         self.model_name: str = data_subset.model_name
         self.objective: Literal[ModelsParams.poisson, ModelsParams.gamma, ModelsParams.binary] = model_config.objective
         logger.info('Model objective||' + str(self.objective))
@@ -493,6 +834,16 @@ class CatboostModel(BaseWrapperModel):
         self._work_type_fit: str = work_type_fit
 
     def fit(self):
+        """
+        Fits CatBoost model and returns unified wrapper.
+
+        :return: Wrapped CatBoost model.
+        :rtype: GLMCatboostCombineModel
+
+        .. rubric:: Examples
+
+        >>> model = CatboostModel(ds, config).fit()
+        """
         features_numerical = self.features_numerical if self.features_numerical else []
         features_categorical = self.features_categorical if self.features_categorical else []
 
@@ -559,7 +910,31 @@ class CatboostModel(BaseWrapperModel):
                                        )
 
 class XgboostModel(BaseWrapperModel):
+    """
+    Wrapper for training XGBoost models.
+
+    Attributes
+    ----------
+    model_name : str
+        Name of the model.
+    objective : ModelsParams
+        Objective function.
+    wrapper : ModelsParams
+        Wrapper type.
+    """
     def __init__(self, data_subset, model_config: ModelConfig, work_type_fit: str='CPU'):
+        """
+        Initializes XGBoost model wrapper.
+
+        :param data_subset: Dataset subset with training data.
+        :type data_subset: ModelDataSubset
+
+        :param model_config: Model configuration.
+        :type model_config: ModelConfig
+
+        :param work_type_fit: Device type ("cpu" or "cuda").
+        :type work_type_fit: str
+        """
         self.model_name: str = data_subset.model_name
         self.objective: Literal[ModelsParams.poisson, ModelsParams.gamma, ModelsParams.binary] = model_config.objective
         logger.info('Model objective||' + str(self.objective))
@@ -574,6 +949,16 @@ class XgboostModel(BaseWrapperModel):
         self._work_type_fit = work_type_fit
 
     def fit(self):
+        """
+        Fits XGBoost model and returns unified wrapper.
+
+        :return: Wrapped XGBoost model.
+        :rtype: GLMCatboostCombineModel
+
+        .. rubric:: Examples
+
+        >>> model = XgboostModel(ds, config).fit()
+        """
         features = list(chain(self.features_numerical, self.features_categorical))
         if self.wrapper == ModelsParams.xgboost and self.objective == ModelsParams.poisson:
             xgboost_wrapper = XGBRegressor
@@ -622,10 +1007,32 @@ class XgboostModel(BaseWrapperModel):
 
 
 class StatsModelsEstimator(RegressorMixin, BaseEstimator):
+    """
+    scikit-learn compatible estimator for statsmodels GLM.
+
+    Attributes
+    ----------
+    model_config : ModelConfig
+        Model configuration.
+    datasubset : ModelDataSubset
+        Dataset subset.
+    """
     def __init__(self,
                  sm_model,
                  model_config: ModelConfig,
                  datasubset: ModelDataSubset, ):
+        """
+        Initializes sklearn-compatible statsmodels estimator.
+
+        :param sm_model: statsmodels GLM constructor.
+        :type sm_model: callable
+
+        :param model_config: Model configuration.
+        :type model_config: ModelConfig
+
+        :param datasubset: Dataset subset.
+        :type datasubset: ModelDataSubset
+        """
         self.sm_model = sm_model
         self.model_config = model_config
         self.datasubset = datasubset
@@ -633,6 +1040,15 @@ class StatsModelsEstimator(RegressorMixin, BaseEstimator):
         self._model = None
 
     def predict(self, X):
+        """
+        Generates predictions for input data.
+
+        :param X: Input features.
+        :type X: pandas.DataFrame
+
+        :return: Predictions.
+        :rtype: pandas.Series
+        """
         features_numerical = self.datasubset.features_numerical if self.datasubset.features_numerical else []
         features_categorical = self.datasubset.features_categorical if self.datasubset.features_categorical else []
 
@@ -642,6 +1058,21 @@ class StatsModelsEstimator(RegressorMixin, BaseEstimator):
         return prediction
 
     def fit(self, X, y, **params):
+        """
+        Fits GLM model using sklearn-style interface.
+
+        :param X: Training features.
+        :type X: pandas.DataFrame
+
+        :param y: Target values.
+        :type y: pandas.Series
+
+        :param params: Additional fitting parameters.
+        :type params: dict
+
+        :return: Trained model.
+        :rtype: statsmodels.genmod.generalized_linear_model.GLMResults
+        """
         X_train = X.copy()
         X = X_train
         if self.model_config.objective is not None:
