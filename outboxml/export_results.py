@@ -20,65 +20,33 @@ from outboxml.core.utils import save_results
 
 class ResultExport:
     """
-    Module for results export.
-
-    Основной модуль выгрузки и обработки основных результатов расчёта и моделирования.
-    Может использоваться для сравнения моделей, в т.ч. для ретро. Использует компоненты из библиотеки plots
-
-    from outboxml.plots import MLPlot, CompareModelsPlot, PlotlyWrapper, CompareModelsMetrics
-
-
-    Parameters:
-    -------------
-    ds_manager: DataSetsManager object with results (after called fit_models() method)
-    ds_manager_to_compare: another DataSetsManager object with results (after called fit_models() method)
-    config: external config with passwords, logins, path to save and folders. By default .env is used
-    ------------
-
-    Methods:
-    ------------
-    save(to_pickle: bool=False,  path_to_save: pathlib.Path,  to_mlflow: bool = False, save_ds_manager: bool = False):
-                method for saving main results for all models and targets.
-                Saving metrics in excel for train and test, predictions in parquet,
-                 model configs in json, model in pickle, ds_manager in pickle, artefacts to mlflow
-
-    df_for_graphs(DSManagerResult, model_name: str, features: list[str]=['All'], plot_category: int = 1, bins_for_numerical_features: int = 5,
-            use_exposure: bool = False)
-
-    plots(model_name: str, features: list[str]=['All'], plot_category: int = 1, bins_for_numerical_features: int = 5,
-            use_exposure: bool = False, user_plot_func=None):
-
-            method for plotting fact/model result for chosen model with exposure for chosen features.
-            If plot category = 1: factors plot
-            if plot category = 0: main metrics plot
-            If plot category = 2: cohort plot
-
-            You can use custom function for plot. See plots() info for details
-
-    compare_metrics(model_name: str, ds_manager_result: DSManagerResult=None)
-    compare_models_plot( model_name: str,
-                            features: list[str] = None,
-                            plot_type: int = 1,
-                            bins_for_numerical_features: int = 5,
-                            use_exposure: bool = True,
-                            show: bool = True,
-                            user_plot_func=None,
-                            cut_min_value: float = 0.01,
-                            cut_max_value: float = 0.8,
-                            samples: float = 100,
-                            cohort_base: str = 'model1',
-                            ds_manager_result: DSManagerResult = None)
-    loss_plot - график убыточности
-    compare_loss_plot - графики убыточности моделей
-
+    Main module for exporting and processing calculation and model results, including metrics and plots.
+    Can be used for model comparison and retrospective analysis. 
+    
+    :param ds_manager: DataSetsManager object with results (after calling fit_models() method)
+    :type ds_manager: DataSetsManager
+    :param ds_manager_to_compare: Another DataSetsManager object with results for comparison
+    :type ds_manager_to_compare: DataSetsManager, optional
+    :param config: External config file with passwords, logins, paths to save and folders.
+                   Uses .env by default
+    :type config: .py, optional
     """
 
     def __init__(self,
                  ds_manager: DataSetsManager,
                  ds_manager_to_compare: DataSetsManager = None,
-                 config=None,
-                 ):
+                 config=None):
+        """
+        Initialize ResultExport class.
 
+        :param ds_manager: DataSetsManager object with results (after calling fit_models() method)
+        :type ds_manager: DataSetsManager
+        :param ds_manager_to_compare: Another DataSetsManager object with results for comparison
+        :type ds_manager_to_compare: DataSetsManager, optional
+        :param config: External config file with passwords, logins, paths to save and folders.
+                       Uses .env by default
+        :type config: .py, optional
+        """
         self._ds_manager = ds_manager
         self.result = None
         self.project_name = None  # self._ds_manager.config.project
@@ -108,6 +76,14 @@ class ResultExport:
             logger.debug(str(self.project_name_to_compare) + '||Results from DS_manager read')
 
     def __prepare_results(self, result: DSManagerResult):
+        """
+        Prepare results for processing.
+
+        :param result: DSManagerResult object to prepare
+        :type result: DSManagerResult
+        :return: Prepared result
+        :rtype: DSManagerResult
+        """
         return result
 
     def save(self, to_pickle: bool = False,
@@ -115,10 +91,25 @@ class ResultExport:
              to_mlflow: bool = False,
              save_ds_manager: bool = False,
              ds_manager_name: str = 'ds_manager'):
-        """Save results for production. Metrics in xlsx, preidctions in parquet, models in pickle, configs in json
-        use to_pickle for model saving
-        path_to_save - path in Path() format
-       """
+        """
+        Save results for production.
+
+        Saves metrics in Excel, predictions in Parquet, models in pickle, and configs in JSON.
+
+        :param to_pickle: Whether to save models in pickle format, defaults to False
+        :type to_pickle: bool, optional
+        :param path_to_save: Path for saving results, defaults to None (uses config path)
+        :type path_to_save: Path, optional
+        :param to_mlflow: Whether to save artifacts to MLflow, defaults to False
+        :type to_mlflow: bool, optional
+        :param save_ds_manager: Whether to save ds_manager object, defaults to False
+        :type save_ds_manager: bool, optional
+        :param ds_manager_name: Name for ds_manager file, defaults to 'ds_manager'
+        :type ds_manager_name: str, optional
+
+        :raises FileNotFoundError: If saving path does not exist
+        :raises PermissionError: If no write permissions to the path
+        """
         if path_to_save is None:
             path_to_save = self.config.results_path
             logger.info('Saving due to config file||Check config carefully')
@@ -187,13 +178,22 @@ class ResultExport:
                         only_main: bool = True,
                         ) -> pd.DataFrame:
         """
-        Return dataframe with metrics of models and show it on plot
-        model_name: target name
-        ds_manager_result: DSManagerResult object after DataSetsManager.get_results() method.
-                            If not ds_manager_to_compare in init of class
-        business_metric: User-defined metric to calculate. (from outboxml.metrics.metrics import BaseMetric)
-        """
+        Return dataframe with metrics of models and show it on plot.
 
+        :param model_name: Model name from models_configs
+        :type model_name: str
+        :param ds_manager_result: Dict with results after DataSetsManager.get_results() method.
+                                  If not provided, uses ds_manager_to_compare from initialization
+        :type ds_manager_result: dict, optional
+        :param business_metric: User-defined metric to calculate
+        :type business_metric: BaseMetric, optional
+        :param only_main: Whether to show only main metrics, defaults to True
+        :type only_main: bool, optional
+
+        :return: DataFrame with comparison metrics
+        :rtype: pd.DataFrame
+
+        """
         if ds_manager_result is None and self.result_to_compare is None:
             raise ('No results to compare!')
         if ds_manager_result:
@@ -223,19 +223,40 @@ class ResultExport:
                             ds_manager_result: dict = None,
                             plotly_params=None,
                             only_test: bool = True):
-        """Return figures with y fact, yPredict for two models and selected features
+        """
+        Return figures with y True and y Predictions for two models and selected features.
 
-             model_name: target for plotting
-            plot_category:   0=metrics plot; 1=factors plot; 2=cohort plot; 3=relative models plot
-            bins_for_numerical_features = number of cutting buns for numerical feature
-            use_exposure: use exposure vector for calculating frequency and severity models and showing on plots
-            user_plot_func: user-defined function in form of func(df1, df2, model_name, features_categorical, features_numerical, bins_for_numerical_features)
-                            where df if full dataframe with features, 'y_prediction', 'y_true' and 'exposure'
+        :param model_name: Model name from models_configs
+        :type model_name: str
+        :param features: List of features to analyze, defaults to None
+        :type features: list, optional
+        :param plot_type: Plot type: 0=metrics plot; 1=factors plot; 2=cohort plot; 3=relative models plot,
+                         defaults to 1
+        :type plot_type: int, optional
+        :param bins_for_numerical_features: Number of bins for numerical features, defaults to 5
+        :type bins_for_numerical_features: int, optional
+        :param use_exposure: Use exposure vector from column_exposure, defaults to True
+        :type use_exposure: bool, optional
+        :param user_plot_func: User-defined plotting function, defaults to None
+        :type user_plot_func: callable, optional
+        :param cut_min_value: Lower quantile for cutting in cohort plot, defaults to 0.01
+        :type cut_min_value: float, optional
+        :param cut_max_value: Upper quantile for cutting in cohort plot, defaults to 0.9
+        :type cut_max_value: float, optional
+        :param samples: Number of samples for grouping in cohort plot, defaults to 100
+        :type samples: float, optional
+        :param cohort_base: Base line for cohort plot ('model1', 'model2' or 'fact'), defaults to 'model1'
+        :type cohort_base: str, optional
+        :param ds_manager_result: DataSetsManager.get_results() dict for comparison, defaults to None
+        :type ds_manager_result: dict, optional
+        :param plotly_params: Parameters for Plotly visualization, defaults to None
+        :type plotly_params: dict, optional
+        :param only_test: Use only test data, defaults to True
+        :type only_test: bool, optional
 
-            cut_min_value: quantile lower number for cutting for cohort plot
-            cut_max_value: quantile max number for cutting for cohort plot
-            samples: number of samples for grouping in cohort plot
-            cohort_base: 'model1', 'model2' or 'fact' for default line in cohort plot
+        :return: Plotly figure object
+        :rtype: plotly.graph_objects.Figure
+
         """
         if ds_manager_result is None and self.result_to_compare is None:
             raise ('No results to compare!')
@@ -277,8 +298,17 @@ class ResultExport:
             return figure
 
     def grafana_export(self, project_name: str = None, date_time=datetime.now()):
-        """DataFrame with all metrics of model for grafana export.
-         Use project_name for formating table (casco by default). Add date_time optionally"""
+        """
+        Create DataFrame with all model metrics for Grafana export.
+
+        :param project_name: Project name for formatting table, defaults to None
+        :type project_name: str, optional
+        :param date_time: Date and time for the export, defaults to current datetime
+        :type date_time: datetime, optional
+
+        :return: DataFrame formatted for Grafana
+        :rtype: pd.DataFrame
+        """
         df_for_grafana = pd.DataFrame()
 
         logger.info('Collecting data for Grafana')
@@ -294,12 +324,25 @@ class ResultExport:
         df_for_grafana['CALCULATION_DATETIME'] = date_time
         df_for_grafana = df_for_grafana.rename(columns={'index': 'TARGET_SLICE'})
         return df_for_grafana
+
     @staticmethod
     def df_for_graphs(result: DSManagerResult, features: list = None, use_exposure: bool = False,
                       only_test: bool = True) -> \
-            (pd.DataFrame, list, list):
+                     (pd.DataFrame, list, list):
         """
-        method for constructing dataframe with results, and lists of features names (features, y_true and y_prediction, exposure)
+        Construct dataframe with results and lists of feature names.
+
+        :param result: DSManagerResult object
+        :type result: DSManagerResult
+        :param features: List of features to include, defaults to None
+        :type features: list, optional
+        :param use_exposure: Use exposure vector, defaults to False
+        :type use_exposure: bool, optional
+        :param only_test: Use only test data, defaults to True
+        :type only_test: bool, optional
+
+        :return: Tuple containing (dataframe, categorical_features, numerical_features)
+        :rtype: tuple[pd.DataFrame, list, list]
         """
         y_graph, features_categorical, features_numerical = DataframeForPlots().df_for_plots(result=result,
                                                                                              features=features,
@@ -309,9 +352,21 @@ class ResultExport:
 
     def metrics_df(self, model_name: str, metrics_dict: dict = None, train_test: str = 'train',
                   business_metric: BaseMetric = None) -> pd.DataFrame:
-        """Method for constricting dataframe with metrics. By default usinf ds_manager result.
-         Also you can you external metrics_dict.
-         """
+        """
+        Construct dataframe with metrics.
+
+        :param model_name: Model name for metrics extraction
+        :type model_name: str
+        :param metrics_dict: External metrics dictionary, defaults to None
+        :type metrics_dict: dict, optional
+        :param train_test: Test or train data, defaults to 'train'
+        :type train_test: str, optional
+        :param business_metric: User-defined business metric, defaults to None
+        :type business_metric: BaseMetric, optional
+
+        :return: DataFrame with metrics
+        :rtype: pd.DataFrame
+        """
         logger.info('Preparing metrics for ' + model_name)
         if metrics_dict is None:
             metrics_dict = self.result[model_name].metrics[train_test]
@@ -334,20 +389,37 @@ class ResultExport:
               samples: int = 100,
               cohort_base: str = 'model',
               only_test: bool = True,
-              plotly_params: dict = None,
-              ):
-        """Plot results for chosen model and features
-        model_name: target for plotting
-        plot_type:  0= metrics plot;  1=factors plot; 2=cohort plot
-        bins_for_numerical_features = number of cutting buns for numerical feature
-        use_exposure: use exposure vector for calculating frequency and severity models and showing on plots
-        user_plot_func: user-defined function in form of func(df, model_name, features, bins_for_numerical_features)
-                        where df if full dataframe with features, 'y_prediction', 'y_true' and 'exposure'
+              plotly_params: dict = None):
+        """
+        Plot results for chosen model and features.
 
-        cut_min_value: quantile lower number for cutting for cohort plot
-        cut_max_value: quantile max number for cutting for cohort plot
-        samples: number of samples for grouping in cohort plot
-        cohort_base: 'model' or 'fact' for default line in cohort plot
+        :param model_name: Model name from models_configs
+        :type model_name: str
+        :param features: List of features to analyze, defaults to None
+        :type features: list, optional
+        :param plot_type: Plot type: 0=metrics plot; 1=factors plot; 2=cohort plot, defaults to 1
+        :type plot_type: int, optional
+        :param bins_for_numerical_features: Number of bins for numerical features, defaults to 5
+        :type bins_for_numerical_features: int, optional
+        :param use_exposure: Use exposure vector from column_exposure, defaults to True
+        :type use_exposure: bool, optional
+        :param user_plot_func: User-defined plotting function, defaults to None
+        :type user_plot_func: callable, optional
+        :param cut_min_value: Lower quantile for cutting in cohort plot, defaults to 0.01
+        :type cut_min_value: float, optional
+        :param cut_max_value: Upper quantile for cutting in cohort plot, defaults to 0.9
+        :type cut_max_value: float, optional
+        :param samples: Number of samples for grouping in cohort plot, defaults to 100
+        :type samples: int, optional
+        :param cohort_base: Base line for cohort plot ('model' or 'fact'), defaults to 'model'
+        :type cohort_base: str, optional
+        :param only_test: Use only test data, defaults to True
+        :type only_test: bool, optional
+        :param plotly_params: Parameters for Plotly visualization, defaults to None
+        :type plotly_params: dict, optional
+
+        :return: Plotly figure object
+        :rtype: plotly.graph_objects.Figure
         """
         bins = bins_for_numerical_features
         if bins_for_numerical_features is not None and features is not None:
@@ -382,12 +454,36 @@ class ResultExport:
             return figure
 
     def __save_to_pickle(self, path_to_save, model, model_name: str):
+        """
+        Save model to pickle file.
+
+        :param path_to_save: Path to save the model
+        :type path_to_save: str
+        :param model: Model object to save
+        :type model: object
+        :param model_name: Name of the model
+        :type model_name: str
+        """
         model_path = os.path.join(path_to_save, f"{model_name}.pickle")
         with open(model_path, "wb") as f:
             pickle.dump(model, f)
             logger.info(model_name + ' to pickle')
 
     def __save_metrics_to_excel(self, metrics: dict, model_name: str, key: str, path, to_mlflow: bool = False):
+        """
+        Save metrics to Excel file.
+
+        :param metrics: Metrics dictionary
+        :type metrics: dict
+        :param model_name: Model name
+        :type model_name: str
+        :param key: Key identifier
+        :type key: str
+        :param path: Path to save the file
+        :type path: str
+        :param to_mlflow: Whether to save to MLflow, defaults to False
+        :type to_mlflow: bool, optional
+        """
         df = {}
         if metrics is None:
             logger.info('No metrics for model||' + model_name)
@@ -402,11 +498,38 @@ class ResultExport:
 
     def __save_predictions(self, y_true, prediction: pd.DataFrame, model_name: str, key: str, path=None,
                            x: pd.DataFrame = None):
+        """
+        Save predictions to dataframe.
 
+        :param y_true: True values
+        :type y_true: pd.Series
+        :param prediction: Predictions
+        :type prediction: pd.DataFrame
+        :param model_name: Model name
+        :type model_name: str
+        :param key: Key identifier
+        :type key: str
+        :param path: Path to save, defaults to None
+        :type path: str, optional
+        :param x: Features, defaults to None
+        :type x: pd.DataFrame, optional
+
+        :return: Combined dataframe with features, true values, and predictions
+        :rtype: pd.DataFrame
+        """
         df = pd.concat([x, y_true, prediction], axis=1)
         return df
 
     def __read_config_target_slices(self, model_name: str) -> tuple:
+        """
+        Read targetslices features from model config.
+
+        :param model_name: Model name to get configuration for
+        :type model_name: str
+
+        :return: Tuple containing (features list, bins)
+        :rtype: tuple[list, int]
+        """
         try:
             features = []
             features_list = self.result[model_name].config.data_config.data.targetslices
@@ -422,30 +545,51 @@ class ResultExport:
 
 class GrafanaExport:
     """
-    Class for export data to grafana db (Motor.grafana.table_name)
+    Class for exporting data to Grafana database.
 
-    Parameters:
-    -----------
-        df: data to export
-        table_name: table_name to replace data
-        connection: user connection engine. By default sqlalchemy MSSQL engine
-    ----------
-    Methods:
-        load_data_to_db: loading dataframe to grafana source
+    This class facilitates exporting pandas DataFrames to a specified table
+    in a Grafana-compatible database
+
+    :param df: DataFrame containing data to export
+    :type df: pd.DataFrame
+    :param table_name: Name of the database table to replace/append data, defaults to 'FrameworkTest'
+    :type table_name: str, optional
+    :param schema: Database schema name, defaults to 'public'
+    :type schema: str, optional
+    :param connection: Custom SQLAlchemy engine connection, defaults to None (uses env config)
+    :type connection: sqlalchemy.engine.Engine, optional
+
+    :raises ValueError: If the input DataFrame is empty
+    :raises Exception: If database connection fails
     """
 
     def __init__(self,
                  df: pd.DataFrame,
                  table_name: str = 'FrameworkTest',
-                 schema: str = 'public', #TODO None
+                 schema: str = 'public',  # TODO: Consider making None
                  connection=None):
+        """
+        Initialize GrafanaExport instance.
+
+        :param df: DataFrame containing data to export
+        :type df: pd.DataFrame
+        :param table_name: Name of the database table to replace/append data, defaults to 'FrameworkTest'
+        :type table_name: str, optional
+        :param schema: Database schema name, defaults to 'public'
+        :type schema: str, optional
+        :param connection: Custom SQLAlchemy engine connection, defaults to None (uses env config)
+        :type connection: sqlalchemy.engine.Engine, optional
+
+        :raises Exception: If database connection fails
+        """
         self.df = df
         if self.df.empty:
             raise logger.error('Empty dataframe to load')
         self.table_name = table_name
         self.schema = schema
         self.__connection = None
-        logger.debug('Connecting to  db..')
+        
+        logger.debug('Connecting to db...')
         if connection is not None:
             self.__connection = connection
         else:
@@ -453,7 +597,34 @@ class GrafanaExport:
         logger.debug('Connection completed')
 
     def load_data_to_db(self):
-        """"Method for loading data to grafana database using params from .env config"""
+        """
+        Load data to Grafana database using parameters from external config.
+
+        This method appends the DataFrame data to the specified table in the database.
+        If the table doesn't exist, it will be created automatically.
+
+        .. warning::
+            Uses `if_exists='append'` which will add data to existing tables without
+            clearing previous data. Consider table size implications.
+
+        :return: None
+        :rtype: None
+
+        :raises sqlalchemy.exc.SQLAlchemyError: If database operation fails
+        :raises ValueError: If DataFrame contains unsupported data types
+        :raises Exception: For other unexpected errors during database operations
+
+
+        Example:
+            >>> df = pd.DataFrame({'metric': [1, 2, 3], 'value': [10, 20, 30]})
+            >>> exporter = GrafanaExport(df, table_name='metrics')
+            >>> exporter.load_data_to_db()
+            Data loaded successfully
+        """
         logger.debug('Loading data to db..')
-        self.df.to_sql(self.table_name, schema=self.schema, con=self.__connection, if_exists='append', index=False)
+        self.df.to_sql(self.table_name, 
+                      schema=self.schema, 
+                      con=self.__connection, 
+                      if_exists='append', 
+                      index=False)
         logger.debug('Loading finished')
