@@ -8,7 +8,7 @@ class TestEnsemble(TestCase):
 
     def setUp(self):
         self.ensemble = Ensemble()
-        self.ensemble.all_groups = {
+        self.ensemble._all_groups = {
             "x": [
                 {
                     "model_config": {
@@ -46,7 +46,7 @@ class TestEnsemble(TestCase):
                 },
             ],
         }
-        self.ensemble.is_maked = False
+        self.ensemble._is_maked = False
 
     def test_make_ensemble_error_ensemble_name_1(self):
         with self.assertRaises(EnsembleError):
@@ -92,12 +92,12 @@ class TestEnsemble(TestCase):
 
     def test_make_ensemble(self):
         self.ensemble.make_ensemble(ensemble_name="1", models_names=["K", "M"], groups=[("a>b", "x"), ("c<d", "y")])
-        self.assertIsInstance(self.ensemble.result_pickle, list)
-        self.assertEqual(len(self.ensemble.result_pickle), 2)
-        self.assertIsInstance(self.ensemble.result_pickle[0], EnsembleResult)
+        self.assertIsInstance(self.ensemble._result_pickle, list)
+        self.assertEqual(len(self.ensemble._result_pickle), 2)
+        self.assertIsInstance(self.ensemble._result_pickle[0], EnsembleResult)
 
-        self.assertEqual(self.ensemble.result_pickle[0].model_name, "K")
-        self.assertEqual(self.ensemble.result_pickle[0].models, [
+        self.assertEqual(self.ensemble._result_pickle[0].model_name, "K")
+        self.assertEqual(self.ensemble._result_pickle[0].models, [
             ("a>b", "x", {
                 "model_config": {
                     "name": "K",
@@ -115,7 +115,7 @@ class TestEnsemble(TestCase):
                 }
             }),
         ])
-        self.assertEqual(self.ensemble.result_pickle[1].models, [
+        self.assertEqual(self.ensemble._result_pickle[1].models, [
             ("a>b", "x", {
                 "model_config": {
                     "name": "M",
