@@ -1,3 +1,4 @@
+""""Module for dataset extraction."""
 import abc
 from abc import ABC
 from pathlib import Path
@@ -25,34 +26,69 @@ class Extractor(ABC):
     """
 
     def __init__(self, *params):
+        """Initialization."""
         self.__connection_config = None
         self.load_config_from_env = False
         self.connection_config = None
 
     @abc.abstractmethod
     def extract_dataset(self) -> pd.DataFrame | pl.DataFrame:
+        """Extract dataset.
+
+        :return: Dataset.
+        :rtype: pandas.DataFrame, polars.DataFrame
+        """
         pass
 
     def load_config(self, connection_config):
+        """Load connection config.
+
+        :param connection_config: Connection config.
+        """
         self.connection_config = connection_config
 
     def __check_object(self, dataset: pd.DataFrame | pl.DataFrame):
-        """Проверка данных на выходе парсера"""
+        """Data checking.
+        :param dataset: Dataset.
+        :type dataset: pandas.DataFrame, polars.DataFrame
+        """
         pass
 
 
 class SimpleExtractor(Extractor):
+    """Class for simple extractor."""
     def __init__(self, data: pd.DataFrame, *params):
+        """Initialization.
+        :param data: Dataset.
+        :type data: pandas.DataFrame.
+        :param params: Parameters.
+        """
         super().__init__(*params)
         self.data = data
 
     def extract_dataset(self) -> pd.DataFrame:
+        """Extract dataset.
+
+        :return: Dataset.
+        :rtype: pandas.DataFrame
+        """
         return self.data
 
 
 class BaseExtractor(Extractor):
+    """Base class for extractor. Support extraction from:
+        - csv file,
+        - pickle file,
+        - parquet file,
+        - databases
+    """
 
     def __init__(self, data_config: DataModelConfig):
+        """Initialization.
+
+        :param data_config: Object of data config.
+        :type data_config: DataModelConfig
+        """
         super().__init__()
         self.__data_config = data_config
 
@@ -107,6 +143,11 @@ class BaseExtractor(Extractor):
             conn.execute(text(trigger_sql))
 
     def extract_dataset(self) -> pd.DataFrame:
+        """Extract dataset.
+
+        :return: Dataset.
+        :rtype: pandas.DataFrame
+        """
         source = self.__data_config.source
 
         if source in (FilesNames.csv, FilesNames.pickle, FilesNames.parquet):
@@ -137,6 +178,13 @@ class BaseExtractor(Extractor):
 
 
 def load_dataset_from_local(data_config: DataModelConfig) -> pd.DataFrame:
+    """Load dataset from local csv, pickle or parquet file.
+
+    :param data_config: Object of data config.
+    :type data_config: DataModelConfig
+    :return: Dataset.
+    :rtype: pandas.DataFrame
+    """
     logger.info("Load data from local file")
     data = None
     if not data_config.local_name_source:
@@ -171,6 +219,13 @@ def load_dataset_from_local(data_config: DataModelConfig) -> pd.DataFrame:
 
 
 def load_dataset_from_db(data_config: DataModelConfig) -> pd.DataFrame:
+    """Load dataset from database.
+
+    :param data_config: Object of data config.
+    :type data_config: DataModelConfig
+    :return: Dataset.
+    :rtype: pandas.DataFrame
+    """
     data = None
 
     if not data_config.table_name_source:
@@ -201,6 +256,13 @@ def load_dataset_from_db(data_config: DataModelConfig) -> pd.DataFrame:
 
 
 def database_to_pandas(sql_query: str) -> pd.DataFrame:
+    """Load data from database to pandas dataframe.
+
+    :param sql_query: SQL query.
+    :type sql_query: str
+    :return: Dataset.
+    :rtype: pandas.DataFrame
+    """
     data = None
 
     try:
