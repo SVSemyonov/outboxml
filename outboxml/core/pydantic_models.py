@@ -167,7 +167,7 @@ class ServiceRequest(BaseModel):
 
 class FeatureSelectionConfig(BaseModel):
     top_feautures_to_select: int = 10
-    count_category: int = 100,
+    count_category: int = 100
     cutoff_1_category: float = 0.99
     cutoff_nan: float = 0.7
     max_corr_value: float = 0.6
