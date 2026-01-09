@@ -168,15 +168,15 @@ class ServiceRequest(BaseModel):
 class FeatureSelectionConfig(BaseModel):
     top_feautures_to_select: int = 10
     count_category: int = 100,
-    cutoff_1_category: float = 0.99,
-    cutoff_nan: float = 0.7,
+    cutoff_1_category: float = 0.99
+    cutoff_nan: float = 0.7
     max_corr_value: float = 0.6
     metric_eval: dict = {'metric_name': 0}
     cv_diff_value:  Optional[float] = None
     encoding_cat: str = 'WoE_cat_to_num'
     encoding_num: str = 'WoE_num_to_num'
-    default_cat: str = '_NAN_',
-    default_num: str = '_MEDIAN_',
+    default_cat: str = '_NAN_'
+    default_num: str = '_MEDIAN_'
     depth: float = 0.01
     features_to_ignore: List[str] = []
     params: dict = {}
