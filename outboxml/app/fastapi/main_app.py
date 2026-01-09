@@ -2,6 +2,7 @@ import uvicorn
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
+from fastapi.middleware.cors import CORSMiddleware
 
 import traceback
 
@@ -12,6 +13,14 @@ from outboxml.core.pydantic_models import UpdateRequest, MonitoringRequest, Auto
 from outboxml.monitoring_manager import MonitoringManager
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # В разработке можно "*", в продакшене укажите домены
+    allow_credentials=True,
+    allow_methods=["*"],  # Или ["GET", "POST", "PUT", "DELETE"]
+    allow_headers=["*"],  # Или ["Content-Type", "Authorization"]
+)
 
 @app.get("/api/health_app")
 async def health_route():
