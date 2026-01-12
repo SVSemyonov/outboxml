@@ -30,14 +30,16 @@ class EMail:
         All emails are automatically saved as HTML files in the results_path
         directory before being sent.
     
-    Example::
+    .. rubric:: Examples
     
-        >>> import config
-        >>> from outboxml.core.email import EMail
-        >>> email = EMail(config=config)
-        >>> email.header("Test Email")
-        >>> email.mail.add_text("This is a test message.")
-        >>> email.send()
+    .. code-block:: python
+    
+        import config
+        from outboxml.core.email import EMail
+        email = EMail(config=config)
+        email.header("Test Email")
+        email.mail.add_text("This is a test message.")
+        email.send()
     """
     def __init__(self,
                  config):
@@ -70,13 +72,15 @@ class EMail:
         .. note::
             Creates or overwrites 'email.html' in config.results_path.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> email = EMail(config=config)
-            >>> email.header("Test Email")
-            >>> email.mail.add_text("This is a test message.")
-            >>> email.save_mail_as_html()
-            >>> # Creates: <results_path>/email.html
+        .. code-block:: python
+        
+            email = EMail(config=config)
+            email.header("Test Email")
+            email.mail.add_text("This is a test message.")
+            email.save_mail_as_html()
+            # Creates: <results_path>/email.html
         """
         # Get HTML content (prefer HTML over plain text)
         html_content = None
@@ -115,12 +119,14 @@ class EMail:
         :return: None
         :rtype: None
         
-        Example::
+        .. rubric:: Examples
         
-            >>> email = EMail(config=config)
-            >>> email.header(group_name="Titanic_Model_v1")
-            >>> # Sets email subject to "Titanic_Model_v1"
-            >>> # Adds greeting text "Добрый день, это ИИ."
+        .. code-block:: python
+        
+            email = EMail(config=config)
+            email.header(group_name="Titanic_Model_v1")
+            # Sets email subject to "Titanic_Model_v1"
+            # Adds greeting text "Добрый день, это ИИ."
         """
         self.mail.add_email_subject(
             f"{group_name}",
@@ -141,16 +147,18 @@ class EMail:
         :return: None
         :rtype: None
         
-        Example::
+        .. rubric:: Examples
         
-            >>> import pandas as pd
-            >>> from datetime import datetime
-            >>> time_data = pd.DataFrame({
-            ...     'Time': [datetime.now(), datetime.now()]
-            ... }, index=['Loading dataset', 'Fitting'])
-            >>> email = EMail(config=config)
-            >>> email.create_time_table(time_data)
-            >>> # Adds "Затраченное время:" text and formatted table
+        .. code-block:: python
+        
+            import pandas as pd
+            from datetime import datetime
+            time_data = pd.DataFrame({
+                'Time': [datetime.now(), datetime.now()]
+            }, index=['Loading dataset', 'Fitting'])
+            email = EMail(config=config)
+            email.create_time_table(time_data)
+            # Adds "Затраченное время:" text and formatted table
         """
         self.mail.add_text(
             "Затраченное время:",
@@ -175,13 +183,15 @@ class EMail:
         :return: None
         :rtype: None
         
-        Example::
+        .. rubric:: Examples
         
-            >>> email = EMail(config=config)
-            >>> email.base_mail(
-            ...     header_name="AutoML Training Complete",
-            ...     text="The model training has finished successfully."
-            ... )
+        .. code-block:: python
+        
+            email = EMail(config=config)
+            email.base_mail(
+                header_name="AutoML Training Complete",
+                text="The model training has finished successfully."
+            )
         """
         self.header(header_name)
         self.mail.add_text(
@@ -201,13 +211,15 @@ class EMail:
         :return: None
         :rtype: None
         
-        Example::
+        .. rubric:: Examples
         
-            >>> with open("plot.png", "rb") as f:
-            ...     image_bytes = f.read()
-            >>> email = EMail(config=config)
-            >>> email.add_image_to_mail(image_bytes)
-            >>> # Adds image to email with size 750x500 pixels
+        .. code-block:: python
+        
+            with open("plot.png", "rb") as f:
+                image_bytes = f.read()
+            email = EMail(config=config)
+            email.add_image_to_mail(image_bytes)
+            # Adds image to email with size 750x500 pixels
         """
         self.mail.add_image(figure, size_pixel=(750, 500), n_line_breaks=1)
 
@@ -242,13 +254,15 @@ class EMail:
             
         :raises smtplib.SMTPException: If email sending fails (HTML file is still saved).
         
-        Example::
+        .. rubric:: Examples
         
-            >>> email = EMail(config=config)
-            >>> email.header("Test Email")
-            >>> email.mail.add_text("This is a test message.")
-            >>> email.send()
-            >>> # Saves email.html and sends email to recipients
+        .. code-block:: python
+        
+            email = EMail(config=config)
+            email.header("Test Email")
+            email.mail.add_text("This is a test message.")
+            email.send()
+            # Saves email.html and sends email to recipients
         """
         self.save_mail_as_html()
         self.mail.send_mail(self.email_receivers)
@@ -267,17 +281,19 @@ class EMail:
         :return: None
         :rtype: None
         
-        Example::
+        .. rubric:: Examples
         
-            >>> email = EMail(config=config)
-            >>> try:
-            ...     result = 1 / 0
-            ... except Exception as e:
-            ...     email.common_error_mail(
-            ...         group_name="Titanic_Model_v1",
-            ...         error=e
-            ...     )
-            >>> # Sends email with subject: "Titanic_Model_v1. Автообновление моделей. Статус: ошибка."
+        .. code-block:: python
+        
+            email = EMail(config=config)
+            try:
+                result = 1 / 0
+            except Exception as e:
+                email.common_error_mail(
+                    group_name="Titanic_Model_v1",
+                    error=e
+                )
+            # Sends email with subject: "Titanic_Model_v1. Автообновление моделей. Статус: ошибка."
         """
         self.mail.add_email_subject(
             f"{group_name}. Автообновление моделей. Статус: ошибка.",
@@ -313,19 +329,21 @@ class EMail:
         :return: None
         :rtype: None
         
-        Example::
+        .. rubric:: Examples
         
-            >>> email = EMail(config=config)
-            >>> new_features = {
-            ...     "model1": ["feature_a", "feature_b"],
-            ...     "model2": ["feature_c"]
-            ... }
-            >>> email.success_release_mail(
-            ...     group_name="Titanic_Model_v1",
-            ...     new_features=new_features
-            ... )
-            >>> # Sends email with subject: "Titanic_Model_v1. Автообновление моделей. Статус: залиты в gitlab."
-            >>> # Lists new features for each model
+        .. code-block:: python
+        
+            email = EMail(config=config)
+            new_features = {
+                "model1": ["feature_a", "feature_b"],
+                "model2": ["feature_c"]
+            }
+            email.success_release_mail(
+                group_name="Titanic_Model_v1",
+                new_features=new_features
+            )
+            # Sends email with subject: "Titanic_Model_v1. Автообновление моделей. Статус: залиты в gitlab."
+            # Lists new features for each model
         """
         self.mail.add_email_subject(
             f"{group_name}. Автообновление моделей. Статус: залиты в gitlab.",
@@ -368,17 +386,19 @@ class EMailDSResult(EMail):
     :var _ds_manager_result: Dictionary mapping model names to DSManagerResult
         objects containing model results, metrics, and predictions.
     
-    Example::
+    .. rubric:: Examples
     
-        >>> from outboxml.core.email import EMailDSResult
-        >>> from outboxml.datasets_manager import DataSetsManager
-        >>> # Assume ds_manager has been trained
-        >>> results = ds_manager.get_result()  # Returns dict[str, DSManagerResult]
-        >>> email = EMailDSResult(
-        ...     config=config,
-        ...     ds_manager_result=results
-        ... )
-        >>> email.success_mail(group_name="Titanic_Model_v1")
+    .. code-block:: python
+    
+        from outboxml.core.email import EMailDSResult
+        from outboxml.datasets_manager import DataSetsManager
+        # Assume ds_manager has been trained
+        results = ds_manager.get_result()  # Returns dict[str, DSManagerResult]
+        email = EMailDSResult(
+            config=config,
+            ds_manager_result=results
+        )
+        email.success_mail(group_name="Titanic_Model_v1")
     """
     def __init__(self, config,
                  ds_manager_result: dict):
@@ -411,15 +431,17 @@ class EMailDSResult(EMail):
             This is a private method, typically called internally by success_mail().
             Errors during metrics extraction are logged but don't stop the process.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> email = EMailDSResult(config=config, ds_manager_result=results)
-            >>> email._metrics_description()
-            >>> # Adds table with columns:
-            >>> # - Metric name
-            >>> # - New model || Training set
-            >>> # - New model || Test set
-            >>> # - Model name
+        .. code-block:: python
+        
+            email = EMailDSResult(config=config, ds_manager_result=results)
+            email._metrics_description()
+            # Adds table with columns:
+            # - Metric name
+            # - New model || Training set
+            # - New model || Test set
+            # - Model name
         """
         #  result_export = ResultExport()
         self.mail.add_text(
@@ -473,14 +495,16 @@ class EMailDSResult(EMail):
             This is a private method, typically called internally by success_mail().
             For each model, saves "<model_name> cohort.png" in results_path.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> email = EMailDSResult(config=config, ds_manager_result=results)
-            >>> email._plots()
-            >>> # For each model:
-            >>> # - Generates cohort plot
-            >>> # - Saves as "<model_name> cohort.png" in results_path
-            >>> # - Adds image to email (750x500 pixels)
+        .. code-block:: python
+        
+            email = EMailDSResult(config=config, ds_manager_result=results)
+            email._plots()
+            # For each model:
+            # - Generates cohort plot
+            # - Saves as "<model_name> cohort.png" in results_path
+            # - Adds image to email (750x500 pixels)
         """
         self.mail.add_text('Графики когорт по новой модели:', n_line_breaks=1)
 
@@ -518,14 +542,16 @@ class EMailDSResult(EMail):
         :return: None
         :rtype: None
         
-        Example::
+        .. rubric:: Examples
         
-            >>> email = EMailDSResult(config=config, ds_manager_result=results)
-            >>> email.success_mail(group_name="Titanic_Model_v1")
-            >>> # Sends email containing:
-            >>> # - Header with group name
-            >>> # - Metrics table for all models
-            >>> # - Cohort plots for each model
+        .. code-block:: python
+        
+            email = EMailDSResult(config=config, ds_manager_result=results)
+            email.success_mail(group_name="Titanic_Model_v1")
+            # Sends email containing:
+            # - Header with group name
+            # - Metrics table for all models
+            # - Cohort plots for each model
         """
         self.header(group_name=group_name)
         self._metrics_description()
@@ -552,16 +578,18 @@ class EMailDSCompareResult(EMailDSResult):
     :var _ds_result_to_compare: Dictionary mapping model names to previous
         DSManagerResult objects for comparison.
     
-    Example::
+    .. rubric:: Examples
     
-        >>> from outboxml.core.email import EMailDSCompareResult
-        >>> current_results = ds_manager.get_result()
-        >>> previous_results = load_previous_results()  # Your function
-        >>> email = EMailDSCompareResult(
-        ...     config=config,
-        ...     ds_manager_result=current_results,
-        ...     ds_result_to_compare=previous_results
-        ... )
+    .. code-block:: python
+    
+        from outboxml.core.email import EMailDSCompareResult
+        current_results = ds_manager.get_result()
+        previous_results = load_previous_results()  # Your function
+        email = EMailDSCompareResult(
+            config=config,
+            ds_manager_result=current_results,
+            ds_result_to_compare=previous_results
+        )
     """
     def __init__(self, config,
                  ds_manager_result: dict,
@@ -593,18 +621,20 @@ class EMailDSCompareResult(EMailDSResult):
             This method overrides the parent _metrics_description() method.
             Errors during metrics extraction are logged but don't stop the process.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> email = EMailDSCompareResult(
-            ...     config=config,
-            ...     ds_manager_result=current_results,
-            ...     ds_result_to_compare=previous_results
-            ... )
-            >>> email._metrics_description()
-            >>> # Adds table comparing:
-            >>> # - Current model metrics (train/test)
-            >>> # - Previous model metrics (train/test)
-            >>> # - Differences
+        .. code-block:: python
+        
+            email = EMailDSCompareResult(
+                config=config,
+                ds_manager_result=current_results,
+                ds_result_to_compare=previous_results
+            )
+            email._metrics_description()
+            # Adds table comparing:
+            # - Current model metrics (train/test)
+            # - Previous model metrics (train/test)
+            # - Differences
         """
         self.mail.add_text(
             "Характеристики моделей:",
@@ -643,19 +673,21 @@ class EMailDSCompareResult(EMailDSResult):
             This method overrides the parent _plots() method.
             For each model, saves "<model_name> cohort.png" in results_path.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> email = EMailDSCompareResult(
-            ...     config=config,
-            ...     ds_manager_result=current_results,
-            ...     ds_result_to_compare=previous_results
-            ... )
-            >>> email._plots()
-            >>> # For each model:
-            >>> # - Generates comparison cohort plot
-            >>> # - Shows current vs previous model performance
-            >>> # - Saves as "<model_name> cohort.png"
-            >>> # - Adds to email (750x500 pixels)
+        .. code-block:: python
+        
+            email = EMailDSCompareResult(
+                config=config,
+                ds_manager_result=current_results,
+                ds_result_to_compare=previous_results
+            )
+            email._plots()
+            # For each model:
+            # - Generates comparison cohort plot
+            # - Shows current vs previous model performance
+            # - Saves as "<model_name> cohort.png"
+            # - Adds to email (750x500 pixels)
         """
         self.mail.add_text('Графики когорт по двум моделям:', n_line_breaks=1)
 
@@ -696,14 +728,16 @@ class AutoMLReviewEMail(EMail):
     :param config: Configuration object (same as EMail).
     :type config: object
     
-    Example::
+    .. rubric:: Examples
     
-        >>> from outboxml.automl_manager import AutoMLManager
-        >>> from outboxml.core.email import AutoMLReviewEMail
-        >>> automl = AutoMLManager(...)
-        >>> result = automl.update_models()
-        >>> email = AutoMLReviewEMail(config=config)
-        >>> email.success_mail(result)
+    .. code-block:: python
+    
+        from outboxml.automl_manager import AutoMLManager
+        from outboxml.core.email import AutoMLReviewEMail
+        automl = AutoMLManager(...)
+        result = automl.update_models()
+        email = AutoMLReviewEMail(config=config)
+        email.success_mail(result)
     """
     def __init__(self, config):
         """Initialize AutoMLReviewEMail instance.
@@ -736,15 +770,17 @@ class AutoMLReviewEMail(EMail):
         :return: None
         :rtype: None
         
-        Example::
+        .. rubric:: Examples
         
-            >>> from outboxml.automl_manager import AutoMLManager
-            >>> from outboxml.core.email import AutoMLReviewEMail
-            >>> automl = AutoMLManager(...)
-            >>> result = automl.update_models()
-            >>> email = AutoMLReviewEMail(config=config)
-            >>> email.success_mail(result)
-            >>> # Sends email with complete AutoML execution report
+        .. code-block:: python
+        
+            from outboxml.automl_manager import AutoMLManager
+            from outboxml.core.email import AutoMLReviewEMail
+            automl = AutoMLManager(...)
+            result = automl.update_models()
+            email = AutoMLReviewEMail(config=config)
+            email.success_mail(result)
+            # Sends email with complete AutoML execution report
         """
         self.base_mail(header_name='AutoML '+ str(auto_ml_result.group_name),
                        text='Отчёт по запуску самообучения')
@@ -775,20 +811,22 @@ class AutoMLReviewEMail(EMail):
         :return: None
         :rtype: None
         
-        Example::
+        .. rubric:: Examples
         
-            >>> status = {
-            ...     'Loading dataset': True,
-            ...     'Feature selection': False,
-            ...     'Fitting': False
-            ... }
-            >>> email = AutoMLReviewEMail(config=config)
-            >>> email.error_mail(
-            ...     group_name="Titanic_Model_v1",
-            ...     error=ValueError("Invalid configuration"),
-            ...     status=status
-            ... )
-            >>> # Sends email with error message and task status table
+        .. code-block:: python
+        
+            status = {
+                'Loading dataset': True,
+                'Feature selection': False,
+                'Fitting': False
+            }
+            email = AutoMLReviewEMail(config=config)
+            email.error_mail(
+                group_name="Titanic_Model_v1",
+                error=ValueError("Invalid configuration"),
+                status=status
+            )
+            # Sends email with error message and task status table
         """
         self.common_error_mail(group_name, error)
         self.mail.add_text(
@@ -815,13 +853,15 @@ class AutoMLReviewEMail(EMail):
         .. note::
             This is a private method, typically called internally by success_mail().
             
-        Example::
+        .. rubric:: Examples
         
-            >>> email = AutoMLReviewEMail(config=config)
-            >>> email._decision_info(decision=True)
-            >>> # Adds text: "Модель выведена в фон."
-            >>> email._decision_info(decision=False)
-            >>> # Adds text: "Модель не обеспечила заданный критерий качества."
+        .. code-block:: python
+        
+            email = AutoMLReviewEMail(config=config)
+            email._decision_info(decision=True)
+            # Adds text: "Модель выведена в фон."
+            email._decision_info(decision=False)
+            # Adds text: "Модель не обеспечила заданный критерий качества."
         """
         if decision:
             self.mail.add_text(
@@ -855,18 +895,20 @@ class AutoMLReviewEMail(EMail):
         .. note::
             This is a private method, typically called internally by success_mail().
             
-        Example::
+        .. rubric:: Examples
         
-            >>> import pandas as pd
-            >>> metrics_df = pd.DataFrame({
-            ...     'Имя модели': ['model1', 'model2'],
-            ...     'Метрика': ['RMSE', 'MAE'],
-            ...     'Новая модель||Тренировочная выборка': [0.5, 0.3],
-            ...     'Новая модель||Тестовая выборка': [0.6, 0.4]
-            ... })
-            >>> email = AutoMLReviewEMail(config=config)
-            >>> email._metrics_description(metrics_df)
-            >>> # Adds formatted metrics table to email
+        .. code-block:: python
+        
+            import pandas as pd
+            metrics_df = pd.DataFrame({
+                'Имя модели': ['model1', 'model2'],
+                'Метрика': ['RMSE', 'MAE'],
+                'Новая модель||Тренировочная выборка': [0.5, 0.3],
+                'Новая модель||Тестовая выборка': [0.6, 0.4]
+            })
+            email = AutoMLReviewEMail(config=config)
+            email._metrics_description(metrics_df)
+            # Adds formatted metrics table to email
         """
         self.mail.add_text(
             "Характеристики моделей:",
@@ -893,17 +935,19 @@ class AutoMLReviewEMail(EMail):
             This is a private method, typically called internally by success_mail().
             For each figure, saves "<model_name> figure.png" in results_path.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> figures = {
-            ...     'model1': plotly_figure1,
-            ...     'model2': plotly_figure2
-            ... }
-            >>> email = AutoMLReviewEMail(config=config)
-            >>> email._plots(figures)
-            >>> # For each figure:
-            >>> # - Saves as "<model_name> figure.png"
-            >>> # - Adds to email (750x500 pixels)
+        .. code-block:: python
+        
+            figures = {
+                'model1': plotly_figure1,
+                'model2': plotly_figure2
+            }
+            email = AutoMLReviewEMail(config=config)
+            email._plots(figures)
+            # For each figure:
+            # - Saves as "<model_name> figure.png"
+            # - Adds to email (750x500 pixels)
         """
         if figures is not None and figures != []:
             self.mail.add_text(
@@ -927,13 +971,15 @@ class EMailMonitoring(EMail):
     :param config: Configuration object (same as EMail).
     :type config: object
     
-    Example::
+    .. rubric:: Examples
     
-        >>> from outboxml.monitoring_result import MonitoringResult
-        >>> from outboxml.core.email import EMailMonitoring
-        >>> # Assume monitoring_result is created by monitoring process
-        >>> email = EMailMonitoring(config=config)
-        >>> email.success_mail(monitoring_result)
+    .. code-block:: python
+    
+        from outboxml.monitoring_result import MonitoringResult
+        from outboxml.core.email import EMailMonitoring
+        # Assume monitoring_result is created by monitoring process
+        email = EMailMonitoring(config=config)
+        email.success_mail(monitoring_result)
     """
     def __init__(self, config):
         """Initialize EMailMonitoring instance.
@@ -962,14 +1008,16 @@ class EMailMonitoring(EMail):
         .. note::
             Only features with PSI > 0.3 are included in the drift table.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> from outboxml.monitoring_result import MonitoringResult
-            >>> from outboxml.core.email import EMailMonitoring
-            >>> # Assume monitoring_result is created by monitoring process
-            >>> email = EMailMonitoring(config=config)
-            >>> email.success_mail(monitoring_result)
-            >>> # Sends email with monitoring summary and drift table
+        .. code-block:: python
+        
+            from outboxml.monitoring_result import MonitoringResult
+            from outboxml.core.email import EMailMonitoring
+            # Assume monitoring_result is created by monitoring process
+            email = EMailMonitoring(config=config)
+            email.success_mail(monitoring_result)
+            # Sends email with monitoring summary and drift table
         """
         self.base_mail(header_name=monitoring_result.group_name + str(' Monitoring'), text='Отчет по запуску мониторинга')
         self.mail.add_text(
@@ -1003,14 +1051,16 @@ class EMailMonitoring(EMail):
         .. note::
             This method calls common_error_mail() from the parent class.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> email = EMailMonitoring(config=config)
-            >>> email.error_mail(
-            ...     group_name="Titanic_Model_v1",
-            ...     error="Connection timeout to monitoring service"
-            ... )
-            >>> # Sends common error email
+        .. code-block:: python
+        
+            email = EMailMonitoring(config=config)
+            email.error_mail(
+                group_name="Titanic_Model_v1",
+                error="Connection timeout to monitoring service"
+            )
+            # Sends common error email
         """
         self.common_error_mail(group_name, error)
 
@@ -1036,20 +1086,22 @@ class EMailMonitoring(EMail):
         .. note::
             This is a private method, typically called internally by success_mail().
             
-        Example::
+        .. rubric:: Examples
         
-            >>> drift_data = pd.DataFrame({
-            ...     'model_name': ['model1', 'model1', 'model2'],
-            ...     'col': ['feature_a', 'feature_b', 'feature_c'],
-            ...     'PSI': [0.5, 0.2, 0.4],
-            ...     'KL': [0.3, 0.1, 0.25],
-            ...     'JS': [0.15, 0.05, 0.12],
-            ...     'model_version': ['v1', 'v1', 'v2']
-            ... })
-            >>> email = EMailMonitoring(config=config)
-            >>> filtered_df = email._prepare_drift_df(drift_data)
-            >>> # Returns DataFrame with only feature_a and feature_c (PSI > 0.3)
-            >>> # Sorted by PSI descending
+        .. code-block:: python
+        
+            drift_data = pd.DataFrame({
+                'model_name': ['model1', 'model1', 'model2'],
+                'col': ['feature_a', 'feature_b', 'feature_c'],
+                'PSI': [0.5, 0.2, 0.4],
+                'KL': [0.3, 0.1, 0.25],
+                'JS': [0.15, 0.05, 0.12],
+                'model_version': ['v1', 'v1', 'v2']
+            })
+            email = EMailMonitoring(config=config)
+            filtered_df = email._prepare_drift_df(drift_data)
+            # Returns DataFrame with only feature_a and feature_c (PSI > 0.3)
+            # Sorted by PSI descending
         """
         if df is None:
             print('Нет данных для отчета')
@@ -1074,12 +1126,14 @@ class HTMLReport:
     :var html_content: List of HTML content strings being assembled.
     :var report_path: Full path to the output HTML report file.
     
-    Example::
+    .. rubric:: Examples
     
-        >>> from outboxml.core.email import HTMLReport
-        >>> report = HTMLReport(config=config)
-        >>> report.success_report(auto_ml_result)
-        >>> # Report saved to: <results_path>/automl_report.html
+    .. code-block:: python
+    
+        from outboxml.core.email import HTMLReport
+        report = HTMLReport(config=config)
+        report.success_report(auto_ml_result)
+        # Report saved to: <results_path>/automl_report.html
     """
     def __init__(self,  config):
         """Initialize HTMLReport instance.
@@ -1109,14 +1163,16 @@ class HTMLReport:
         .. note::
             This is a private method, typically called internally by other methods.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> report = HTMLReport(config=config)
-            >>> report._add_section(
-            ...     title="Model Training Results",
-            ...     text="The models have been trained successfully.",
-            ...     n_line_breaks=2
-            ... )
+        .. code-block:: python
+        
+            report = HTMLReport(config=config)
+            report._add_section(
+                title="Model Training Results",
+                text="The models have been trained successfully.",
+                n_line_breaks=2
+            )
         """
         if title:
             self.html_content.append(f"<h2>{title}</h2>")
@@ -1138,17 +1194,19 @@ class HTMLReport:
         .. note::
             This is a private method, typically called internally by other methods.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> import pandas as pd
-            >>> metrics_df = pd.DataFrame({
-            ...     'Model': ['model1', 'model2'],
-            ...     'RMSE': [0.5, 0.6],
-            ...     'MAE': [0.3, 0.4]
-            ... })
-            >>> report = HTMLReport(config=config)
-            >>> report._add_table(metrics_df)
-            >>> # Adds HTML table to report content
+        .. code-block:: python
+        
+            import pandas as pd
+            metrics_df = pd.DataFrame({
+                'Model': ['model1', 'model2'],
+                'RMSE': [0.5, 0.6],
+                'MAE': [0.3, 0.4]
+            })
+            report = HTMLReport(config=config)
+            report._add_table(metrics_df)
+            # Adds HTML table to report content
         """
         self.html_content.append(df.to_html(classes='dataframe', border=0,
                                             justify='right', index=False))
@@ -1170,14 +1228,16 @@ class HTMLReport:
         .. note::
             This is a private method, typically called internally by other methods.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> import plotly.graph_objects as go
-            >>> fig = go.Figure(data=go.Bar(x=['A', 'B'], y=[1, 2]))
-            >>> report = HTMLReport(config=config)
-            >>> report._add_plot(fig, "bar_chart")
-            >>> # Saves: <results_path>/bar_chart.html
-            >>> # Adds: <iframe src="bar_chart.html" width="800" height="500"></iframe>
+        .. code-block:: python
+        
+            import plotly.graph_objects as go
+            fig = go.Figure(data=go.Bar(x=['A', 'B'], y=[1, 2]))
+            report = HTMLReport(config=config)
+            report._add_plot(fig, "bar_chart")
+            # Saves: <results_path>/bar_chart.html
+            # Adds: <iframe src="bar_chart.html" width="800" height="500"></iframe>
         """
         if figure:
             plot_path = os.path.join(self.config.results_path, f"{plot_name}.html")
@@ -1198,13 +1258,15 @@ class HTMLReport:
             - Creates or overwrites automl_report.html in config.results_path
             - Prints confirmation message to console
             
-        Example::
+        .. rubric:: Examples
         
-            >>> report = HTMLReport(config=config)
-            >>> report._add_section(title="Test Report", text="This is a test.")
-            >>> report.save_report()
-            >>> # Creates: <results_path>/automl_report.html
-            >>> # Prints: "Report saved to: <results_path>/automl_report.html"
+        .. code-block:: python
+        
+            report = HTMLReport(config=config)
+            report._add_section(title="Test Report", text="This is a test.")
+            report.save_report()
+            # Creates: <results_path>/automl_report.html
+            # Prints: "Report saved to: <results_path>/automl_report.html"
         """
         full_html = f"""
             <!DOCTYPE html>
@@ -1251,16 +1313,18 @@ class HTMLReport:
         :return: None
         :rtype: None
         
-        Example::
+        .. rubric:: Examples
         
-            >>> from outboxml.automl_manager import AutoMLManager
-            >>> from outboxml.core.email import HTMLReport
-            >>> automl = AutoMLManager(...)
-            >>> result = automl.update_models()
-            >>> report = HTMLReport(config=config)
-            >>> report.success_report(result)
-            >>> # Generates HTML report with complete AutoML execution details
-            >>> # Saves to: <results_path>/automl_report.html
+        .. code-block:: python
+        
+            from outboxml.automl_manager import AutoMLManager
+            from outboxml.core.email import HTMLReport
+            automl = AutoMLManager(...)
+            result = automl.update_models()
+            report = HTMLReport(config=config)
+            report.success_report(result)
+            # Generates HTML report with complete AutoML execution details
+            # Saves to: <results_path>/automl_report.html
         """
         self._add_section(title=f'AutoML {auto_ml_result.group_name}',
                           text='Automated training run report')
@@ -1292,21 +1356,23 @@ class HTMLReport:
         :return: None
         :rtype: None
         
-        Example::
+        .. rubric:: Examples
         
-            >>> status = {
-            ...     'Loading dataset': True,
-            ...     'Feature selection': False,
-            ...     'Fitting': False
-            ... }
-            >>> report = HTMLReport(config=config)
-            >>> report.error_report(
-            ...     group_name="Titanic_Model_v1",
-            ...     error="Configuration validation failed",
-            ...     status=status
-            ... )
-            >>> # Generates HTML report with error details and task status
-            >>> # Saves to: <results_path>/automl_report.html
+        .. code-block:: python
+        
+            status = {
+                'Loading dataset': True,
+                'Feature selection': False,
+                'Fitting': False
+            }
+            report = HTMLReport(config=config)
+            report.error_report(
+                group_name="Titanic_Model_v1",
+                error="Configuration validation failed",
+                status=status
+            )
+            # Generates HTML report with error details and task status
+            # Saves to: <results_path>/automl_report.html
         """
         self._add_section(title=f'AutoML {group_name} Error',
                           text=str(error))
@@ -1331,13 +1397,15 @@ class HTMLReport:
         .. note::
             This is a private method, typically called internally by success_report().
             
-        Example::
+        .. rubric:: Examples
         
-            >>> report = HTMLReport(config=config)
-            >>> report._decision_info(decision=True)
-            >>> # Adds: "Model deployed to production."
-            >>> report._decision_info(decision=False)
-            >>> # Adds: "Model didn't meet the required quality criteria."
+        .. code-block:: python
+        
+            report = HTMLReport(config=config)
+            report._decision_info(decision=True)
+            # Adds: "Model deployed to production."
+            report._decision_info(decision=False)
+            # Adds: "Model didn't meet the required quality criteria."
         """
         if decision:
             self._add_section(text="Model deployed to production.")
@@ -1365,18 +1433,20 @@ class HTMLReport:
         .. note::
             This is a private method, typically called internally by success_report().
             
-        Example::
+        .. rubric:: Examples
         
-            >>> import pandas as pd
-            >>> metrics_df = pd.DataFrame({
-            ...     'Имя модели': ['model1'],
-            ...     'Метрика': ['RMSE'],
-            ...     'Новая модель||Тренировочная выборка': [0.5],
-            ...     'Новая модель||Тестовая выборка': [0.6]
-            ... })
-            >>> report = HTMLReport(config=config)
-            >>> report._metrics_description(metrics_df)
-            >>> # Adds section header and HTML table to report
+        .. code-block:: python
+        
+            import pandas as pd
+            metrics_df = pd.DataFrame({
+                'Имя модели': ['model1'],
+                'Метрика': ['RMSE'],
+                'Новая модель||Тренировочная выборка': [0.5],
+                'Новая модель||Тестовая выборка': [0.6]
+            })
+            report = HTMLReport(config=config)
+            report._metrics_description(metrics_df)
+            # Adds section header and HTML table to report
         """
         self._add_section(text="Model metrics comparison:")
         self._add_table(compare_metrics_df)
@@ -1397,17 +1467,19 @@ class HTMLReport:
             This is a private method, typically called internally by success_report().
             If figures is None or empty, nothing is added.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> figures = {
-            ...     'model1': plotly_figure1,
-            ...     'model2': plotly_figure2
-            ... }
-            >>> report = HTMLReport(config=config)
-            >>> report._plots(figures)
-            >>> # For each figure:
-            >>> # - Saves as "<model_name>.html"
-            >>> # - Adds iframe to report
+        .. code-block:: python
+        
+            figures = {
+                'model1': plotly_figure1,
+                'model2': plotly_figure2
+            }
+            report = HTMLReport(config=config)
+            report._plots(figures)
+            # For each figure:
+            # - Saves as "<model_name>.html"
+            # - Adds iframe to report
         """
         if figures:
             self._add_section(text='Model visualizations:')

@@ -40,13 +40,15 @@ class DataDrift(DataReviewerComponent):
     :var full_report: List for storing full calculation reports.
     :var columns_to_exclude: List of column names to exclude from drift calculation.
     
-    Example::
+    .. rubric:: Examples
     
-        >>> from outboxml.datadrift import DataDrift
-        >>> from outboxml.monitoring_result import DataContext
-        >>> drift_detector = DataDrift(full_calc=True, n_bins=50)
-        >>> result = drift_detector.review(data_context)
-        >>> # Returns DataFrame with PSI, KL, JS metrics for each column
+    .. code-block:: python
+    
+        from outboxml.datadrift import DataDrift
+        from outboxml.monitoring_result import DataContext
+        drift_detector = DataDrift(full_calc=True, n_bins=50)
+        result = drift_detector.review(data_context)
+        # Returns DataFrame with PSI, KL, JS metrics for each column
     """
     def __init__(self, full_calc: bool = True, columns_to_exclude: list = [], n_bins: int = 100,
                  dif_len_string: int = 100):
@@ -97,14 +99,16 @@ class DataDrift(DataReviewerComponent):
             - Columns in columns_to_exclude are skipped
             - Errors during calculation are logged but don't stop the process
             
-        Example::
+        .. rubric:: Examples
         
-            >>> from outboxml.monitoring_result import DataContext
-            >>> data_context = DataContext(X_train=train_df, X_test=test_df)
-            >>> drift_detector = DataDrift(full_calc=True)
-            >>> result = drift_detector.review(data_context)
-            >>> # Returns DataFrame with PSI, KL, JS for each column
-            >>> print(result['feature_name']['PSI'])  # Get PSI for a specific feature
+        .. code-block:: python
+        
+            from outboxml.monitoring_result import DataContext
+            data_context = DataContext(X_train=train_df, X_test=test_df)
+            drift_detector = DataDrift(full_calc=True)
+            result = drift_detector.review(data_context)
+            # Returns DataFrame with PSI, KL, JS for each column
+            print(result['feature_name']['PSI'])  # Get PSI for a specific feature
         """
         train_data = data_context.X_train
         test_data = data_context.X_test
@@ -162,11 +166,13 @@ class DataDrift(DataReviewerComponent):
             This is a private method, typically called internally by review().
             Infinite values are excluded from the sum.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> drift_detector = DataDrift()
-            >>> psi = drift_detector._calculate_psi(train_data, test_data, n_bins=50)
-            >>> print(f"PSI: {psi}")
+        .. code-block:: python
+        
+            drift_detector = DataDrift()
+            psi = drift_detector._calculate_psi(train_data, test_data, n_bins=50)
+            print(f"PSI: {psi}")
         """
         e, p = self.compute_probs(train_sample, n=n_bins)
         _, q = self.compute_probs(test_sample, n=e[:-1])
@@ -195,11 +201,13 @@ class DataDrift(DataReviewerComponent):
             This is a private method, typically called internally by review().
             JS divergence is symmetric and always finite.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> drift_detector = DataDrift()
-            >>> js = drift_detector._calculate_js_divirgence(train_data, test_data, n_bins=50)
-            >>> print(f"JS divergence: {js}")
+        .. code-block:: python
+        
+            drift_detector = DataDrift()
+            js = drift_detector._calculate_js_divirgence(train_data, test_data, n_bins=50)
+            print(f"JS divergence: {js}")
         """
         e, p = self.compute_probs(train_sample, n=n_bins)
         _, q = self.compute_probs(test_sample, n=e)
@@ -230,11 +238,13 @@ class DataDrift(DataReviewerComponent):
             This is a private method, typically called internally by review().
             Only bins where both distributions have non-zero probability are used.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> drift_detector = DataDrift()
-            >>> kl = drift_detector._calculate_kl_divirgence(train_data, test_data, n_bins=50)
-            >>> print(f"KL divergence: {kl}")
+        .. code-block:: python
+        
+            drift_detector = DataDrift()
+            kl = drift_detector._calculate_kl_divirgence(train_data, test_data, n_bins=50)
+            print(f"KL divergence: {kl}")
         """
         e, p = self.compute_probs(train_sample, n=n_bins)
         _, q = self.compute_probs(test_sample, n=e)
@@ -260,12 +270,14 @@ class DataDrift(DataReviewerComponent):
             This is a private method, typically called internally by divergence
             calculation methods.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> tuples = [(0.1, 0.2), (0.3, 0.4), (0.5, 0.6)]
-            >>> p, q = drift_detector.get_probs(tuples)
-            >>> # p = array([0.1, 0.3, 0.5])
-            >>> # q = array([0.2, 0.4, 0.6])
+        .. code-block:: python
+        
+            tuples = [(0.1, 0.2), (0.3, 0.4), (0.5, 0.6)]
+            p, q = drift_detector.get_probs(tuples)
+            # p = array([0.1, 0.3, 0.5])
+            # q = array([0.2, 0.4, 0.6])
         """
         p = np.array([p[0] for p in list_of_tuples])
         q = np.array([p[1] for p in list_of_tuples])
@@ -288,12 +300,14 @@ class DataDrift(DataReviewerComponent):
             This is a private method, typically called internally by divergence
             calculation methods. Prevents division by zero in log calculations.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> p = np.array([0.1, 0.2, 0.0, 0.3])
-            >>> q = np.array([0.15, 0.0, 0.25, 0.35])
-            >>> result = drift_detector.support_intersection(p, q)
-            >>> # Returns: [(0.1, 0.15), (0.3, 0.35)]
+        .. code-block:: python
+        
+            p = np.array([0.1, 0.2, 0.0, 0.3])
+            q = np.array([0.15, 0.0, 0.25, 0.35])
+            result = drift_detector.support_intersection(p, q)
+            # Returns: [(0.1, 0.15), (0.3, 0.35)]
         """
         sup_int = (
             list(
@@ -326,13 +340,15 @@ class DataDrift(DataReviewerComponent):
             - The last element of e is NaN, and the last element of p is the
               proportion of NaN values
             
-        Example::
+        .. rubric:: Examples
         
-            >>> import pandas as pd
-            >>> data = pd.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, None])
-            >>> e, p = drift_detector.compute_probs(data, n=5)
-            >>> # e contains bin edges plus NaN
-            >>> # p contains probabilities for each bin plus NaN probability
+        .. code-block:: python
+        
+            import pandas as pd
+            data = pd.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, None])
+            e, p = drift_detector.compute_probs(data, n=5)
+            # e contains bin edges plus NaN
+            # p contains probabilities for each bin plus NaN probability
         """
         if isinstance(data, np.ndarray): data = pd.Series(data)
         if data.dtype == 'object': data = pd.to_numeric(data, errors='coerce')
@@ -365,12 +381,14 @@ class DataDrift(DataReviewerComponent):
             when full_calc=True. Uses the types_dict populated during review()
             to determine column types.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> base_df = pd.DataFrame({'feature1': [1, 2, 3], 'feature2': ['a', 'b', 'c']})
-            >>> control_df = pd.DataFrame({'feature1': [1, 2, 4], 'feature2': ['a', 'b', 'd']})
-            >>> result = drift_detector._full_calculation(base_df, control_df)
-            >>> # Returns DataFrame with detailed statistics for each feature
+        .. code-block:: python
+        
+            base_df = pd.DataFrame({'feature1': [1, 2, 3], 'feature2': ['a', 'b', 'c']})
+            control_df = pd.DataFrame({'feature1': [1, 2, 4], 'feature2': ['a', 'b', 'd']})
+            result = drift_detector._full_calculation(base_df, control_df)
+            # Returns DataFrame with detailed statistics for each feature
         """
         result = pd.DataFrame()
         for column in self.types_dict.keys():
@@ -426,14 +444,16 @@ class DataDrift(DataReviewerComponent):
             This is a private method, typically called internally by _full_calculation().
             Difference strings are truncated to dif_len_string characters.
             
-        Example::
+        .. rubric:: Examples
         
-            >>> base_series = pd.Series([1, 2, 3, 4, 5])
-            >>> control_series = pd.Series([1, 2, 3, 6, 7])
-            >>> stats = drift_detector._drift_calc(
-            ...     base_series, control_series, label='feature1', type='NUMERICAL'
-            ... )
-            >>> print(stats['dif_train'])  # Values in base but not in control
+        .. code-block:: python
+        
+            base_series = pd.Series([1, 2, 3, 4, 5])
+            control_series = pd.Series([1, 2, 3, 6, 7])
+            stats = drift_detector._drift_calc(
+                base_series, control_series, label='feature1', type='NUMERICAL'
+            )
+            print(stats['dif_train'])  # Values in base but not in control
         """
         return {
 
