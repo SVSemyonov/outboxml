@@ -15,8 +15,26 @@ from sklearn.model_selection import cross_val_score
 from outboxml.core.pydantic_models import FeatureSelectionConfig, ModelConfig
 from outboxml.data_subsets import ModelDataSubset
 
+"""
+Feature selection analysis tools.
+
+This module contains analytical utilities used during feature selection,
+including correlation analysis, SHAP-based feature importance, and
+cross-validation stability checks using CatBoost models.
+"""
+
 
 def train_data(data_subset: ModelDataSubset) -> tuple:
+    """Extracts training and testing data from a dataset subset.
+
+        Handles optional exposure normalization.
+
+        :param data_subset: Prepared dataset subset.
+        :type data_subset: ModelDataSubset
+
+        :return: Tuple containing train/test features, targets, and categorical features.
+        :rtype: tuple (X_train, X_test, y_train, y_test, cat_features)
+        """
     X_train = data_subset.X_train
     X_test = data_subset.X_test
     cat_features = data_subset.features_categorical
@@ -25,6 +43,20 @@ def train_data(data_subset: ModelDataSubset) -> tuple:
     return X_train, X_test, y_train, y_test, cat_features
 
 def catboost_model(objective, params, cat_features=None):
+    """Creates a CatBoost model based on the objective type.
+
+        :param objective: Objective function name.
+        :type objective: str
+
+        :param params: CatBoost model parameters.
+        :type params: dict
+
+        :param cat_features: List of categorical feature indices or names.
+        :type cat_features: list, optional
+
+        :return: Initialized CatBoost model.
+        :rtype: CatBoostClassifier or CatBoostRegressor
+        """
     if objective == "Logloss":
         logger.info('Classification')
         model = CatBoostClassifier(objective=objective, cat_features=cat_features, verbose=False, **params)
@@ -37,12 +69,31 @@ def catboost_model(objective, params, cat_features=None):
 
 
 class Analysis(ABC):
+    """Abstract base class for feature selection analysis tools."""
     @abstractmethod
     def result(self, *params):
+        """Executes analysis and returns its result."""
         pass
 
 
 class CorrelationMatrix(Analysis):
+    """Correlation-based feature filtering using Phik correlation matrix.
+
+        Removes features with correlation above a specified threshold,
+        keeping the most important ones.
+
+        :param data: Feature matrix.
+        :type data: pandas.DataFrame
+
+        :param feature_importance_list: Features ordered by importance.
+        :type feature_importance_list: list
+
+        :param features_numerical: List of numerical features.
+        :type features_numerical: list
+
+        :param threshold: Correlation threshold.
+        :type threshold: float
+        """
     def __init__(self,
                  data: pd.DataFrame,
                  feature_importance_list: list,
@@ -55,6 +106,11 @@ class CorrelationMatrix(Analysis):
         self.features_numerical = features_numerical
 
     def result(self):
+        """Computes correlated features to drop.
+
+                :return: List of feature names to drop.
+                :rtype: list
+                """
         self.X = self.X[reversed(self.last)]  # упорядочен по значимости
         logger.debug('Feature selection||Calculating correlations')
         phik_matrix = self.X.phik_matrix(interval_cols=self.features_numerical)
@@ -70,6 +126,29 @@ class CorrelationMatrix(Analysis):
 
 
 class CVStability(Analysis):
+    """Cross-validation stability analysis for feature selection.
+
+        Evaluates feature stability by measuring performance variation
+        across cross-validation folds when excluding features.
+
+        :param list_to_exclude: Initial list of features to exclude.
+        :type list_to_exclude: list
+
+        :param data_subset: Prepared dataset subset.
+        :type data_subset: ModelDataSubset
+
+        :param config: Feature selection configuration.
+        :type config: FeatureSelectionConfig
+
+        :param features: List of candidate features.
+        :type features: list
+
+        :param objective: CatBoost objective.
+        :type objective: str
+
+        :param catboost_params: CatBoost parameters.
+        :type catboost_params: dict, optional
+        """
     def __init__(self,
                  list_to_exclude: list,
                  data_subset: ModelDataSubset,
@@ -92,7 +171,14 @@ class CVStability(Analysis):
 
 
     def result(self,):
-        """Calculation of stability using phik matrix"""
+        """Calculates feature stability using cross-validation.
+
+        Features whose CV metric variation exceeds the configured
+        threshold are dropped.
+
+        :return: Updated list of features to drop.
+        :rtype: list
+        """
         # TODO разобраться со списками
         features = self.features
         if features == []:
@@ -139,6 +225,16 @@ class CVStability(Analysis):
             return self.to_drop
 
     def __choose_scoring_fun(self, model_name: str):
+        """Selects scoring function for cross-validation.
+
+                INTERNAL METHOD. Not part of the public API.
+
+                :param model_name: Model name.
+                :type model_name: str
+
+                :return: Scoring function name.
+                :rtype: str
+                """
         if self.config.metric_eval[model_name] in get_scorer_names():
             return self.config.metric_eval[model_name]
         else:
@@ -147,6 +243,22 @@ class CVStability(Analysis):
 
 
 class CatboostShapAnalysis(Analysis):
+    """SHAP-based feature selection using CatBoost.
+
+        Performs recursive feature elimination based on SHAP values.
+
+        :param data_subset: Prepared dataset subset.
+        :type data_subset: ModelDataSubset
+
+        :param config: Feature selection configuration.
+        :type config: FeatureSelectionConfig
+
+        :param objective: CatBoost objective.
+        :type objective: str
+
+        :param params: CatBoost parameters.
+        :type params: dict, optional
+        """
     def __init__(self,
                  data_subset: ModelDataSubset,
                  config: FeatureSelectionConfig,
@@ -162,6 +274,14 @@ class CatboostShapAnalysis(Analysis):
             self.params = params
 
     def result(self,):
+        """Runs SHAP-based feature selection.
+
+                Trains a CatBoost model and recursively selects features
+                based on SHAP values.
+
+                :return: Feature selection summary.
+                :rtype: dict
+                """
         logger.debug('Feature selection||Fitting catboost')
         X_train, X_test, y_train, y_test, cat_features = train_data(self.data_subset)
         train_pool = Pool(X_train, y_train, feature_names=list(X_train.columns),
