@@ -20,9 +20,25 @@ from outboxml.core.utils import FilesNames
 
 
 class Extractor(ABC):
-    """
-    Base interface for extracting data.
-    Inherited user classes should contain the `extract_dataset` method which returns pandas or polars Dataframe.
+    """Base interface for extracting data.
+
+    Abstract base class that defines the interface for data extraction.
+    Inherited user classes should implement the ``extract_dataset`` method
+    which returns a pandas or polars DataFrame.
+
+    :var __connection_config: Internal connection configuration.
+    :var load_config_from_env: Whether to load configuration from environment.
+    :var connection_config: Connection configuration object.
+
+    .. note::
+        Subclasses must implement the :meth:`extract_dataset` method.
+
+    Example::
+
+        class MyExtractor(Extractor):
+            def extract_dataset(self) -> pd.DataFrame:
+                # Your extraction logic here
+                return pd.read_csv('data.csv')
     """
 
     def __init__(self, *params):
@@ -48,15 +64,35 @@ class Extractor(ABC):
         self.connection_config = connection_config
 
     def __check_object(self, dataset: pd.DataFrame | pl.DataFrame):
-        """Data checking.
-        :param dataset: Dataset.
-        :type dataset: pandas.DataFrame, polars.DataFrame
+        """Check and validate dataset.
+
+        This method can be overridden in subclasses to perform data validation
+        and verification.
+
+        :param dataset: Dataset to check.
+        :type dataset: pandas.DataFrame or polars.DataFrame
+        :return: None
+        :rtype: None
         """
         pass
 
 
 class SimpleExtractor(Extractor):
-    """Class for simple extractor."""
+    """Simple extractor for pre-loaded data.
+
+    This extractor is used when data is already loaded into memory as a
+    pandas DataFrame.
+
+    :param data: Pre-loaded dataset.
+    :type data: pd.DataFrame
+    :param *params: Additional parameters (currently unused).
+
+    Example::
+
+        data = pd.read_csv('my_data.csv')
+        extractor = SimpleExtractor(data=data)
+        dataset = extractor.extract_dataset()
+    """
     def __init__(self, data: pd.DataFrame, *params):
         """Initialization.
         :param data: Dataset.
@@ -76,11 +112,30 @@ class SimpleExtractor(Extractor):
 
 
 class BaseExtractor(Extractor):
-    """Base class for extractor. Support extraction from:
-        - csv file,
-        - pickle file,
-        - parquet file,
-        - databases
+    """Base class for extractor supporting multiple data sources.
+
+    Supports extraction from:
+    - CSV files
+    - Pickle files
+    - Parquet files
+    - Databases (PostgreSQL, etc.)
+
+    :param data_config: Data configuration object specifying the data source
+        and connection parameters.
+    :type data_config: DataModelConfig
+
+    :var __data_config: Internal data configuration object.
+
+    Example::
+
+        from outboxml.core.pydantic_models import DataModelConfig
+
+        config = DataModelConfig(
+            source="csv",
+            local_name_source="data.csv"
+        )
+        extractor = BaseExtractor(data_config=config)
+        dataset = extractor.extract_dataset()
     """
 
     def __init__(self, data_config: DataModelConfig):

@@ -44,26 +44,18 @@ class BaseWrapperModel(ABC):
 
 
 class DefaultModels:
-    """
-    Factory class for loading default or baseline models.
+    """Factory class for loading default or baseline models.
 
-    This class is used when no custom user-defined models
-    are provided in the configuration.
+    This class is used when no custom user-defined models are provided
+    in the configuration. It can load wrapper-based models or baseline
+    models depending on the configuration.
 
-    Attributes
-    ----------
-    group_name : str
-        Name of the model group.
-    dataset : pandas.DataFrame
-        Full dataset used for training.
-    data_subsets : Dict[str, ModelDataSubset]
-        Prepared datasets for each model.
-    models_configs : List[ModelConfig]
-        Configuration objects for models.
-    baseline_model : int
-        Identifier of baseline model.
-    models_names : list[str]
-        Names of loaded models.
+    :var group_name: Name of the model group.
+    :var dataset: Full dataset used for training.
+    :var data_subsets: Prepared datasets for each model.
+    :var models_configs: Configuration objects for models.
+    :var baseline_model: Identifier of baseline model.
+    :var models_names: Names of loaded models.
     """
 
     def __init__(self,
@@ -158,13 +150,22 @@ class DefaultModels:
 
 
 class BaselineModels:
-    """
-    Factory for creating simple baseline models.
+    """Factory for creating simple baseline models.
 
-    Attributes
-    ----------
-    model_name : str
-        Name of the model.
+    Creates baseline models for comparison purposes. Supports RandomForestRegressor,
+    DummyRegressor (median), and mean-based models.
+
+    :param dataset: ModelDataSubset containing training data.
+    :type dataset: ModelDataSubset
+    :param model_name: Name of the model.
+    :type model_name: str
+    :param model_number: Baseline model identifier. 1 = RandomForestRegressor,
+        2 = DummyRegressor median, 3 = mean.
+    :type model_number: int
+
+    :var model_name: Name of the model.
+    :var dataset: ModelDataSubset containing training data.
+    :var model_number: Baseline model identifier.
     """
     def __init__(self,
                  dataset,

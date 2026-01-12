@@ -55,23 +55,16 @@ class ReportComponent(ABC):
 
 @dataclass
 class MonitoringItem:
-    """
-    Configuration container for a single monitoring item.
+    """Configuration container for a single monitoring item.
 
-    Combines a data reviewer, report generator, and execution settings.
+    Combines a data reviewer, report generator, and execution settings
+    into a single monitoring configuration.
 
-    Attributes
-    ----------
-    data_reviewer : DataReviewerComponent
-        Component responsible for data review.
-    reviewer_report : ReportComponent
-        Report generator component.
-    group_models : bool
-        Whether models are processed as a group.
-    name : str
-        Monitoring item name.
-    table_name : str or None
-        Target database table name.
+    :var data_reviewer: Component responsible for data review.
+    :var reviewer_report: Report generator component.
+    :var group_models: Whether models are processed as a group.
+    :var name: Monitoring item name.
+    :var table_name: Target database table name.
     """
     data_reviewer: DataReviewerComponent
     reviewer_report: ReportComponent
@@ -187,13 +180,19 @@ class ReportRegistry():
 
 
 class MonitoringService:
-    """
-    Service responsible for executing monitoring items.
+    """Service responsible for executing monitoring items.
 
-    Attributes
-    ----------
-    monitoring_items : list[MonitoringItem]
-        List of configured monitoring items.
+    Manages a collection of monitoring items and executes them in sequence,
+    producing review results and formatted reports.
+
+    :var monitoring_items: List of configured monitoring items.
+    :vartype monitoring_items: list[MonitoringItem]
+
+    Example::
+
+        service = MonitoringService()
+        service.add_item(monitoring_item)
+        reviews, reports = service.review_all(context)
     """
     def __init__(self):
         """

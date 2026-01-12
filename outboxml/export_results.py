@@ -19,17 +19,42 @@ from outboxml.core.utils import save_results
 
 
 class ResultExport:
-    """
-    Main module for exporting and processing calculation and model results, including metrics and plots.
-    Can be used for model comparison and retrospective analysis. 
-    
-    :param ds_manager: DataSetsManager object with results (after calling fit_models() method)
+    """Main module for exporting and processing calculation and model results.
+
+    This class handles exporting and processing of model results, including
+    metrics and plots. Can be used for model comparison and retrospective analysis.
+
+    :param ds_manager: DataSetsManager object with results (after calling
+        ``fit_models()`` method).
     :type ds_manager: DataSetsManager
-    :param ds_manager_to_compare: Another DataSetsManager object with results for comparison
+    :param ds_manager_to_compare: Another DataSetsManager object with results
+        for comparison. Defaults to None.
     :type ds_manager_to_compare: DataSetsManager, optional
-    :param config: External config file with passwords, logins, paths to save and folders.
-                   Uses .env by default
-    :type config: .py, optional
+    :param config: External config file with passwords, logins, paths to save
+        and folders. Uses .env by default if not provided.
+    :type config: Any, optional
+
+    :var _ds_manager: DataSetsManager object with results.
+    :var result: Dictionary of results from ds_manager.
+    :var project_name: Name of the project.
+    :var _ds_manager_to_compare: Optional DataSetsManager for comparison.
+    :var result_to_compare: Optional results for comparison.
+    :var project_name_to_compare: Optional project name for comparison.
+
+    .. rubric:: Examples
+
+    .. code-block:: python
+
+        from outboxml.datasets_manager import DataSetsManager
+        from outboxml.export_results import ResultExport
+
+        # After training models
+        ds_manager = DataSetsManager(config_name="config.json")
+        ds_manager.fit_models()
+
+        # Export results
+        exporter = ResultExport(ds_manager=ds_manager)
+        exporter.save(to_pickle=True, to_mlflow=True)
     """
 
     def __init__(self,

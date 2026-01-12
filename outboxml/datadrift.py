@@ -33,12 +33,8 @@ class DataDrift(DataReviewerComponent):
         Defaults to 100.
     :type dif_len_string: int
     
-    :var dif_len_string: Maximum length of difference string in full calculation.
-    :var n_bins: Number of bins to use for histogram-based calculations.
-    :var full_calc: Whether to perform full calculation.
     :var types_dict: Dictionary mapping column names to their types ('NUMERICAL' or 'CATEGORICAL').
     :var full_report: List for storing full calculation reports.
-    :var columns_to_exclude: List of column names to exclude from drift calculation.
     
     .. rubric:: Examples
     

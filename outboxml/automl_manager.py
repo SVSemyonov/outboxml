@@ -40,8 +40,6 @@ class AutoMLResult:
     
     :param group_name: Name of the model group for this AutoML run.
     :type group_name: str
-    
-    :var group_name: Name of the model group.
     :var start_run_time: Timestamp when the AutoML run started.
     :var run_time: Dictionary mapping stage names to execution timestamps.
     :var features_for_research: List of features selected for research.
@@ -119,12 +117,6 @@ class MLFlowWrapper:
     :type results_path: str
     :param mlflow_tracking_uri: MLFlow tracking server URI. Defaults to 'http://localhost:5000'.
     :type mlflow_tracking_uri: str
-    
-    :var experiment_name: Name of the MLFlow experiment.
-    :var group_name: Name of the model group/run.
-    :var mlflow_tracking_uri: MLFlow tracking server URI.
-    :var results_path: Path to the results directory.
-    :var tags: Dictionary of tags for runs.
     
     .. rubric:: Examples
     
