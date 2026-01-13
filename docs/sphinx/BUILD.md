@@ -25,6 +25,7 @@
 
    Open `_build/html/index.html` in your web browser.
 
+<<<<<<< HEAD
 ## Automated Builds (CI/CD)
 
 Documentation is automatically built when:
@@ -53,6 +54,8 @@ To manually trigger a build in CI/CD:
 - **GitHub**: Push changes or create a PR
 - **GitLab**: Push changes or create a merge request
 
+=======
+>>>>>>> origin/develop
 ## Available Build Targets
 
 - `html` - Build HTML documentation (default)
