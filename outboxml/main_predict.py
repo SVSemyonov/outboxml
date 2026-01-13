@@ -31,20 +31,47 @@ async def main_predict(
         second_features_values: Optional[List[Dict]] = None,
         async_mode: bool = True,
 ) -> Dict:
-    """Calc model predictions.
+    """Calculate model predictions.
 
-    :param config: Config module. Should contain `prod_models_path`.
-    :type config: module`
-    :param group_name: Name of the main model.
-    :type group_name: str
-    :param features_values: Data for main model.
-    :type features_values: list[dict], pandas.DataFrame
-    :param second_group_name: Name of second model.
-    :type second_group_name: str
-    :param second_features_values: Data for second model.
-    :type second_features_values: list[dict], pandas.DataFrame
-    :param async_mode: Flag to use async mode.
+    This function loads model groups from pickle files and performs
+    predictions on the provided features. Supports single or dual
+    model group predictions with optional async execution.
+
+    :param config: Configuration module. Should contain ``prod_models_path``.
+    :type config: module
+    :param group_name: Name of the main model group. If None, uses the
+        latest group from the production models path.
+    :type group_name: Optional[str]
+    :param features_values: Data for main model. Can be a list of dictionaries
+        or a pandas DataFrame.
+    :type features_values: Union[List[Dict], pd.DataFrame]
+    :param second_group_name: Name of second model group. Defaults to None.
+    :type second_group_name: Optional[str]
+    :param second_features_values: Data for second model. Can be a list of
+        dictionaries or a pandas DataFrame. Defaults to None.
+    :type second_features_values: Optional[List[Dict]]
+    :param async_mode: Whether to use async mode for predictions. Defaults to True.
     :type async_mode: bool
+    :return: Dictionary containing predictions with keys:
+        - ``usage_model``: Name of the main model group used
+        - ``result``: Dictionary of predictions by model name
+        - ``version_model``: Dictionary of model versions
+        - ``df``: Dictionary of DataFrames with predictions
+        If ``second_group_name`` is provided, also includes ``second_response``
+        with the same structure for the second model group.
+    :rtype: Dict
+
+    :raises FileNotFoundError: If model group pickle file is not found.
+    :raises ValidationError: If model group structure is invalid.
+
+    Example::
+
+        result = await main_predict(
+            config=config,
+            group_name="my_model_group",
+            features_values=df,
+            async_mode=True
+        )
     """
 
     predict_tasks = []

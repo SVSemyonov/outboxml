@@ -1122,7 +1122,6 @@ class HTMLReport:
     :param config: Configuration object with results_path attribute.
     :type config: object
     
-    :var config: Configuration object with results_path attribute.
     :var html_content: List of HTML content strings being assembled.
     :var report_path: Full path to the output HTML report file.
     

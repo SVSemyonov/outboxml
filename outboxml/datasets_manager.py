@@ -29,26 +29,39 @@ from outboxml import config
 
 
 class DSManagerResult:
-    """Класс контейнер результатов
+    """Container class for model results.
 
-    Parameters
-    ___________
-    model_name: имя модели
-    config: конфиг файл с исходными данными
-    model: обученная модель
-    datasubset: Объект ModelDataSubset, содержащий вектора X_train/test, Y_train/test, имена числовых и категориальных фичей, экспозицию
-    model config: конфиг модели
-    __________
-    Methods
-    dict_for_prod_export - Возвращает словаь для формирования pickle файла для сервиса
-    from_pickle_model_result - Конвертер словаря из пикл сервиса в объект (class method)
-    ______
-    Properties:
-    ______
-    X - вектор X
-    y_pred - Predictions
-    y - y_true
-    exposure - вектор экспозиции
+    Stores all information about a trained model including the model object,
+    data subsets, predictions, metrics, and configurations.
+
+    :param model_name: Name of the model.
+    :type model_name: str
+    :param model: Trained model object.
+    :type model: Any
+    :param data_subset: Object containing train/test data subsets with
+        X_train/test, y_train/test vectors, numerical and categorical feature
+        names, and exposure vectors.
+    :type data_subset: ModelDataSubset
+    :param model_config: Model configuration object.
+    :type model_config: ModelConfig, optional
+    :param config: Configuration file with source data settings.
+    :type config: AllModelsConfig, optional
+    :param predictions: Dictionary with 'train' and 'test' keys containing predictions.
+    :type predictions: dict, optional
+    :param metrics: Dictionary with 'train' and 'test' keys containing metrics.
+    :type metrics: dict, optional
+
+    .. rubric:: Methods
+
+    - :meth:`dict_for_prod_export` - Returns dictionary for creating pickle file for service
+    - :meth:`from_pickle_model_result` - Converter from pickle service dictionary to object (class method)
+
+    .. rubric:: Properties
+
+    - :attr:`X` - Feature vector X
+    - :attr:`y_pred` - Predictions
+    - :attr:`y` - True target values (y_true)
+    - :attr:`exposure` - Exposure vector
     """
 
     def __init__(self,
@@ -213,87 +226,105 @@ class DSManagerResult:
 
 
 class DataSetsManager:
-    """Основной класс для работы с моделями.
+    """Main class for working with models.
 
-    Для работы с фреймоврком необходим заполенный по правилам config файл.
-    Из коробки работа производится по параметрам конфига DataSetsManager(config_name = config).
-    
-    Для пользовательской настройки фреймоворка необходимо импортировать модули:
-    from outboxml.extractors.extractor import Extractor, RTDMExtractor, ActuarExtractor
-    from outboxml.metrics.metrics import BaseMetric
-    from outboxml.models import Model
-    from outboxml.dataset_retro import RetroDataset
-    from outboxml.export_results import ResultsExport
+    This is the core class for managing datasets, model training, and evaluation
+    in the OutBoxML framework. It handles data loading, preprocessing, model
+    fitting, prediction, and result management.
 
-    Работа с фрейморком начинается с создания объекта с параметрами.
-    Обязательный параметр на входе: путь к конфиг файлу или сам валидированный конифиг-файл AllModesConfig
-    Остальные параметры могут быть установлены автоматически "из коробки",
-    Информация о работе выводится в виде лог-файла.
-    Результаты моделирования выводятся в контейнере результатов DSManagerResult
+    For framework usage, a properly configured config file is required.
+    Out-of-the-box operation is performed using config parameters:
+    ``DataSetsManager(config_name=config)``.
 
+    For custom framework configuration, import the following modules:
+    ::
 
-    Parameters:
-    ----------
-    config_name: path to config or validated config file
+        from outboxml.extractors import Extractor
+        from outboxml.metrics.base_metrics import BaseMetric
+        from outboxml.models import BaseWrapperModel
+        from outboxml.dataset_retro import RetroDataset
+        from outboxml.export_results import ResultExport
 
-    extractor: User-defined extractor object inheritanced by Extractor interface.
-               main method - extract_dataset() should return Pandas Dataframe
-               extractor should contain check_object() method with data validation and verification
-               Use library RTDMExtractor or ActuarExtractor for working with databases
+    Framework usage starts with creating an object with parameters.
+    The required parameter is: path to config file or validated config file
+    (AllModelsConfig). Other parameters can be set automatically "out of the box".
+    Work information is output as a log file.
+    Modeling results are output in the DSManagerResult container.
 
-    modified_data: dict {name: PreparedDataset} with models preparation objects. Wrapper of prepare_dataset function
-                        PreparedDataset by default uses model_config features and has no prep and post prep functions
+    :param config_name: Path to config file or validated config file (AllModelsConfig).
+    :type config_name: Union[str, Dict]
+    :param extractor: User-defined extractor object inheriting from Extractor interface.
+        Main method ``extract_dataset()`` should return pandas DataFrame.
+        Extractor should contain ``check_object()`` method with data validation
+        and verification. Use library RTDMExtractor or ActuarExtractor for
+        working with databases.
+    :type extractor: Optional[Extractor]
+    :param prepared_datasets: Dictionary ``{name: PreparedDataset}`` with model
+        preparation objects. Wrapper of ``prepare_dataset`` function.
+        PreparedDataset by default uses model_config features and has no prep
+        and post prep functions.
+    :type prepared_datasets: Optional[Dict[str, PrepareDataset]]
+    :param models_dict: Dictionary ``{name: Model}`` with models for training
+        and prediction inheriting from Model class. Class should have ``fit()``,
+        ``predict()`` methods. By default model is chosen by group and project
+        name. You can import models from library.
+    :type models_dict: Optional[Dict]
+    :param business_metric: User-defined business metric. Should inherit from
+        BaseMetric. Main method is ``calculate_metric()``.
+    :type business_metric: Optional[BaseMetric]
+    :param use_baseline_model: Baseline model selection. 1 - RandomForestRegressor,
+        2 - DummyRegressor median; 3 - mean. Defaults to 0 (no baseline).
+    :type use_baseline_model: int
+    :param retro_changes: RetroDataset object for retro analysis.
+    :type retro_changes: Optional[RetroDataset]
+    :param external_config: External configuration object. Defaults to None.
+    :type external_config: Any, optional
+    :param use_temp_files: Whether to use temporary files for data processing.
+        Defaults to False.
+    :type use_temp_files: bool
+    :param prepare_engine: Engine to use for data preparation ('pandas' or 'polars').
+        Defaults to 'pandas'.
+    :type prepare_engine: Literal['pandas', 'polars']
 
+    .. rubric:: Methods
 
-    models_dict: dict {name: Model} with models for train and prediction inheritanced by Model class.
-                class should have fit(), predict() and models_dict() methods.
-                By default model is chosen by group and project name. You can import models from library
+    - :meth:`load_dataset` - Load dataset from source and path in config file
+        or user-defined extractor class
+    - :meth:`get_trainDfs` - Return prepared data subset to train user model
+    - :meth:`get_testDfs` - Return prepared data subset to test user model
+    - :meth:`fit_models` - Fit, predict and get metrics for all models in model_dict
+    - :meth:`get_result` - Return container of results DSManagerResult
+    - :meth:`check_datadrift` - Returns dataframe with datadrift analysis result
 
-    business_metric: user-defined business metric.
-                    The inheritace of BaseMetric. Main method is calculate_metric()
+    .. rubric:: Examples
 
-    use_baseline_model: bool , Выбор Baseline. 1 - RandomForestRegressor, 2 - DummyRegressor median; 3 - mean
+    Example usage with Titanic dataset:
 
-    retroChanges: RetroDataset object for retro analysis.
+    .. code-block:: python
 
-    Methods:
-    __________
-    load_dataset() - loading due to source and path from config file or user-defined extractor class
-    get_trainDfs(model_name: str) - return prepared datasubset to train user model
-    get_testDfs(model_name: str) - return prepared datasubset to test user model
-    fit_models({model_name: model, ...}, need_fit=True) - fit< predict and get metrics for all models in model_dict
-    get_result() - return container of results DSManagerResult
-    check_datadrift(model_name: str) - returns dataframe with datadrift analysis result
-    ----------
-    Examples:
-    ----------
-    To see more examples go to outboxml/examples repository
-
-
-    Examples:
-    _______
-    1. Titanic
-
-        #post prep function
+        # Post prep function
         def data_post_prep_func(data: pd.DataFrame):
             data["SEX"] = pd.to_numeric(data["SEX"])
             return data
 
-        titanic_ds_manager =  DataSetsManager(config_name=config_name,
-                                         extractor=TitanicExampleExtractor(path_to_file=path_to_data),
-                                         prepared_datasets={
-                                                        'first': PrepareDataset(group_name='survived1',
-                                                                                    data_post_prep_func=data_post_prep_func,
-                                                                                    check_prepared=True,
-                                                                                    calc_corr=True),
-                                                        'second': PrepareDataset(group_name='survived2',)
-                                                            },
-                                         business_metric=TitanicExampleMetric()
-
-                                         )
-        titanic_TrainDs = titanic_ds_manager.get_TrainDfs(model_name='first')
+        titanic_ds_manager = DataSetsManager(
+            config_name=config_name,
+            extractor=TitanicExampleExtractor(path_to_file=path_to_data),
+            prepared_datasets={
+                'first': PrepareDataset(
+                    group_name='survived1',
+                    data_post_prep_func=data_post_prep_func,
+                    check_prepared=True,
+                    calc_corr=True
+                ),
+                'second': PrepareDataset(group_name='survived2')
+            },
+            business_metric=TitanicExampleMetric()
+        )
+        titanic_TrainDs = titanic_ds_manager.get_trainDfs(model_name='first')
         titanic_results = titanic_ds_manager.fit_models()
 
+    For more examples, see the ``outboxml/examples`` repository.
     """
 
     def __init__(
