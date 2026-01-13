@@ -25,6 +25,34 @@
 
    Open `_build/html/index.html` in your web browser.
 
+## Automated Builds (CI/CD)
+
+Documentation is automatically built when:
+
+- **Pull Requests** are created targeting the `develop` branch (GitHub)
+- **Merge Requests** are created targeting the `develop` branch (GitLab)
+- Code changes are pushed to the `develop` branch
+
+### GitHub Actions
+
+The workflow (`.github/workflows/docs.yml`) will:
+- Build documentation on PRs and pushes to `develop`
+- Upload build artifacts for review
+- Deploy to GitHub Pages when pushed to `develop`
+
+### GitLab CI
+
+The pipeline (`.gitlab-ci.yml`) will:
+- Build documentation on merge requests and pushes to `develop`
+- Store build artifacts for download
+- Deploy to GitLab Pages when pushed to `develop`
+
+### Manual Trigger
+
+To manually trigger a build in CI/CD:
+- **GitHub**: Push changes or create a PR
+- **GitLab**: Push changes or create a merge request
+
 ## Available Build Targets
 
 - `html` - Build HTML documentation (default)
