@@ -12,53 +12,94 @@ from outboxml.core.utils import ResultPickle
 
 
 class EnsembleResult:
-    """
-    Class for storing one part of the models' ensemble.
-    The final structure of the pickle file is List[EnsembleResult].
+    """Class for storing one part of the models' ensemble.
 
-    :param model_name: The name of the model, it should be in all elements of `models`.
-    :param models: List[(condition: str, group_name: str, model: Any)].
+    The final structure of the pickle file is ``List[EnsembleResult]``.
+    Each result contains a model name and a list of conditional models.
 
-    Condition should be a valid string for pandas.query().
-    Group_name is a name of models' group that should be applied for the given condition.
-    Model is a fitted model object.
+    :var model_name: The name of the model, it should be in all elements
+        of ``models``.
+    :var models: List of tuples ``(condition: str, group_name: str, model: Any)``.
+        Condition should be a valid string for ``pandas.query()``.
+        Group_name is a name of models' group that should be applied for
+        the given condition. Model is a fitted model object.
+
+    Example::
+
+        result = EnsembleResult(
+            model_name="my_model",
+            models=[
+                ("region == 'A'", "model_group_a", fitted_model_a),
+                ("region == 'B'", "model_group_b", fitted_model_b)
+            ]
+        )
     """
 
     def __init__(self, model_name: str, models: List[Tuple[str, str, Any]]):
+        """Initialize EnsembleResult instance.
+
+        :param model_name: The name of the model, it should be in all elements
+            of ``models``.
+        :type model_name: str
+        :param models: List of tuples ``(condition: str, group_name: str, model: Any)``.
+            Condition should be a valid string for ``pandas.query()``.
+            Group_name is a name of models' group that should be applied for
+            the given condition. Model is a fitted model object.
+        :type models: List[Tuple[str, str, Any]]
+        """
         self.model_name: str = model_name
         self.models = models
 
 
 class Ensemble:
-    """
-    Class for creating and saving models' ensemble.
+    """Class for creating and saving models' ensemble.
 
-    :param config: Object that should contain `prod_models_path`, `results_path` and if mlflow is used `mlflow_tracking_uri`, `mlflow_experiment`.
+    This class allows creating ensembles of model groups that can be applied
+    conditionally based on data characteristics. The ensemble is saved as
+    a pickle file for use in production.
 
-    Example:
+    :var config: Configuration object that should contain ``prod_models_path``,
+        ``results_path`` and optionally ``mlflow_tracking_uri``, ``mlflow_experiment``
+        if MLflow is used.
+    :var _ensemble_name: Name of the ensemble.
+    :var _models_names: List of model names in the ensemble.
+    :var _all_groups: Dictionary of all model groups.
+    :var _is_maked: Flag indicating if ensemble has been created.
+    :var _result_pickle: List of EnsembleResult objects.
 
-    class external_config:
-        prod_models_path = "example_prod_path"
-        results_path = "example_results_path"
-        mlflow_tracking_uri = "https://mlflow.company.my"
-        mlflow_experiment = "example_experiment"
+    .. rubric:: Examples
 
-    ens = Ensemble(config=external_config)
+    .. code-block:: python
 
-    ens.make_ensemble(
-        ensemble_name="example_ensemble",
-        models_names=[
-            "example_model_a",
-            "example_model_b",",
-        ],
-        groups=[
-            ("rule_column == 'rule_a'", "model_a.pickle"),
-            ("rule_column == 'rule_b'", "model_b.pickle"),
-        ]
-    )
+        class external_config:
+            prod_models_path = "example_prod_path"
+            results_path = "example_results_path"
+            mlflow_tracking_uri = "https://mlflow.company.my"
+            mlflow_experiment = "example_experiment"
+
+        ens = Ensemble(config=external_config)
+
+        ens.make_ensemble(
+            ensemble_name="example_ensemble",
+            models_names=[
+                "example_model_a",
+                "example_model_b",
+            ],
+            groups=[
+                ("rule_column == 'rule_a'", "model_a.pickle"),
+                ("rule_column == 'rule_b'", "model_b.pickle"),
+            ]
+        )
     """
 
     def __init__(self, config=None):
+        """Initialize Ensemble instance.
+
+        :param config: Configuration object that should contain ``prod_models_path``,
+            ``results_path`` and optionally ``mlflow_tracking_uri``, ``mlflow_experiment``
+            if MLflow is used. Defaults to None.
+        :type config: Any, optional
+        """
         self.config = config
         self._ensemble_name: Optional[str] = None
         self._models_names: Optional[List[str]] = None
@@ -67,17 +108,36 @@ class Ensemble:
         self._result_pickle: Optional[List] = None
 
     def make_ensemble(self, ensemble_name: str, models_names: List[str], groups: List[Tuple[str, str]]) -> None:
-        """
-        Make an ensemble of models' groups.
+        """Make an ensemble of models' groups.
+
+        Creates an ensemble by loading model groups and associating them
+        with conditional rules. The ensemble is saved as a pickle file.
 
         :param ensemble_name: Ensemble name.
-        :param models_names: Models names that should be present in all groups.
-        :param groups: List[(condition: str, group_name: str)].
-
-        Condition should be a valid string for pandas.query().
-        Group_name is a name of models' group that should be applied for the given condition.
-
+        :type ensemble_name: str
+        :param models_names: Model names that should be present in all groups.
+        :type models_names: List[str]
+        :param groups: List of tuples ``(condition: str, group_name: str)``.
+            Condition should be a valid string for ``pandas.query()``.
+            Group_name is a name of models' group that should be applied
+            for the given condition.
+        :type groups: List[Tuple[str, str]]
         :return: None
+        :rtype: None
+
+        :raises EnsembleError: If ensemble is already made, or if parameters
+            are invalid.
+
+        Example::
+
+            ens.make_ensemble(
+                ensemble_name="my_ensemble",
+                models_names=["model_1", "model_2"],
+                groups=[
+                    ("region == 'A'", "group_a.pickle"),
+                    ("region == 'B'", "group_b.pickle")
+                ]
+            )
         """
 
         logger.info(f"making ensemble {ensemble_name} ...")

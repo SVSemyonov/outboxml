@@ -14,36 +14,81 @@ from outboxml.core.prepared_datasets import BasePrepareDataset
 from outboxml.core.pydantic_models import FeatureSelectionConfig, ModelConfig, FeatureModelConfig
 from outboxml.data_subsets import DataPreprocessor, ModelDataSubset
 
+"""
+Feature selection module.
+
+Provides interfaces and base implementations for feature selection
+pipelines, including feature preparation, SHAP-based selection,
+correlation filtering, and CV stability checks.
+"""
+
 
 class SelectionInterface(ABC):
-    """Selection interface"""
+    """Base interface for feature selection algorithms.
+
+    Abstract base class that defines the interface for feature selection
+    implementations. All feature selection algorithms should inherit from
+    this class and implement the ``feature_selection`` method.
+    """
     def feature_selection(self, *params) -> list:
-        """Main selection method"""
+        """Main feature selection method.
+
+        This method should be implemented by subclasses to perform the
+        actual feature selection logic.
+
+        :param *params: Variable number of parameters depending on the
+            specific implementation.
+        :return: List of selected feature names.
+        :rtype: list[str]
+        """
         pass
 
 
 class FeatureSelection(ABC):
+    """Abstract base class for feature selection implementations.
 
-    def select_features(self, *params)->ModelDataSubset:
+    This class provides the interface for feature selection that returns
+    a ModelDataSubset with selected features. Subclasses should implement
+    the ``select_features`` method.
+    """
+    def select_features(self, *params) -> ModelDataSubset:
+        """Execute feature selection.
+
+        This method should be implemented by subclasses to perform feature
+        selection and return a ModelDataSubset containing only the selected
+        features.
+
+        :param *params: Variable number of parameters depending on the
+            specific implementation.
+        :return: Dataset subset with selected features.
+        :rtype: ModelDataSubset
+        """
         pass
 
 
 class FeatureSelectionInterface(SelectionInterface):
-    """Основной интерфейс для алгоритма выбора фичей
-    Parameters:
-    ______________
-        feature_selection_config: конфиг для выбора фичей (см. pydantic_models.py)
-        train_ind: индексы для train
-        test_ind: индексы для test
-        target: target Serie
-        objective: objective type according to catboost objective (by default reading from config)
+    """Main interface for feature selection algorithms.
 
-    Methods:
-        feature_selection() - Метод отброра фичей. Возвращает список отобранных
-    
+    Uses SHAP values, correlation filtering, and cross-validation
+    stability analysis to select the most relevant features.
+
+    :param feature_selection_config: Configuration for feature selection.
+    :type feature_selection_config: FeatureSelectionConfig
+
+    :param objective: CatBoost objective name.
+    :type objective: str
     """
-    def __init__(self, feature_selection_config: FeatureSelectionConfig, objective: str = 'RMSE'):
 
+    def __init__(self, feature_selection_config: FeatureSelectionConfig, objective: str = 'RMSE'):
+        """Initialize feature selection interface.
+
+        :param feature_selection_config: Configuration for feature selection.
+        :type feature_selection_config: FeatureSelectionConfig
+        :param objective: CatBoost objective name. Supports 'RMSE', 'poisson',
+            'gamma', 'binary', 'binomial', or any valid CatBoost objective.
+            Defaults to 'RMSE'.
+        :type objective: str
+        """
         self.to_drop = []
         self.last = None
         self.params = {}
@@ -61,6 +106,20 @@ class FeatureSelectionInterface(SelectionInterface):
 
 
     def feature_selection(self,data_subset: ModelDataSubset, new_features_list: list, params: dict = None ):
+        """Selects features based on SHAP importance and stability criteria.
+
+                :param data_subset: Prepared dataset subset for model training.
+                :type data_subset: ModelDataSubset
+
+                :param new_features_list: List of candidate features.
+                :type new_features_list: list
+
+                :param params: Additional CatBoost parameters.
+                :type params: dict, optional
+
+                :return: List of selected feature names.
+                :rtype: list
+                """
         catboost_shap_analysis = CatboostShapAnalysis(data_subset=data_subset,
                                                       config=self._config,
                                                       objective=self.objective,
@@ -94,23 +153,24 @@ class FeatureSelectionInterface(SelectionInterface):
 
 
 class BaseFS(FeatureSelection):
-    """Class for selecting new features for a dataset based on configuration settings.
-    Utilizes base interfaces for data preparation and feature selection.
-    Parameters:
+    """Base feature selection pipeline.
 
-        parameters : FeatureSelectionConfig
-            parameters for feature selection (see pydantic models for schema).
-        feature_selection_interface : SelectionInterface
-            Interface for feature selection with a `feature_selection()` method.
-        prepare_data_interface : BasePrepareDataset
-            Interface for data preparation with a `data_prepare()` method.
-        new_features_list : list of str
-            List of candidate features to evaluate.
+    Orchestrates feature preparation, selection, and dataset filtering.
 
+    :param data_preprocessor: Dataset preprocessor.
+    :type data_preprocessor: DataPreprocessor
 
-    Methods:
-       select_features()
-            Executes the feature selection pipeline.
+    :param parameters: Feature selection configuration.
+    :type parameters: FeatureSelectionConfig
+
+    :param feature_selection_interface: Feature selection algorithm.
+    :type feature_selection_interface: SelectionInterface
+
+    :param prepare_data_interface: Dataset preparation interface.
+    :type prepare_data_interface: BasePrepareDataset
+
+    :param new_features_list: Candidate features.
+    :type new_features_list: list, optional
     """
     def __init__(self,
                  data_preprocessor: DataPreprocessor,
@@ -132,7 +192,17 @@ class BaseFS(FeatureSelection):
         self.result_features = []
 
     def select_features(self, model_name: str=None, params={}):
-        """Method for executing the feature selection pipeline. Returns a list of names of selected features"""
+        """Executes the full feature selection pipeline.
+
+        :param model_name: Model name.
+        :type model_name: str, optional
+
+        :param params: Model parameters.
+        :type params: dict
+
+        :return: Dataset subset with selected features.
+        :rtype: ModelDataSubset
+        """
         logger.debug('Feature selection||Prepare of new_features for research')
         if not self.parameters.use_temp_data:
             data_for_research = self.prepare_data(model_name=model_name)
@@ -155,6 +225,14 @@ class BaseFS(FeatureSelection):
         return final_data
 
     def prepare_data(self, model_name: str=None)->ModelDataSubset:
+        """Prepares dataset for feature selection.
+
+                :param model_name: Model name.
+                :type model_name: str, optional
+
+                :return: Prepared dataset subset.
+                :rtype: ModelDataSubset
+                """
         feature_params = {}
         full_data = self._data_preprocessor.dataset
         self.features_for_model = self.feature_types(full_data)
@@ -168,7 +246,14 @@ class BaseFS(FeatureSelection):
                                                   )
 
     def feature_types(self, data: pd.DataFrame)->dict:
+        """Determines feature types for selection.
 
+                :param data: Input dataset.
+                :type data: pandas.DataFrame
+
+                :return: List of feature names suitable for modeling.
+                :rtype: list
+                """
         cutoff_1_category = self.parameters.cutoff_1_category
         cutoff_nan = self.parameters.cutoff_nan
         count_category = self.parameters.count_category
@@ -198,6 +283,25 @@ class BaseFS(FeatureSelection):
 
     def _prepare_feature(self, serie: pd.Series,  depth: float = 0.01,
                          q1: float = 0.001, q2: float = 0.999)->dict:
+        """Prepares parameters for a single feature.
+
+                Internal helper method.
+
+                :param serie: Feature data.
+                :type serie: pandas.Series
+
+                :param depth: Category proportion cutoff.
+                :type depth: float
+
+                :param q1: Lower quantile.
+                :type q1: float
+
+                :param q2: Upper quantile.
+                :type q2: float
+
+                :return: Feature parameters dictionary.
+                :rtype: dict
+                """
         return feature_params(serie=serie, max_category_num=self.parameters.count_category,
                               cutoff_nan=self.parameters.cutoff_nan,
                               cutoff_1_category=self.parameters.cutoff_1_category,
@@ -209,7 +313,19 @@ class BaseFS(FeatureSelection):
                               encoding_num=self.parameters.encoding_num)
 
     def _filter_data(self, data_subset: ModelDataSubset, selected_features: list)->ModelDataSubset:
-        """Method for creating of the result list of selected features"""
+        """Filters dataset based on selected features.
+
+        Removes non-selected features and updates model configuration.
+
+        :param data_subset: Dataset subset to filter.
+        :type data_subset: ModelDataSubset
+
+        :param selected_features: Selected feature names.
+        :type selected_features: list
+
+        :return: Filtered dataset subset.
+        :rtype: ModelDataSubset
+        """
         logger.debug('Feature selection||Preparing results')
         result_features = []
         for selected_feature in selected_features:
@@ -235,6 +351,16 @@ class BaseFS(FeatureSelection):
         return data_subset
 
     def _prepare_data_using_temp(self, model_name: str=None)->ModelDataSubset:
+        """Prepares dataset using temporary saved subsets.
+
+                Used when `use_temp_data=True` in configuration.
+
+                :param model_name: Model name.
+                :type model_name: str, optional
+
+                :return: Combined dataset with original and new features.
+                :rtype: ModelDataSubset
+                """
         init_version = deepcopy(self._data_preprocessor._version)
         version = self._data_preprocessor._version.split('_new')[0]
         self._data_preprocessor._pickle_subset.version = version
@@ -263,6 +389,16 @@ class BaseFS(FeatureSelection):
 
 
     def _preprocessor_for_using_temp_files(self, model_name):
+        """Creates a new DataPreprocessor for temporary feature preparation.
+
+                Internal helper for reusing saved dataset subsets.
+
+                :param model_name: Model name.
+                :type model_name: str
+
+                :return: Configured DataPreprocessor instance.
+                :rtype: DataPreprocessor
+                """
         full_data = self._data_preprocessor.dataset
         feature_params = {}
         new_model_config = deepcopy(self._data_preprocessor.model_config(model_name))

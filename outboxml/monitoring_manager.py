@@ -19,33 +19,30 @@ from outboxml.monitoring_result import MonitoringResult, DataContext, Monitoring
 
 
 class MonitoringManager:
-    """
-    Orchestrator class for executing model monitoring pipeline.
+    """Orchestrator class for executing model monitoring pipeline.
 
-    This class manages the full monitoring lifecycle:
-    loading configurations, extracting data and logs,
-    running monitoring checks, exporting results,
+    This class manages the full monitoring lifecycle: loading configurations,
+    extracting data and logs, running monitoring checks, exporting results,
     and sending notifications.
 
-    Attributes
-    ----------
-    monitoring_service : MonitoringService
-        Service responsible for executing monitoring checks.
-    result : MonitoringResult
-        Object storing monitoring results.
-    logs : pandas.DataFrame or None
-        Extracted production logs.
+    :var monitoring_service: Service responsible for executing monitoring checks.
+    :vartype monitoring_service: MonitoringService
+    :var result: Object storing monitoring results.
+    :vartype result: MonitoringResult
+    :var logs: Extracted production logs.
+    :vartype logs: pandas.DataFrame or None
 
     .. rubric:: Examples
 
-    Example usage::
+    .. code-block:: python
 
-    manager = MonitoringManager(
-        monitoring_config='configs/monitoring_test_config.json',
-        models_config='configs/config_example_titanic.json',
-        data_extractor=TitanicExampleExtractor(),
-        logs_extractor=LogsExtractor()
-    )
+        manager = MonitoringManager(
+            monitoring_config='configs/monitoring_test_config.json',
+            models_config='configs/config_example_titanic.json',
+            data_extractor=TitanicExampleExtractor(),
+            logs_extractor=LogsExtractor()
+        )
+        result = manager.review(send_mail=True, to_grafana=True)
     """
 
     def __init__(self,
