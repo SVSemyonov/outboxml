@@ -37,8 +37,8 @@ async def update_route(update_request: UpdateRequest):
     try:
         auto_ml_config = update_request.auto_ml_config
         all_model_config = update_request.all_model_config
-        auto_ml  = AutoMLManager(auto_ml_config=auto_ml_config,
-                                 models_config=all_model_config,
+        auto_ml  = AutoMLManager(auto_ml_config=auto_ml_config.dict(),
+                                 models_config=all_model_config.dict(),
                                  retro=retro,
                                  hp_tune=hp_tune,
                                  use_temp_files=use_temp_files,
@@ -60,8 +60,8 @@ async def update_route(monitoring_request: MonitoringRequest):
     try:
         monitoring_config = monitoring_request.monitoring_config
         all_model_config = monitoring_request.all_model_config
-        monitoring  = MonitoringManager(monitoring_config=monitoring_config,
-                                        models_config=all_model_config,
+        monitoring  = MonitoringManager(monitoring_config=monitoring_config.dict(),
+                                        models_config=all_model_config.dict(),
                          )
         monitoring.review()
 
