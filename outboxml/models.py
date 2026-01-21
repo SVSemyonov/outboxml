@@ -1,3 +1,6 @@
+import json
+import os
+import tempfile
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -28,6 +31,7 @@ class BaseWrapperModel(ABC):
     This class defines a common interface for all models
     that are used within the system.
     """
+
 
     @abstractmethod
     def fit(self, **params):
@@ -1116,3 +1120,192 @@ class StatsModelsEstimator(RegressorMixin, BaseEstimator):
     @property
     def model(self):
         return self._model
+
+
+class Encoder:
+    def result(self):
+        pass
+
+class ModelSerialization:
+    def __init__(self, model: BaseWrapperModel,
+                 output_format: str ='json'):
+        self.model = model
+        if output_format == 'json':
+            self.encoder = ModelJSONEncoder(self.model)
+
+    def convert_model(self)->Union[Dict[str, Any]]:
+        return self.encoder.result()
+
+    @staticmethod
+    def from_json(json_data: dict) -> BaseWrapperModel:
+        """Deserialize model from JSON dictionary."""
+        model_type = json_data.get("model_type")
+
+        if model_type == 'GLMCatboostCombineModel':
+            return GLMCatboostCombineModelEncoder.from_json(json_data)
+        elif model_type == 'CatboostOverGLMModel':
+            return CatboostOverGLMModelEncoder.from_json(json_data)
+        else:
+            raise ValueError(f"Unknown model type: {model_type}")
+
+
+
+class ModelJSONEncoder:
+    def __init__(self, model: BaseWrapperModel):
+        self.model_type = type(model).__name__
+        if self.model_type == 'GLMCatboostCombineModel':
+            self._model_encoder = GLMCatboostCombineModelEncoder(model)
+        elif self.model_type == 'CatboostOverGLMModel':
+            self._model_encoder = CatboostOverGLMModelEncoder(model)
+        else:
+            raise logger.error('No encoder for model||'+ self.model_type)
+
+    def result(self)->Dict[str, Any]:
+        return self._model_encoder.result()
+
+
+class GLMCatboostCombineModelEncoder(Encoder):
+    def __init__(self, model: GLMCatboostCombineModel,
+                 output_type: str='json'):
+        self.model = model
+        self.output_type = output_type
+        self.model_type = 'GLMCatboostCombineModel'
+
+    def result(self):
+        if self.output_type == 'json':
+            return self._model_to_json()
+
+    def _model_to_json(self)->Dict[str, Any]:
+        """Serialize GLMCatboostCombineModel to JSON dictionary."""
+        # Determine base model type and encode it
+
+        base_model = self.model.model
+        model_type = type(base_model).__name__
+
+        if 'CatBoost' in model_type:
+            base_encoder = CatboostJSONEncoder(base_model)
+            base_model_data = base_encoder.result()
+        elif 'XGB' in model_type:
+            base_encoder = XGBoostJSONEncoder(base_model)
+            base_model_data = base_encoder.result()
+        elif 'GLM' in model_type or hasattr(base_model, 'params'):
+            # Assuming statsmodels GLM
+            base_encoder = GLMJSONEncoder(base_model)
+            base_model_data = base_encoder.result()
+        else:
+            raise logger.error('No encoder for model||' + str(model_type))
+
+        # Encode scaler if present
+        scaler_data = None
+        if hasattr(self.model, 'min_max_scaler') and self.model.min_max_scaler is not None:
+            scaler_data = self._encode_scaler(self.model.min_max_scaler)
+
+        return {
+            "model_type": self.model_type,
+            "model_name": getattr(self.model, 'model_name', None),
+            "wrapper": getattr(self.model, '_wrapper', None),
+            "base_model": base_model_data,
+            "scaler": scaler_data,
+            "features_numerical": getattr(self.model, 'features_numerical', []),
+            "features_categorical": getattr(self.model, 'features_categorical', []),
+            "metadata": {
+                "class_name": self.model.__class__.__name__,
+                "serialization_version": "1.0"
+            }
+        }
+
+
+class CatboostOverGLMModelEncoder(Encoder):
+    def __init__(self, model: GLMCatboostCombineModel,
+                 output_type: str='json'):
+        self.model = model
+        self.output_type = output_type
+        self.model_type = 'CatboostOverGLMModel'
+
+    def result(self):
+        if self.output_type == 'json':
+            return self._model_to_json()
+
+    def _model_to_json(self) -> Dict[str, Any]:
+        pass
+
+
+class CatboostJSONEncoder(Encoder):
+    def __init__(self, catboost_model):
+        self.catboost_model = catboost_model
+        self.model_type = 'Catboost'
+
+    def result(self) -> Dict[str, Any]:
+        """Serialize CatBoost model to JSON dictionary."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = f.name
+
+        self.catboost_model.save_model(temp_path, format="json")
+
+        # Read the JSON content
+        with open(temp_path, 'r') as f:
+            model_json = json.load(f)
+
+        # Clean up temp file
+        os.unlink(temp_path)
+
+        return {
+            "type": type(self.catboost_model).__name__,
+            "data": model_json,
+            "serialization": "catboost_json",
+            "parameters": self.catboost_model.get_params(),
+            "is_classifier": isinstance(self.catboost_model, CatBoostClassifier)
+        }
+
+
+
+class GLMJSONEncoder(Encoder):
+    def __init__(self, glm_model):
+        self.glm_model = glm_model
+        self.model_type = 'statsmodels'
+
+    def result(self):
+        result = {
+            "type": self.glm_model.__class__.__name__,
+            "params": self.glm_model.params.tolist() if hasattr(self.glm_model.params, 'tolist') else list(
+                self.glm_model.params),
+            "model_class": "GLM"
+        }
+
+        # Add additional attributes if available
+        if hasattr(self.glm_model, 'cov_params'):
+            result["cov_params"] = self.glm_model.cov_params().values.tolist()
+        if hasattr(self.glm_model, 'df_model'):
+            result["df_model"] = self.glm_model.df_model
+        if hasattr(self.glm_model, 'df_resid'):
+            result["df_resid"] = self.glm_model.df_resid
+
+        return result
+
+
+class XGBoostJSONEncoder(Encoder):
+    def __init__(self, xgboost_model):
+        self.xgboost_model = xgboost_model
+        self.model_type = 'XGBoost'
+
+    def result(self) -> Dict[str, Any]:
+        """Serialize XGBoost model to JSON dictionary."""
+        # XGBoost can save to JSON format
+        model_json = self.xgboost_model.save_config()
+        with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as f:
+            temp_path = f.name
+
+        self.xgboost_model.save_model(temp_path)
+
+        with open(temp_path, 'r') as f:
+            booster_json = json.load(f)
+
+        os.unlink(temp_path)
+
+        return {
+            "type": type(self.xgboost_model).__name__,
+            "config": json.loads(model_json),
+            "booster": booster_json,
+            "serialization": "xgboost_json",
+            "is_classifier": isinstance(self.xgboost_model, XGBClassifier)
+        }

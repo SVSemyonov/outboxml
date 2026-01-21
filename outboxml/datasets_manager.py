@@ -24,7 +24,7 @@ from outboxml.extractors import Extractor, BaseExtractor, SimpleExtractor
 from outboxml.metrics.base_metrics import BaseMetric, BaseMetrics
 from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes, PrepareDatasetPl
 from outboxml.metrics.processor import ModelMetrics
-from outboxml.models import DefaultModels
+from outboxml.models import DefaultModels, ModelSerialization
 from outboxml import config
 
 
@@ -151,6 +151,29 @@ class DSManagerResult:
 
         return model_results
 
+    def json_export(self, ):
+        """Convert DSManagerResult to dictionary for pickle export to other use.
+
+        :return: Dictionary containing model configuration, model object, and feature lists.
+        :rtype: dict
+
+        .. rubric:: Examples
+
+        >>> result = DSManagerResult(...)
+        >>> export_dict = result.json_export()
+
+        """
+        model = ModelSerialization(model=self.model, output_format='json').convert_model()
+        model_results = {
+            "model_config": self.model_config.model_dump(),
+            "model": model,
+            "min_max_scaler": None,
+            "features_numerical": self.data_subset.features_numerical,
+            "features_categorical": self.data_subset.features_categorical,
+        }
+
+        return model_results
+
     @classmethod
     def from_pickle_model_result(cls, model_result: dict, all_model_config: AllModelsConfig, ):
         """Convert pickle dictionary to DSManagerResult object.
@@ -179,6 +202,39 @@ class DSManagerResult:
         features_categorical = model_result['features_categorical']
         return cls(model_name=model_name,
                    config=all_model_config,
+                   data_subset=ModelDataSubset(model_name=model_name,
+                                               features_numerical=features_numerical,
+                                               features_categorical=features_categorical,
+                                               ),
+                   model=model,
+                   model_config=model_config)
+
+    @classmethod
+    def from_json(cls, model_result: dict):
+        """Convert pickle dictionary to DSManagerResult object.
+
+        Uses library model wrapper format.
+
+        :param model_result: Dictionary loaded from pickle file containing model data.
+        :type model_result: dict
+        :return: DSManagerResult instance created from pickle data.
+        :rtype: DSManagerResult
+
+        .. rubric:: Examples
+
+        >>> with open('result.json', 'rb') as f:
+        ...     model_result = json.load(f)
+        >>> result = DSManagerResult.from_json(model_result)
+        """
+
+        model_config = model_result['model_config']
+        model_name = model_result['model_config']['name']
+        model_config = ModelConfig.model_validate(model_config)
+        model = ModelSerialization.from_json(model_result['model'])
+        features_numerical = model_result['features_numerical']
+        features_categorical = model_result['features_categorical']
+        return cls(model_name=model_name,
+                   config=None,
                    data_subset=ModelDataSubset(model_name=model_name,
                                                features_numerical=features_numerical,
                                                features_categorical=features_categorical,
@@ -597,7 +653,7 @@ class DataSetsManager:
                       data: pd.DataFrame,
                       model_name: str,
                       model_result=None,
-                      full_output: bool = True,
+                      use_exposure: bool = False,
                       ) -> DSManagerResult:
         """Construct DSManagerResult for external model or data prediction.
         
@@ -608,8 +664,8 @@ class DataSetsManager:
         :param model_result: Optional model result as dict from service or DSManagerResult object.
                             If None, uses inner results.
         :type model_result: dict or DSManagerResult, optional
-        :param full_output: Whether to return full output with metrics or only predictions.
-        :type full_output: bool
+        :param use_exposure: recalculate target and metrics on expousre
+        :type use_exposure: bool
         :return: DSManagerResult object containing predictions and optionally metrics.
         :rtype: DSManagerResult
         
@@ -634,7 +690,7 @@ class DataSetsManager:
                                                                             all_model_config=self._all_models_config)
 
         model_config = deepcopy(model_result.model_config)
-        model_config.column_exposure = None
+        if not use_exposure: model_config.column_exposure = None
         model = model_result.model
         features_numerical = model_result.data_subset.features_numerical
         features_categorical = model_result.data_subset.features_categorical
