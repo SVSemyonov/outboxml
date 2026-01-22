@@ -181,7 +181,7 @@ def feature_params(serie: pd.Series,
             try:
                 VC = VC[VC['proportion'] > depth][serie.name]
                 feature_params['default'] = default_cat  # проверить
-                serie.apply(lambda x: x if (x in set(VC)) or (pd.isnull(x)) else "OTHER")
+                serie = serie.apply(lambda x: x if (x in set(VC)) or (pd.isnull(x)) else "OTHER")
                 feature_params['encoding'] = encoding_cat
                 feature_params['feature_values'] = serie
             except:

@@ -3,6 +3,7 @@ from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 
+
 import traceback
 
 from outboxml.automl_manager import AutoMLManager
@@ -36,6 +37,13 @@ async def update_route(update_request: UpdateRequest):
 
                          )
         auto_ml.update_models()
+        client = Minio(
+            endpoint="localhost:9000",
+            access_key="minioadmin",
+            secret_key="minioadmin123",
+            secure=False
+        )
+        auto_ml.get_result()
         response = auto_ml.status
         status_code = status.HTTP_200_OK
 
@@ -130,6 +138,9 @@ async def default_model_config(params: dict={}):
 
 def run_app(host="127.0.0.2", port=8000):
     uvicorn.run(app, host=host, port=port)
+
+
+
 
 if __name__ == "__main__":
     run_app()

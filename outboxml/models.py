@@ -1195,16 +1195,13 @@ class GLMCatboostCombineModelEncoder(Encoder):
         else:
             raise logger.error('No encoder for model||' + str(model_type))
 
-        # Encode scaler if present
-        scaler_data = None
-        if hasattr(self.model, 'min_max_scaler') and self.model.min_max_scaler is not None:
-            scaler_data = self._encode_scaler(self.model.min_max_scaler)
+        scaler_data = MinMaxScalerEncoder(self.model.min_max_scaler).result()
 
         return {
             "model_type": self.model_type,
             "model_name": getattr(self.model, 'model_name', None),
             "wrapper": getattr(self.model, '_wrapper', None),
-            "base_model": base_model_data,
+            "model": base_model_data,
             "scaler": scaler_data,
             "features_numerical": getattr(self.model, 'features_numerical', []),
             "features_categorical": getattr(self.model, 'features_categorical', []),
@@ -1309,3 +1306,38 @@ class XGBoostJSONEncoder(Encoder):
             "serialization": "xgboost_json",
             "is_classifier": isinstance(self.xgboost_model, XGBClassifier)
         }
+
+
+class MinMaxScalerEncoder(Encoder):
+    def __init__(self,
+                 scaler: MinMaxScaler):
+        self.scaler = scaler
+
+    def result(self):
+        return self._encode_scaler(self.scaler)
+
+    def _encode_scaler(self, scaler: MinMaxScaler) -> Dict[str, Any]:
+        """Encode MinMaxScaler to dictionary."""
+        if scaler is None:
+            return None
+
+        scaler_dict = {
+            "type": "MinMaxScaler",
+            "feature_range": scaler.feature_range,
+            "data": {}
+        }
+
+        # Store all important attributes if they exist
+        attributes = ['scale_', 'min_', 'data_min_', 'data_max_',
+                     'data_range_', 'n_samples_seen_']
+
+        for attr in attributes:
+            if hasattr(scaler, attr):
+                value = getattr(scaler, attr)
+                if value is not None:
+                    if isinstance(value, np.ndarray):
+                        scaler_dict["data"][attr] = value.tolist()
+                    else:
+                        scaler_dict["data"][attr] = value
+
+        return scaler_dict
