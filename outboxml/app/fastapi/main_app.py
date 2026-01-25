@@ -1,3 +1,4 @@
+import pandas as pd
 import uvicorn
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
@@ -123,14 +124,20 @@ async def default_automl_config(params: dict={}):
 async def default_model_config(params: dict={}):
     try:
 
-        response = build_default_all_models_config(data=None,
+        data = params.get('data', None)
+        # Конвертируем входящий список диктов в DataFrame
+        data = pd.DataFrame(data) if data is not None else None
+
+        func_params = {k: v for k, v in params.items() if k != 'data'}
+        response = build_default_all_models_config(data=data,
                                                     max_category_num= 20,
                                                     category_proportion_cut_value=0.01,
                                                     q1=0.001,
-                                                    q2=0.999,**params)
+                                                    q2=0.999,**func_params)
         status_code = status.HTTP_200_OK
 
     except Exception as exc:
+
         response = {"error": traceback.format_exc()}
         status_code = status.HTTP_400_BAD_REQUEST
 

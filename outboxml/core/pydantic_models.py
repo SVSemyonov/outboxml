@@ -186,8 +186,8 @@ class FeatureSelectionConfig(BaseModel):
 class HPTuneConfig(BaseModel):
     sampling: str ='TPE'
     cv_folds_num: int = 3
-    parameters: dict = None
-    metric_score: Dict[str, str] = None
+    parameters: dict = {}
+    metric_score: Dict[str, str] = {"default": "neg_mean_absolute_error"}
 
 
 class ModelInferenceConfig(BaseModel):
