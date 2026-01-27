@@ -312,6 +312,16 @@ class MonitoringFactory:
 
         return service
 
+@ReportRegistry.register("base_report")
+class MonitoringReport(ReportComponent):
+    """
+    Report without processing
+    """
+    def __init__(self):
+        super().__init__()
+
+    def make_report(self, data: pd.DataFrame, context: MonitoringContext) -> pd.DataFrame:
+        return data
 
 @ReportRegistry.register("base_datadrift_report")
 class MonitoringReport(ReportComponent):
