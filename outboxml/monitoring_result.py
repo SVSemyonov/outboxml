@@ -51,6 +51,7 @@ class DataContext:
                 train_ind=self.actual.index,
                 test_ind=pd.Index([]),
                 model_config=models_config,
+                target=pd.Series()
             )
 
             self.X_train = subset.X_train

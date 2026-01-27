@@ -10,6 +10,7 @@ from outboxml import config
 from outboxml.core.email import EMailMonitoring
 from outboxml.core.pydantic_models import MonitoringConfig, ModelConfig, AllModelsConfig
 from outboxml.datasets_manager import DataSetsManager
+from outboxml.ensemble import Ensemble, EnsembleResult
 from outboxml.export_results import ResultExport, GrafanaExport
 from outboxml.extractors import Extractor
 from outboxml.metrics.base_metrics import BaseMetric
