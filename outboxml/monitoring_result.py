@@ -4,7 +4,8 @@ import pandas as pd
 from loguru import logger
 
 from outboxml.core.data_prepare import prepare_dataset
-from outboxml.core.pydantic_models import ModelConfig, MonitoringConfig
+from outboxml.core.prepared_datasets import TrainTestIndexes
+from outboxml.core.pydantic_models import ModelConfig, MonitoringConfig, AllModelsConfig, SeparationModelConfig
 from outboxml.data_subsets import DataPreprocessor
 from outboxml.extractors import Extractor
 from typing import List
@@ -23,13 +24,24 @@ class MonitoringResult:
 
 @dataclass
 class DataContext:
+    base: pd.DataFrame = None
+    actual: pd.DataFrame = None
+
     X_train: pd.DataFrame = None
     X_test: pd.DataFrame = None
 
-    base: pd.DataFrame = None
-    actual: pd.DataFrame  = None
+    _separation_config: SeparationModelConfig = None
 
-    def prepare_data(self, data_preprocessor, models_config):
+    def __post_init__(self):
+        if self._separation_config:
+            self.X_train_index, self.X_test_index = TrainTestIndexes(
+                self.base, self._separation_config
+            ).train_test_indexes()
+        else:
+            self.X_train_index = None
+            self.X_test_index = None
+
+    def prepare_data(self, data_preprocessor, models_config=None):
         try:
             subset = data_preprocessor.get_subset(model_name=models_config.name)
 
@@ -54,7 +66,6 @@ class MonitoringContext:
 
     monitoring_result: MonitoringResult
     monitoring_config: MonitoringConfig
-    models_config: List[ModelConfig]
-
-    logs_extractor: Extractor
-    #data_context: DataContext
+    models_config: List[ModelConfig] | None
+    all_models_config: AllModelsConfig | None
+    logs_extractor: Extractor | None

@@ -225,7 +225,8 @@ class MonitoringService:
         """
         data_context = DataContext(
             base=context.data_preprocessor.dataset,
-            actual=context.logs_extractor.extract_dataset()
+            actual=context.logs_extractor.extract_dataset(),
+            _separation_config=context.all_models_config.data_config.separation if context.all_models_config.data_config.separation else None
         )
         data_reviewer_results = {}
         reviewer_report_results = {}
@@ -236,7 +237,7 @@ class MonitoringService:
                     models_reviewer_result = {}
                     for model in context.models_config:
                         temp_data_context = replace(data_context)
-                        temp_data_context.prepare_data(context.data_preprocessor, model, )
+                        temp_data_context.prepare_data(context.data_preprocessor, model)
                         reviewer_result = item.data_reviewer.review(temp_data_context)
                         models_reviewer_result[model.name] = reviewer_result
 
