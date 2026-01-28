@@ -8,8 +8,9 @@ from pydantic import ValidationError
 
 from outboxml import config
 from outboxml.core.email import EMailMonitoring
-from outboxml.core.pydantic_models import MonitoringConfig
+from outboxml.core.pydantic_models import MonitoringConfig, ModelConfig, AllModelsConfig
 from outboxml.datasets_manager import DataSetsManager
+from outboxml.ensemble import Ensemble, EnsembleResult
 from outboxml.export_results import ResultExport, GrafanaExport
 from outboxml.extractors import Extractor
 from outboxml.metrics.base_metrics import BaseMetric
@@ -107,14 +108,14 @@ class MonitoringManager:
         self._result_export = ResultExport(ds_manager=self._ds_manager, config=self._external_config)
         self._logs_extractor = logs_extractor
         self.__init_monitoring()
-
+        self._prod_models_configs = None
+        self.__init_prod_models_configs()
         self.result = MonitoringResult(group_name=self._monitoring_config.group_name)
         self.result.dataset_name = self._define_dataset_name()
 
         self.monitoring_service = MonitoringFactory.create_from_config(
             self._monitoring_config,
         )
-        self.logs = None
 
     def review(self,
                send_mail: bool = True,
@@ -140,9 +141,6 @@ class MonitoringManager:
         Example usage::
         manager.review(send_mail=True, to_grafana=True)
         """
-        if self.logs is None:
-            self.logs = self._logs_extractor.extract_dataset()
-            logger.debug('Logs are loaded')
         self._ds_manager._retro = True
         self._ds_manager._init_dsmanager()
         context = MonitoringContext(
@@ -150,7 +148,8 @@ class MonitoringManager:
             logs_extractor=self._logs_extractor,
             monitoring_result=self.result,
             monitoring_config=self._monitoring_config,
-            models_config=self._ds_manager._models_configs,
+            models_config=self._prod_models_configs,
+            all_models_config=self.__init_all_models_config(self._models_config)
         )
         service_reviews, service_reports = self.monitoring_service.review_all(context=context)
         self.result.reviews = service_reviews
@@ -164,8 +163,8 @@ class MonitoringManager:
             if send_mail:
                 self.email.success_mail(self.result)
         except Exception as exc:
-              logger.error(exc)
-              self.email.error_mail(group_name=self.result.group_name, error=exc)
+            logger.error(exc)
+            self.email.error_mail(group_name=self.result.group_name, error=exc)
         finally:
             return self.result
 
@@ -189,6 +188,42 @@ class MonitoringManager:
         except ValidationError as e:
             logger.error("Config validation error")
             raise ValidationError(e)
+
+    def __init_prod_models_configs(self):
+        with open(f'{self._monitoring_config.prod_models_path}/{self._monitoring_config.pickle_name}.pickle',
+                  'rb') as f:
+            prod_model = pickle.load(f)
+        prod_models_config = []
+        for model in prod_model:
+            if isinstance(prod_model, EnsembleResult):
+                for val in model.models:
+                    prod_models_config.append(ModelConfig.model_validate(val[2]['model_config']))
+            elif isinstance(prod_model, list):
+                prod_models_config.append(ModelConfig.model_validate(model['model_config']))
+            else:
+                logger.error("Invalid prod_models config type")
+
+        self._prod_models_configs = prod_models_config
+
+    def __init_all_models_config(self, models_config):
+        if isinstance(models_config, dict):
+            logger.info("AllModelsConfig config from dict")
+            config = json.dumps(models_config)
+        else:
+            logger.info("AllModelsConfig from path")
+            try:
+                with open(models_config, "r", encoding='utf-8') as f:
+                    config = f.read()
+            except FileNotFoundError:
+                logger.error("Invalid AllModelsConfig config name")
+                raise FileNotFoundError("Invalid config name")
+
+        try:
+            all_models_config = AllModelsConfig.model_validate_json(config)
+        except ValidationError as e:
+            logger.error("Config validation error")
+            raise ValidationError(e)
+        return all_models_config
 
     def _grafana_report(self, report: pd.DataFrame, table_name: str) -> None:
         """
