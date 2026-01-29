@@ -110,6 +110,7 @@ class MonitoringManager:
         self.__init_monitoring()
         self._prod_models_configs = None
         self.__init_prod_models_configs()
+        self._all_models_config = self.__init_all_models_config(self._models_config)
         self.result = MonitoringResult(group_name=self._monitoring_config.group_name)
         self.result.dataset_name = self._define_dataset_name()
 
@@ -149,7 +150,7 @@ class MonitoringManager:
             monitoring_result=self.result,
             monitoring_config=self._monitoring_config,
             models_config=self._prod_models_configs,
-            all_models_config=self.__init_all_models_config(self._models_config)
+            all_models_config=self._all_models_config
         )
         service_reviews, service_reports = self.monitoring_service.review_all(context=context)
         self.result.reviews = service_reviews
@@ -253,6 +254,6 @@ class MonitoringManager:
         if self._monitoring_config.data_source in ['csv', 'parquet']:
             dataset_name = os.path.basename(os.path.splitext(self._ds_manager.data_config.local_name_source)[0])
         else:
-            dataset_name = self._monitoring_config.data_config.table_name_source
+            dataset_name = self._all_models_config.data_config.table_name_source
 
         return dataset_name

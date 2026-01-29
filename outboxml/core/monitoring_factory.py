@@ -225,7 +225,7 @@ class MonitoringService:
         """
         data_context = DataContext(
             base=context.data_preprocessor.dataset,
-            actual=context.logs_extractor.extract_dataset(),
+            actual=context.logs_extractor.extract_dataset() if context.logs_extractor else pd.DataFrame(),
             _separation_config=context.all_models_config.data_config.separation if context.all_models_config.data_config.separation else None
         )
         data_reviewer_results = {}
