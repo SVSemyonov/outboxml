@@ -13,7 +13,7 @@ from outboxml.core.pydantic_models import (
     ModelConfig,
     FeatureModelConfig,
 )
-from outboxml.core.enums import FeatureEngineering, FeaturesTypes
+from outboxml.core.enums import FeatureEngineering, FeaturesTypes, ColumnsNames
 from outboxml.core.utils import (
     update_model_config_default,
     update_model_config_replace,
@@ -21,22 +21,6 @@ from outboxml.core.utils import (
 )
 from outboxml.core.errors import ConfigError
 from outboxml.core.enums import EncodingNames
-
-
-pl_numeric_dtypes = [
-    pl.datatypes.Decimal,
-    pl.datatypes.Float32,
-    pl.datatypes.Float64,
-    pl.datatypes.Int8,
-    pl.datatypes.Int16,
-    pl.datatypes.Int32,
-    pl.datatypes.Int64,
-    pl.datatypes.Int128,
-    pl.datatypes.UInt8,
-    pl.datatypes.UInt16,
-    pl.datatypes.UInt32,
-    pl.datatypes.UInt64,
-]
 
 
 class Encoder:
@@ -573,22 +557,20 @@ def prepare_relative_feature_series(
     :return: Series with calculated values.
     """
 
-    if not isinstance(default_value, (int, float)):
-        raise ConfigError("Invalid default value for relative feature")
     return (numerator / denominator).replace([-np.inf, np.inf], np.nan).fillna(default_value)
 
 
 def prepare_relative_feature_series_pl(
-        data: pl.LazyFrame,
+        lazy_data: pl.LazyFrame,
         feature_name: str,
         numerator_name: str,
         denominator_name: str,
-        default_value: Union[float, int],
+        default_value: int | float | Literal[FeatureEngineering.nan],
 ) -> pl.LazyFrame:
     """
     Prepare relative feature's data, the input numerator's and denominator's types should be Polars' LazyFrame.
 
-    :param data: Features' values in Polars' LazyFrame format.
+    :param lazy_data: Features' values in Polars' LazyFrame format.
     :param feature_name: Feature's name.
     :param numerator_name: Numerator column's name.
     :param denominator_name: Denominator column's name.
@@ -597,13 +579,17 @@ def prepare_relative_feature_series_pl(
     :return: LazyFrame with calculated values.
     """
 
-    if not isinstance(default_value, (int, float)):
-        raise ConfigError("Invalid default value for relative feature")
     return (
-        data
+        lazy_data
         .with_columns(
-            pl.when(pl.col(denominator_name) == 0)
-            .then(pl.lit(default_value))
+            pl.when(
+                (pl.col(numerator_name).is_null())
+                | (pl.col(numerator_name).is_nan())
+                | (pl.col(denominator_name).is_null())
+                | (pl.col(denominator_name).is_nan())
+                | (pl.col(denominator_name) == 0)
+            )
+            .then(pl.lit(float("nan")) if default_value == FeatureEngineering.nan else pl.lit(default_value))
             .otherwise(pl.col(numerator_name) / pl.col(denominator_name))
             .alias(feature_name)
         )
@@ -625,8 +611,6 @@ def prepare_relative_feature(
     :return: Calculated value.
     """
 
-    if not isinstance(default_value, (int, float)):
-        raise ConfigError("Invalid default value for relative feature")
     if (
         pd.isnull(numerator)
         or pd.isnull(denominator)
@@ -649,23 +633,7 @@ def to_str(v):
     else:
         v = v.upper()
     return v
-"""
-def replace_categorical_values_pl(self,
-        feature_data: pl.LazyFrame,
-        feature: FeatureModelConfig,
-) -> pl.LazyFrame:
-    dict_replace_temp = dict_replace(feature=feature, dtype=FeaturesTypes.categorical)
-    feature_data = (
-        feature_data
-        .with_columns(
-            pl.when(~pl.col(feature.name).is_in(dict_replace_temp) & pl.col(feature.name).is_not_null())
-            .then(pl.lit(feature.default))
-            .otherwise(pl.col(feature.name).replace(dict_replace_temp))
-            .alias(feature.name)
-        )
-    )
-    return feature_data
-"""
+
 
 def prepare_categorical_feature_series(
         feature_data: pd.Series,
@@ -684,9 +652,6 @@ def prepare_categorical_feature_series(
 
     feature_data = feature_data.apply(lambda x: to_str(x))
 
-    if not isinstance(feature.default, (str, int)):
-        raise ConfigError(f"{feature.name}: invalid default value for categorical feature")
-
     # Replace values
     if log:
         ind = (~feature_data.isin(feature.replace.keys()) & feature_data.notna())
@@ -695,28 +660,24 @@ def prepare_categorical_feature_series(
     feature_data = replace_categorical_values_series(feature_data, feature)
 
     # Fill missing values
+    fill_null_value = feature.fillna if feature.fillna else feature.default
     if pd.isnull(feature_data).sum() > 0:
         if log:
             logger.info(feature.name + ' || Исправлено пропусков: ' + str(feature_data.isna().sum()))
-        if feature.fillna:
-            if not isinstance(feature.fillna, (str, int)):
-                raise ConfigError(f"{feature.name}: invalid fillna value for categorical feature")
-            feature_data.fillna(feature.fillna, inplace=True)
-        else:
-            feature_data.fillna(feature.default, inplace=True)
+        feature_data.fillna(fill_null_value, inplace=True)
 
     return feature_data
 
 
 def prepare_categorical_feature_pl(
-        feature_data: pl.LazyFrame,
+        lazy_data: pl.LazyFrame,
         feature: FeatureModelConfig,
         data_dtypes: Dict[str, pl.DataType],
 ) -> pl.LazyFrame:
     """
     Prepare values in categorical feature's data, the input type should be Polars' LazyFrame.
 
-    :param feature_data: Feature's values in Polars' LazyFrame format.
+    :param lazy_data: Feature's values in Polars' LazyFrame format.
     :param feature: Feature's config.
     :param data_dtypes: Features' types.
 
@@ -726,22 +687,22 @@ def prepare_categorical_feature_pl(
     dict_replace_temp = dict_replace(feature=feature, dtype=FeaturesTypes.categorical)
     fill_null_value = feature.fillna if feature.fillna else feature.default
 
-    feature_data = (
-        feature_data
+    lazy_data = (
+        lazy_data
         .with_columns(
             pl.when(
                 ~pl.col(feature.name).is_in(dict_replace_temp)
                 & pl.col(feature.name).is_not_null()
-                & pl.col(feature.name).is_not_nan()
+                & (pl.col(feature.name).is_not_nan() if data_dtypes[feature.name].is_numeric() else True)
             )
             .then(pl.lit(feature.default))
             .when(
                 (pl.col(feature.name).is_null())
-                | (pl.col(feature.name).is_nan())
+                | (pl.col(feature.name).is_nan() if data_dtypes[feature.name].is_numeric() else True)
             )
             .then(pl.lit(fill_null_value))
             .when(
-                data_dtypes[feature.name] in pl_numeric_dtypes
+                data_dtypes[feature.name].is_numeric()
             )
             .then(pl.col(feature.name).cast(pl.String).replace(dict_replace_temp))
             .otherwise(pl.col(feature.name).str.to_uppercase().replace(dict_replace_temp))
@@ -749,7 +710,7 @@ def prepare_categorical_feature_pl(
         )
     )
 
-    return feature_data
+    return lazy_data
 
 
 def prepare_categorical_feature(
@@ -767,20 +728,12 @@ def prepare_categorical_feature(
 
     feature_value = to_str(feature_value)
 
-    if not isinstance(feature.default, (str, int)):
-        raise ConfigError(f"{feature.name}: invalid default value for categorical feature")
-
     # Replace values
     feature_value = replace_categorical_values(feature_value, feature)
 
     # Fill missing values
     if pd.isnull(feature_value):
-        if feature.fillna:
-            if not isinstance(feature.fillna, (str, int)):
-                raise ConfigError(f"{feature.name}: invalid fillna value for categorical feature")
-            feature_value = feature.fillna
-        else:
-            feature_value = feature.default
+        feature_value = feature.fillna if feature.fillna else feature.default
 
     return feature_value
 
@@ -788,7 +741,7 @@ def prepare_categorical_feature(
 def prepare_numerical_feature_series(
         feature_data: pd.Series,
         feature: FeatureModelConfig,
-        train_ind: Optional[pd.Index] = None,
+        default_value: float | int,
         log: bool = True,
 ) -> Tuple[pd.Series, Optional[Union[float, int]]]:
     """
@@ -796,36 +749,17 @@ def prepare_numerical_feature_series(
 
     :param feature_data: Feature's values.
     :param feature: Feature's config.
-    :param train_ind: Indices of training subset.
+    :param default_value: Default value for NaNs.
     :param log: Whether to log the process.
 
-    :return: Tuple with Series of prepared values and the default value.
+    :return: Series of prepared values.
     """
-
-    if train_ind is None:
-        train_ind = feature_data.index
 
     # Replace values
     feature_data = replace_numerical_values_series(feature_data, feature)
 
     if feature_data.dtype not in (int, float):
         feature_data = pd.to_numeric(feature_data, downcast="float", errors="coerce")
-
-    # Fill missing values
-    val_fill = None
-    if feature.default == FeatureEngineering.min:
-        val_fill = feature_data.loc[[i for i in train_ind if i in feature_data.index]].min()
-    elif feature.default == FeatureEngineering.max:
-        val_fill = feature_data.loc[[i for i in train_ind if i in feature_data.index]].max()
-    elif feature.default == FeatureEngineering.mean:
-        val_fill = feature_data.loc[[i for i in train_ind if i in feature_data.index]].mean()
-    elif feature.default == FeatureEngineering.median:
-        val_fill = feature_data.loc[[i for i in train_ind if i in feature_data.index]].median()
-
-    default_value = val_fill if val_fill is not None else feature.default
-
-    if not isinstance(default_value, (int, float)):
-        raise ConfigError(f"{feature.name}: invalid default value for numerical feature")
 
     if pd.isnull(feature_data).sum() > 0:
         if log:
@@ -855,7 +789,7 @@ def prepare_numerical_feature_series(
         val_splits = [-np.inf] + list([float(x) for x in feature.cut_number.split('_')]) + [np.inf]
         feature_data = pd.cut(feature_data, bins=val_splits).astype(str)
 
-    return feature_data, val_fill
+    return feature_data
 
 
 def prepare_numerical_feature(
@@ -883,11 +817,6 @@ def prepare_numerical_feature(
     # Fill missing values
     if pd.isnull(feature_value):
         feature_value = feature.default
-    if not isinstance(feature.default, (int, float)):
-        raise ConfigError(f"{feature.name}: invalid default value for numerical feature")
-
-    if pd.isnull(feature_value):
-        feature_value = feature.default
 
     # Clip values
     if feature.clip:
@@ -909,14 +838,6 @@ def prepare_numerical_feature(
         feature_value = map_num(feature_value, mapping)
 
     return feature_value
-
-
-# def prepare_intersection(data: pd.DataFrame, feature_intersection: IntersectionModelConfig) -> pd.Series:
-#     data[feature_intersection.name] = ""
-#     for feature in feature_intersection.features_to_intersect:
-#         data[feature_intersection.name] += '[' + data[feature].astype(str) + ']'
-#
-#     return data[feature_intersection.name]
 
 
 def prepare_dataset(
@@ -956,12 +877,15 @@ def prepare_dataset(
 
     as_dict: bool = False
     as_polars: bool = False
+    as_pandas: bool = False
     if isinstance(data, dict):
         as_dict = True
     elif isinstance(data, pl.DataFrame):
         as_polars = True
+        data_dtypes = data.schema
         lazy_data: pl.LazyFrame = data.lazy()
     elif isinstance(data, pd.DataFrame):
+        as_pandas = True
         pd.options.mode.chained_assignment = None
     else:
         logger.error(f"Invalid data type {type(data)}")
@@ -977,15 +901,15 @@ def prepare_dataset(
                 )
 
             elif as_polars:
-                data = prepare_relative_feature_series_pl(
-                    data=lazy_data,
+                lazy_data = prepare_relative_feature_series_pl(
+                    lazy_data=lazy_data,
                     feature_name=relative_feature.name,
                     numerator_name=relative_feature.numerator,
                     denominator_name=relative_feature.denominator,
                     default_value=relative_feature.default
                 )
 
-            else:
+            elif as_pandas:
                 data[relative_feature.name] = prepare_relative_feature_series(
                     numerator=data[relative_feature.numerator],
                     denominator=data[relative_feature.denominator],
@@ -993,36 +917,95 @@ def prepare_dataset(
                 )
 
     for feature in model_config.features:
-        if as_dict and feature.replace.get(FeatureEngineering.feature_type) == FeatureEngineering.numerical:
-            data[feature.name] = prepare_numerical_feature(
-                feature_value=data[feature.name],
-                feature=feature,
-            )
 
-        elif as_dict and feature.replace.get(FeatureEngineering.feature_type) != FeatureEngineering.numerical:
-            data[feature.name] = prepare_categorical_feature(
-                feature_value=data[feature.name],
-                feature=feature,
-            )
+        # Numerical features
+        if feature.replace.get(FeatureEngineering.feature_type) == FeatureEngineering.numerical:
 
-        elif feature.replace.get(FeatureEngineering.feature_type) == FeatureEngineering.numerical:
-            if train_ind is None:
-                train_ind = data.index
-            data[feature.name], val_fill = prepare_numerical_feature_series(
-                feature_data=data[feature.name],
-                feature=feature,
-                train_ind=train_ind,
-                log=log
-            )
-            if val_fill:
+            # Define missing values
+            default_value = feature.default
+            if not isinstance(feature.default, (int, float)):
+                if as_polars:
+                    feature_data_train = (
+                        data
+                        .filter(pl.col(ColumnsNames.is_train_obml) == 1)
+                        [feature.name]
+                    )
+
+                elif as_pandas:
+                    feature_data_train = (
+                        data
+                        .loc[[i for i in train_ind if i in data.index] if train_ind else data.index]
+                        [feature.name]
+                    )
+
+                match feature.default:
+                    case FeatureEngineering.min:
+                        val_fill = feature_data_train.min()
+                        if val_fill == -float("inf"):
+                            logger.warning(f"invalid default value (minimum = -inf) for {feature.name}")
+                    case FeatureEngineering.max:
+                        val_fill = feature_data_train.max()
+                        if val_fill == float("inf"):
+                            logger.warning(f"invalid default value (maximum = inf) for {feature.name}")
+                    case FeatureEngineering.mean:
+                        val_fill = feature_data_train.mean()
+                    case FeatureEngineering.median:
+                        val_fill = feature_data_train.median()
+                    case FeatureEngineering.nan:
+                        val_fill = np.nan
+                        logger.warning(f"invalid default value (nan) for {feature.name}")
+                    case _:
+                        logger.error(f"invalid default value for {feature.name}: {feature.default}")
+                        raise ValueError(f"invalid default value for {feature.name}: {feature.default}")
+
+                logger.info(f"default value for {feature.name} is {val_fill}")
                 model_config = update_model_config_default(model_config, feature.name, val_fill)
+                default_value = val_fill
 
-        elif feature.replace.get(FeatureEngineering.feature_type) != FeatureEngineering.numerical:
-            data[feature.name] = prepare_categorical_feature_series(
-                feature_data=data[feature.name],
-                feature=feature,
-                log=log
-            )
+            # Prepare values
+            if as_dict:
+                data[feature.name] = prepare_numerical_feature(
+                    feature_value=data[feature.name],
+                    feature=feature,
+                )
+
+            elif as_polars:
+                lazy_data = prepare_numerical_feature_pl(
+                    lazy_data=lazy_data,
+                    feature=feature,
+                    default_value=default_value,
+                    data_dtypes=data_dtypes,
+                )
+
+            elif as_pandas:
+                data[feature.name] = prepare_numerical_feature_series(
+                    feature_data=data[feature.name],
+                    feature=feature,
+                    default_value=default_value,
+                    log=log,
+                )
+
+        # Categorical features
+        else:
+            if as_dict:
+                data[feature.name] = prepare_categorical_feature(
+                    feature_value=data[feature.name],
+                    feature=feature,
+                )
+
+            elif as_polars:
+                lazy_data = prepare_categorical_feature_pl(
+                    lazy_data=lazy_data,
+                    feature=feature,
+                    data_dtypes=data_dtypes,
+                )
+
+            elif as_pandas:
+                data[feature.name] = prepare_categorical_feature_series(
+                    feature_data=data[feature.name],
+                    feature=feature,
+                    log=log,
+                )
 
     if check_prepared and not as_dict:
         logger.info('Find drop values for features')
@@ -1076,12 +1059,22 @@ def prepare_dataset(
         [feature.name for feature in model_config.features] if model_config.features else [],
         # [feature.name for feature in model_config.intersections] if model_config.intersections else [],
     )))
+
     if as_dict:
         features_categorical = [feature for feature in features_all if
                                 isinstance(data[feature], str)]
         features_numerical = [feature for feature in features_all if
                               isinstance(data[feature], (int, float))]
+        data = pd.DataFrame([data])
+
+    elif as_polars:
+        data = lazy_data.select(features_all).collect()
+        data_dtypes_prepared = data.schema
+        features_categorical = [feature for feature in features_all if not data_dtypes_prepared[feature].is_numeric()]
+        features_numerical = [feature for feature in features_all if data_dtypes_prepared[feature].is_numeric()]
+
     else:
+        data = data[features_all]
         features_categorical = [feature for feature in features_all if
                                 (data[feature].dtype == 'object' or data[feature].dtype == 'category')]
         features_numerical = [feature for feature in features_all if
@@ -1089,7 +1082,7 @@ def prepare_dataset(
 
     # Change output data types
     # TODO: добавить в конфиг автоматическое определение размера категорий
-    if modify_dtypes and not as_dict:
+    if modify_dtypes and not as_dict and not as_polars:
         for column in features_all:
             # if data[column].dtype == 'object' or (check_prepared and column in nunUniqueTrainDict and nunUniqueTrainDict[column] < 30):
             if data[column].dtype == 'object':
@@ -1116,18 +1109,17 @@ def prepare_dataset(
         group_path.mkdir(exist_ok=True)
         model_path = model_config.results_path / group_name / model_config.name
         model_path.mkdir(exist_ok=True)
-        data.to_parquet(
-            os.path.join(model_path, model_config.name + "_data.parquet.gzip"),
-            engine="pyarrow",
-            compression="gzip",
-        )
-
-    if as_dict:
-        data = pd.DataFrame([data])
-    elif as_polars:
-        data = data.collect()
-    else:
-        data = data[features_all]
+        if as_polars:
+            data.write_parquet(
+                os.path.join(model_path, model_config.name + "_data.parquet.gzip"),
+                compression="gzip",
+            )
+        else:
+            data.to_parquet(
+                os.path.join(model_path, model_config.name + "_data.parquet.gzip"),
+                engine="pyarrow",
+                compression="gzip",
+            )
 
     return PrepareDatasetResult(
         data=data,

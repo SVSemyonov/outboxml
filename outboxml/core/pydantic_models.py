@@ -42,7 +42,13 @@ class RelativeFeatureModelConfig(BaseModel):
     name: str
     numerator: str
     denominator: str
-    default: Any
+    default: int | float | Literal[FeatureEngineering.nan]
+
+    @model_validator(mode="after")
+    def check_rel_default(self):
+        if not (self.default == FeatureEngineering.nan or isinstance(self.default, (float, int))):
+            raise ConfigError(f"{self.name}: invalid default value for numerical feature {self.default}")
+        return self
 
 
 class FeatureModelConfig(BaseModel):
@@ -51,7 +57,7 @@ class FeatureModelConfig(BaseModel):
     replace: Dict
     clip: Optional[Dict] = None
     cut_number: Optional[str] = None
-    fillna: Optional[Union[int, float, str]] = None
+    fillna: Optional[Union[int, float, str]] = None  # For categorical features only
     encoding: Optional[str] = None
     optbinning_params: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None
     bins: Optional[List] = None
@@ -88,12 +94,17 @@ class FeatureModelConfig(BaseModel):
     def check_default(self):
         # Numerical
         if self.replace.get(FeatureEngineering.feature_type) == FeatureEngineering.numerical:
-            if self.default not in [FeatureEngineering.nan, FeatureEngineering.median,
-                            FeatureEngineering.mean, FeatureEngineering.max, FeatureEngineering.min]:
-                if not isinstance(self.default, (float, int)):
-                    raise ConfigError(f"{self.name}: invalid default value for numerical feature")
-                if not (isinstance(self.fillna, (float, int)) or self.fillna is None):
-                    raise ConfigError(f"{self.name}: invalid fillna value for numerical feature")
+            if not (
+                self.default in [
+                    FeatureEngineering.nan,
+                    FeatureEngineering.median,
+                    FeatureEngineering.mean,
+                    FeatureEngineering.max,
+                    FeatureEngineering.min,
+                ]
+                or isinstance(self.default, (float, int))
+            ):
+                raise ConfigError(f"{self.name}: invalid default value for numerical feature")
 
         # Categorical
         else:
@@ -103,6 +114,18 @@ class FeatureModelConfig(BaseModel):
                 raise ConfigError(f"{self.name}: invalid fillna value for categorical feature")
 
         return self
+
+    @model_validator(mode="after")
+    def check_clip(self):
+        # Numerical
+        if self.replace.get(FeatureEngineering.feature_type) == FeatureEngineering.numerical:
+            if not self.clip:
+                raise ConfigError(f"{self.name}: clip value is required for numerical feature")
+            else:
+                for key in [FeatureEngineering.min_value, FeatureEngineering.max_value]:
+                    val = self.clip.get(key)
+                    if not isinstance(val, (float, int)):
+                        raise ConfigError(f"{self.name}: invalid clip value for numerical feature")
 
 
 class IntersectionModelConfig(BaseModel):
