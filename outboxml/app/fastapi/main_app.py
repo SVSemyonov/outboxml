@@ -12,8 +12,11 @@ import config
 from outboxml.export_results import ResultExport
 
 from outboxml.automl_manager import AutoMLManager
-from outboxml.automl_utils import build_default_auto_ml_config, build_default_all_models_config
+from outboxml.automl_utils import build_default_auto_ml_config, build_default_all_models_config, \
+    load_last_pickle_models_result
 from outboxml.core.pydantic_models import UpdateRequest, MonitoringRequest, AutoMLResultRequest, MonitoringResultRequest
+from outboxml.main_predict import main_predict
+from outboxml.main_release import Release, MLFLowRelease
 
 from outboxml.monitoring_manager import MonitoringManager
 from outboxml.plots import FactorsPlot
@@ -45,7 +48,7 @@ async def update_route(update_request: UpdateRequest):
         all_model_config = update_request.all_model_config
         auto_ml  = AutoMLManager(auto_ml_config=auto_ml_config.dict(),
                                  models_config=all_model_config.dict(),
-                                 retro=retro,
+                                 retro=False,
                                  hp_tune=hp_tune,
                                  use_temp_files=use_temp_files,
 
@@ -59,6 +62,7 @@ async def update_route(update_request: UpdateRequest):
         status_code = status.HTTP_400_BAD_REQUEST
 
     return JSONResponse(content=jsonable_encoder(response), status_code=status_code)
+
 
 @app.post("/api/monitoring")
 async def update_route(monitoring_request: MonitoringRequest):
