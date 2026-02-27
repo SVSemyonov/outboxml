@@ -235,14 +235,18 @@ class MLFlowWrapper:
         logger.debug('Exporting results to MLFlow')
         with mlflow.start_run(run_name=self.group_name + str(automl_results.run_time['start']), ):
             log = os.path.join(self.results_path, "log.log")
+            report = os.path.join(self.results_path, "automl_report.html")
+            pickle_model = os.path.join(self.results_path, automl_results.result_pickle_name)
+
             mlflow.log_artifact(log)
-            mlflow.log_artifact(os.path.join(self.results_path, automl_results.result_pickle_name))
+            mlflow.log_artifact(report)
+            mlflow.log_artifact(pickle_model)
             mlflow.set_tag(key='Deployment_decision', value=automl_results.deployment)
             #mlflow.set_tags()
             try:
                 mlflow.log_artifact(os.path.join(self.results_path, automl_results.all_models_config))
             except:
-                pass
+                logger.error('MLflow export||No model config')
             if automl_results.compare_business_metric is not None:
                 if automl_results.compare_business_metric['difference'] is not None:
                     business_metric = {'business_metric': automl_results.compare_business_metric['difference']}
@@ -260,6 +264,8 @@ class MLFlowWrapper:
                                                 f"{model_name}_features_numerical.json")
                     features_cat = os.path.join(self.results_path, self.group_name, model_name,
                                                 f"{model_name}_features_categorical.json")
+                    model_plot = os.path.join(self.results_path,
+                                                f"{model_name}.html")
                     model = os.path.join(self.results_path, self.group_name, model_name, f"{model_name}_model.pickle")
 
 
@@ -271,6 +277,7 @@ class MLFlowWrapper:
                     mlflow.log_artifact(features_num)  # модель
                     mlflow.log_artifact(features_cat)
                     mlflow.log_artifact(model)
+                    mlflow.log_artifact(model_plot)
                     mlflow.log_artifact(model_config)
                     try:
                         mlflow.log_params(dict(automl_results.new_hp[model_name]))

@@ -1,17 +1,35 @@
+import mlflow
+import pandas as pd
 import uvicorn
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
+from fastapi.middleware.cors import CORSMiddleware
 
 import traceback
 
+import config
+from outboxml.export_results import ResultExport
+
 from outboxml.automl_manager import AutoMLManager
-from outboxml.automl_utils import build_default_auto_ml_config, build_default_all_models_config
+from outboxml.automl_utils import build_default_auto_ml_config, build_default_all_models_config, \
+    load_last_pickle_models_result
 from outboxml.core.pydantic_models import UpdateRequest, MonitoringRequest, AutoMLResultRequest, MonitoringResultRequest
+from outboxml.main_predict import main_predict
+from outboxml.main_release import Release, MLFLowRelease
 
 from outboxml.monitoring_manager import MonitoringManager
+from outboxml.plots import FactorsPlot
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # В разработке можно "*", в продакшене укажите домены
+    allow_credentials=True,
+    allow_methods=["*"],  # Или ["GET", "POST", "PUT", "DELETE"]
+    allow_headers=["*"],  # Или ["Content-Type", "Authorization"]
+)
 
 @app.get("/api/health_app")
 async def health_route():
@@ -28,9 +46,9 @@ async def update_route(update_request: UpdateRequest):
     try:
         auto_ml_config = update_request.auto_ml_config
         all_model_config = update_request.all_model_config
-        auto_ml  = AutoMLManager(auto_ml_config=auto_ml_config,
-                                 models_config=all_model_config,
-                                 retro=retro,
+        auto_ml  = AutoMLManager(auto_ml_config=auto_ml_config.dict(),
+                                 models_config=all_model_config.dict(),
+                                 retro=False,
                                  hp_tune=hp_tune,
                                  use_temp_files=use_temp_files,
 
@@ -45,14 +63,15 @@ async def update_route(update_request: UpdateRequest):
 
     return JSONResponse(content=jsonable_encoder(response), status_code=status_code)
 
+
 @app.post("/api/monitoring")
 async def update_route(monitoring_request: MonitoringRequest):
 
     try:
         monitoring_config = monitoring_request.monitoring_config
         all_model_config = monitoring_request.all_model_config
-        monitoring  = MonitoringManager(monitoring_config=monitoring_config,
-                                        models_config=all_model_config,
+        monitoring  = MonitoringManager(monitoring_config=monitoring_config.dict(),
+                                        models_config=all_model_config.dict(),
                          )
         monitoring.review()
 
@@ -114,14 +133,20 @@ async def default_automl_config(params: dict={}):
 async def default_model_config(params: dict={}):
     try:
 
-        response = build_default_all_models_config(data=None,
+        data = params.get('data', None)
+        # Конвертируем входящий список диктов в DataFrame
+        data = pd.DataFrame(data) if data is not None else None
+
+        func_params = {k: v for k, v in params.items() if k != 'data'}
+        response = build_default_all_models_config(data=data,
                                                     max_category_num= 20,
                                                     category_proportion_cut_value=0.01,
                                                     q1=0.001,
-                                                    q2=0.999,**params)
+                                                    q2=0.999,**func_params)
         status_code = status.HTTP_200_OK
 
     except Exception as exc:
+
         response = {"error": traceback.format_exc()}
         status_code = status.HTTP_400_BAD_REQUEST
 
