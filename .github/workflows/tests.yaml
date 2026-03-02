@@ -1,0 +1,66 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [ develop, main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.13"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+        cache-dependency-path: 'pyproject.toml'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install coverage
+
+    - name: Start Infrastructure (Docker Compose)
+      run: |
+        cd outboxml/app
+        chmod +x create-folder.sh
+        ./create-folder.sh
+        docker compose up -d
+        sleep 600
+
+    - name: Run tests with coverage
+      run: |
+        # Запуск unittest discover
+        coverage run -m unittest discover -s tests
+
+    - name: Check coverage threshold (75%)
+      run: |
+        coverage report -m --fail-under=75
+
+    - name: Generate coverage XML
+      if: always()
+      run: |
+        coverage xml
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-report-py${{ matrix.python-version }}
+        path: coverage.xml
+        retention-days: 7
+
+    - name: Stop Infrastructure
+      if: always()
+      working-directory: outboxml/app
+      run: |
+        docker compose down
