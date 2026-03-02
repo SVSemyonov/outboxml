@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "outboxml"
-version = "0.9.6"
+version = "0.10.0"
 description = "Framework for ML and DS: Automating pipelines from training to deployment"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -24,7 +24,7 @@ classifiers = [
     "Framework :: FastAPI",
 ]
 
-# Все зависимости перенесены из вашего списка и requirements.txt
+
 dependencies = [
     "catboost==1.2.8",
     "loguru==0.7.2",
@@ -67,7 +67,6 @@ dev = [
 include-package-data = true
 
 [tool.setuptools.packages.find]
-# Аналог find_packages(exclude=[...]) из вашего setup.py
 where = ["."]
 exclude = [
     "tests*",

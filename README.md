@@ -10,6 +10,12 @@ The key components include:
 
 The main connections between components are made with Docker, the framework requires OS with Docker и Docker Compose installed.
 
+### 📦 Library Installation
+You can install the OutBoxML core library directly from PyPI:
+```bash
+pip install outboxml
+```
+
 ## Communications between the containers
 All containers use one Docker network, by default (`<project>_default`):
 - **MLflow** Communicates with PostgreSQL using `postgre`.
@@ -128,6 +134,7 @@ We appreciate the support of our Data Science department for integrating the fra
 - Vladimir Suvorov - Core code development and software architecture
 - Dmitry Bochkarev - Code development and data science model implementation
 - Maxim Matcera - Development of specific modules
-   
+- Dmitry Zotov - Development of specific modules
+
    
 
