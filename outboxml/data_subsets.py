@@ -516,7 +516,11 @@ class DataPreprocessor:
         if isinstance(self._dataset, pd.DataFrame):
             if not self._retro:
                 self._collect_features_list()
-                data_to_save = self._dataset[self._data_columns]
+                try:
+                    data_to_save = self._dataset[self._data_columns]
+                except KeyError as exc:
+                    logger.error('Error while saving dataset. Saving full||'+str(exc))
+                    data_to_save = self._dataset
             else:
                 data_to_save = self._dataset
             self._parquet_dataset.save_parquet(data_to_save)
@@ -755,9 +759,19 @@ class DataPreprocessor:
             using_features = []
             model_features = {}
             for model_config in self._prepare_datasets.values():
+
                 model = model_config.get_model_config()
-                features = model.features.copy()
                 model_features[model.name] = []
+                relative_features = model.relative_features.copy()
+                if model.relative_features is not None:
+                    for relative_feature in relative_features:
+                        if relative_feature.numerator not in model_features[model.name]:
+                            model_features[model.name].append(relative_feature.numerator)
+                        if relative_feature.denominator not in model_features[model.name]:
+                            model_features[model.name].append(relative_feature.denominator)
+
+                features = model.features.copy()
+
                 for feature in features:
                     model_features[model.name].append(feature.name)
                 model_features[model.name].append(model.column_target)
@@ -767,13 +781,7 @@ class DataPreprocessor:
 
                 if model.column_target is not None:
                     model_features[model.name].append(model.column_target)
-                relative_features = model.relative_features.copy()
-                if model.relative_features is not None:
-                    for relative_feature in relative_features:
-                        if relative_feature.numerator not in model_features[model.name]:
-                            model_features[model.name].append(relative_feature.numerator)
-                        if relative_feature.denominator not in model_features[model.name]:
-                            model_features[model.name].append(relative_feature.denominator)
+
                 using_features = using_features + model_features[model.name]
             if self._extra_columns is not None:
                 self._data_columns = list(set(using_features + self._extra_columns))

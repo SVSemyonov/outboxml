@@ -9,7 +9,7 @@ from typing import List, Dict, Tuple, Optional, Any
 from outboxml.core.pydantic_models import ModelConfig
 from outboxml.core.errors import EnsembleError
 from outboxml.core.utils import ResultPickle
-
+from outboxml import config as lib_config
 
 class EnsembleResult:
     """Class for storing one part of the models' ensemble.
@@ -101,6 +101,8 @@ class Ensemble:
         :type config: Any, optional
         """
         self.config = config
+        if config is None:
+            self.config = lib_config
         self._ensemble_name: Optional[str] = None
         self._models_names: Optional[List[str]] = None
         self._all_groups: Optional[Dict] = None

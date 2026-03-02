@@ -1207,7 +1207,7 @@ class HTMLReport:
             report._add_table(metrics_df)
             # Adds HTML table to report content
         """
-        self.html_content.append(df.reset_index().to_html(classes='dataframe', border=0,
+        self.html_content.append(df.to_html(classes='dataframe', border=0,
                                                             justify='right', index=False))
 
     def _add_plot(self, figure, plot_name):

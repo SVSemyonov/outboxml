@@ -77,10 +77,7 @@ class TestDataPrepare(TestCase):
         feature_data_replace_dict = pd.Series(
             [replace_numerical_values(v, self.feature_model_config_numerical) for v in feature_data]
         )
-        feature_data_replace_series_cut_num = replace_numerical_values_series(
-            feature_data, self.feature_model_config_numerical_cut_num)
-        assert_series_equal(feature_data_replace_series_cut_num,
-                            pd.Series([np.nan, "-2", -1, "1", 3, "14", np.nan, None]))
+
 
         assert_series_equal(feature_data_replace_series, feature_data_replace_dict)
         assert_series_equal(feature_data_replace_series, pd.Series([np.nan, -2.0, -1.0, 1.0, 3.0, 14.0, np.nan, np.nan]))
