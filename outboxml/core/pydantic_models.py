@@ -1,4 +1,4 @@
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, model_validator, ConfigDict
 from typing import List, Dict, Any, Optional, Union
 from typing_extensions import Literal
 
@@ -111,6 +111,7 @@ class IntersectionModelConfig(BaseModel):
 
 
 class ModelConfig(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
     name: str
     objective: Optional[str] = None
     wrapper: Optional[str] = None
