@@ -1,3 +1,16 @@
+__pycache__/
+.pytest_cache
+.cache/
+
+# IDEs
+.idea/
+.vscode/
+.git/
+
+# Environment
+venv/
+.env
+
 /outboxml/app/jupyter-workspace/
 /outboxml/app/grafana-data/
 /examples/energy_efficiency/.ipynb_checkpoints/example-checkpoint.ipynb

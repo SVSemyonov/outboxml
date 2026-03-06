@@ -1,3 +1,4 @@
+"""Module for calculating model predictions."""
 from copy import deepcopy
 from itertools import chain
 import pandas as pd
@@ -19,6 +20,42 @@ async def ensemble_predict(
         modify_dtypes: bool = True,
         raise_on_encoding_error: bool = True,
 ) -> Dict:
+    """Predict ensemble models.
+
+    :param ensemble_name: Ensemble name.
+    :type ensemble_name: str
+    :param ensemble: Object of models ensemble.
+    :type ensemble: dict, EnsembleResult.
+    :param features_values: Data for ensemble models.
+    :type features_values: dict, list[dict], pandas.DataFrame
+    :param log: Flag for logging.
+    :type log: bool
+    :param modify_dtypes: Modify data columns types during data preparation.
+    :type modify_dtypes: bool
+    :param Flag for raising exception on encoding error.
+    :type raise_on_encoding_error: bool
+    :return: Predictions, data, model info.
+    :rtype: dict
+    :raises TypeError: Invalid features_values type.
+    :raises NotImplementedError: Invalid ensemble: imprecise conditions.
+
+    .. rubric:: Example
+
+    features_values = [{
+        'FEATURE1': 100,
+        'FEATIRE2': 200,
+        'CHANNEL': 'RETAIL'
+    }]
+
+    predictions = ensemble_predict(
+        ensemble_name='titanic',
+        ensemble='titanic_channel',
+        features_values=features_values,
+        log=False,
+        modify_dtypes=False,
+        raise_on_encoding_error=True
+    )
+    """
 
     as_dict: bool = False
     if isinstance(features_values, dict):
@@ -29,7 +66,7 @@ async def ensemble_predict(
     elif isinstance(features_values, list):
         data = pd.DataFrame(features_values)
     elif isinstance(features_values, pd.DataFrame):
-        data = features_values
+        data = features_values.copy()
     else:
         raise TypeError("Invalid features_values type")
 
@@ -131,6 +168,64 @@ def one_model_predict(
         modify_dtypes: bool = True,
         raise_on_encoding_error: bool = True,
 ) -> Dict:
+    """Predict simple models.
+
+    :param group_name: Model group name.
+    :type ensemble_name: str
+    :param model_result: Object with model result.
+    :type model_result: dict, DSManagerResult.
+    :param features_values: Data for ensemble models.
+    :type features_values: dict, pandas.DataFrame
+    :param log: Flag for logging.
+    :type log: bool
+    :param modify_dtypes: Modify data columns types during data preparation.
+    :type modify_dtypes: bool
+    :param Flag for raising exception on encoding error.
+    :type raise_on_encoding_error: bool
+    :return: Predictions, data, model info.
+    :rtype: dict
+    :raises TypeError: Invalid features_values type.
+
+    .. rubric:: Example
+
+    model_result = {
+        'model_config': {
+            'name': 'first',
+            'column_target': 'TARGET',
+            'objective': 'poisson',
+            'wrapper': 'catboost',
+            'features': [
+                {
+                  'name': 'FEATURE1',
+                  'default': 0,
+                  'replace': {'_TYPE_': '_NUM_'}
+                },
+                {
+                  'name': 'FEATURE2',
+                  'default': 1,
+                  'replace': {'_TYPE_': '_NUM_'}
+                }
+            ]
+        },
+        'model': titanic_catboost,
+        'features_numerical': ['FEATURE1', 'FEATURE2'],
+        'features_categorical': []
+    }
+
+    features_values = {
+        'FEATURE1': 100,
+        'FEATIRE2': 200
+    }
+
+    predictions = one_model_predict(
+        group_name='titanic',
+        model_result='titanic_first',
+        features_values=features_values,
+        log=False,
+        modify_dtypes=False,
+        raise_on_encoding_error=True
+    )
+    """
 
     if isinstance(model_result, dict):
 

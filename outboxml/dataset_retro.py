@@ -5,19 +5,47 @@ from loguru import logger
 
 
 class RetroDataset(ABC):
-    """
-    Abstract class for constructing dataset for retro analysis
-    Inheritanced classes should contain methods add_X_retro and  add_y_retro for loading data for retro
+    """Abstract class for constructing dataset for retro analysis.
 
-    ------
-    Класс для работы с ретроанализом. Пользователю необходимо перегрузить метод load_retro_data с получением датафрейма для ретро анализа
+    This class provides the interface for retrospective analysis of models.
+    Inherited classes should contain methods ``add_X_retro`` and ``add_y_retro``
+    for loading data for retro analysis.
+
+    Users need to override the ``load_retro_data`` method to obtain a DataFrame
+    for retro analysis.
+
+    :var retro_data: DataFrame containing retrospective data.
+    :vartype retro_data: pd.DataFrame, optional
+
+    .. note::
+        The ``load_retro_data`` method should populate ``self.retro_data``
+        with the retrospective dataset.
+
+    Example::
+
+        class MyRetroDataset(RetroDataset):
+            def load_retro_data(self, *params):
+                # Load your retrospective data here
+                self.retro_data = pd.read_csv('retro_data.csv')
     """
     def __init__(self):
         self.retro_data = None
 
     @abstractmethod
     def load_retro_data(self, *params):
-        """ Method for extracting dataset for retro analysy. Should load data to self.retro_data"""
+        """Method for extracting dataset for retro analysis.
+
+        This method should load retrospective data into ``self.retro_data``.
+        Must be implemented by subclasses.
+
+        :param *params: Variable number of parameters for data loading.
+        :return: None
+        :rtype: None
+
+        .. note::
+            After calling this method, ``self.retro_data`` should contain
+            a pandas DataFrame with the retrospective dataset.
+        """
         pass
 
     def get_retro_dataset(self) -> pd.DataFrame:

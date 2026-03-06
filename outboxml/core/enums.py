@@ -72,17 +72,19 @@ class EncodingNames(str, Enum):
     to_float = "to_float"
     to_int = "to_int"
     woe_num_num = "WoE_num_to_num"
+    cut_num = "cut_num"
 
 
 class FeatureTypesForSelection(str, Enum):
     binary = "BINARY"#: ['EventCreatedByGIBDDFlag', 'E-Garant', < ... >]
-    categorical = "CATEGORIAL"#: ['CustomerImportance', 'DTPOSAGOType', < ... >]
+    categorical = "CATEGORСAL"#: ['CustomerImportance', 'DTPOSAGOType', < ... >]
     numeric = "NUMERIC"#: ['LossNumber', 'InsuredSum', 'LossDateTime', < ... >]
     to_drop = "TO_DROP"#: ['EventTypeDescription', 'InsuranceTypeName', < ... >]
     object =  "OBJECT"#: ['ContractNumber', 'VictimContractNumber', < ... >]
 
 
 class ModelTypes(str, Enum):
+
     regression = 'regression'
     classification = 'classification'
     clustering = 'clustering'

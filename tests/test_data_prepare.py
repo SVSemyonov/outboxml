@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from pandas.testing import assert_series_equal
@@ -16,6 +18,7 @@ from outboxml.core.data_prepare import (
     prepare_numerical_feature,
 )
 from outboxml.core.pydantic_models import FeatureModelConfig
+from outboxml.data_subsets import ModelDataSubset
 
 
 class TestDataPrepare(TestCase):
@@ -35,10 +38,18 @@ class TestDataPrepare(TestCase):
                "name": "CBM",
                 "default": 13,
                 "clip": {"min_value": -1, "max_value": 13},
-                "replace": {"_TYPE_": "_NUM_", "M": -1, "2": 3, "-100": "_NAN_"}
+                "replace": {"_TYPE_": "_NUM_", "M": -1, "2": 3, "-100": "_NAN_"},
             }
         )
-
+        self.feature_model_config_numerical_cut_num = FeatureModelConfig.model_validate(
+            {
+                "name": "CBM",
+                "default": 13,
+                "clip": {"min_value": -1, "max_value": 13},
+                "replace": {"_TYPE_": "_NUM_", "M": -1, "2": 3, "-100": "_NAN_"},
+                "encoding": "cut_num"
+            }
+        )
         self.feature_model_config_numerical_cut = FeatureModelConfig.model_validate(
             {
                 "name": "CBM_cut",
@@ -66,6 +77,8 @@ class TestDataPrepare(TestCase):
         feature_data_replace_dict = pd.Series(
             [replace_numerical_values(v, self.feature_model_config_numerical) for v in feature_data]
         )
+
+
         assert_series_equal(feature_data_replace_series, feature_data_replace_dict)
         assert_series_equal(feature_data_replace_series, pd.Series([np.nan, -2.0, -1.0, 1.0, 3.0, 14.0, np.nan, np.nan]))
 
@@ -74,6 +87,7 @@ class TestDataPrepare(TestCase):
         feature_data_replace_series = replace_numerical_values_series(
             feature_data, self.feature_model_config_numerical
         )
+
         feature_data_replace_dict = pd.Series(
             [replace_numerical_values(v, self.feature_model_config_numerical) for v in feature_data]
         )
@@ -163,6 +177,18 @@ class TestDataPrepare(TestCase):
             pd.Series(["(3.0, inf]", "(-inf, 1.0]", "(-inf, 1.0]", "(-inf, 1.0]", "(1.0, 3.0]", "(3.0, inf]", "(3.0, inf]", "(3.0, inf]"])
         )
 
+    def test_model_data_subset(self):
+        test_data_path = Path(__file__).resolve().parent / "test_data"
+        path_to_data = test_data_path / 'titanic.csv'
+        data = pd.read_csv(path_to_data)
+        data1 = data.drop(columns=['AGE'])
+        data2 = data['AGE']
+        datasubset1 = ModelDataSubset(model_name='test',X_train=data1, features_categorical=list(data.columns))
+        datasubset2 = ModelDataSubset(model_name='test', X_train=data2, features_numerical=['AGE'])
+        dsubset = datasubset1 + datasubset2
+        self.assertIsInstance(dsubset, ModelDataSubset)
+        self.assertEqual(dsubset.X_train.shape, (891,12))
+        self.assertEqual(datasubset1.X_train.shape, (891, 11))
 
 if __name__ == '__main__':
     main()

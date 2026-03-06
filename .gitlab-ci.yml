@@ -1,0 +1,57 @@
+stages:
+  - build
+  - docs
+
+variables:
+  PYTHON_VERSION: "3.11"
+
+# Build documentation job
+build_docs:
+  stage: docs
+  image: python:3.11
+  only:
+    - merge_requests
+    - develop
+  changes:
+    - outboxml/**/*.py
+    - docs/sphinx/**/*
+    - .gitlab-ci.yml
+  before_script:
+    - python -m pip install --upgrade pip
+    - pip install -r docs/sphinx/requirements.txt
+    - pip install -e .
+  script:
+    - cd docs/sphinx
+    - make html
+    - |
+      if [ ! -d "_build/html" ]; then
+        echo "Error: Documentation build failed - _build/html directory not found"
+        exit 1
+      fi
+      echo "Documentation built successfully"
+  artifacts:
+    when: on_success
+    expire_in: 1 week
+    paths:
+      - docs/sphinx/_build/html
+    reports:
+      # Store build status
+      dotenv: docs/sphinx/_build/.build_status
+  allow_failure: false
+
+# Optional: Deploy documentation to GitLab Pages
+pages:
+  stage: deploy
+  image: python:3.11
+  only:
+    - develop
+  dependencies:
+    - build_docs
+  script:
+    - cd docs/sphinx
+    - make html
+  artifacts:
+    paths:
+      - docs/sphinx/_build/html
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"

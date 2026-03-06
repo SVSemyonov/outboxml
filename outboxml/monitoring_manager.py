@@ -7,71 +7,43 @@ from loguru import logger
 from pydantic import ValidationError
 
 from outboxml import config
-from outboxml.core.data_prepare import prepare_dataset
 from outboxml.core.email import EMailMonitoring
-from outboxml.core.pydantic_models import MonitoringConfig
-from outboxml.datadrift import DataDrift
+from outboxml.core.pydantic_models import MonitoringConfig, ModelConfig, AllModelsConfig
 from outboxml.datasets_manager import DataSetsManager
+from outboxml.ensemble import Ensemble, EnsembleResult
 from outboxml.export_results import ResultExport, GrafanaExport
 from outboxml.extractors import Extractor
 from outboxml.metrics.base_metrics import BaseMetric
+from outboxml.core.monitoring_factory import MonitoringFactory
+from outboxml.monitoring_result import MonitoringResult, DataContext, MonitoringContext
 
-
-class MonitoringResult:
-    def __init__(self, group_name):
-        self.group_name = group_name
-        self.model_version = 'default'
-        self.datadrift = {}
-        self.metric = None
-        self.extrapolation_results = {}
-        self.report = pd.DataFrame()
-        self.grafana_dashboard = None
-
-
-
-class MonitoringReport:
-    def __init__(self, ):
-        pass
-
-    def make_report(self, monitoring_result: MonitoringResult) -> pd.DataFrame:
-        report = pd.DataFrame()
-        for key in monitoring_result.datadrift.keys():
-            df_result = monitoring_result.datadrift[key].copy()
-            df_result['model_name'] = key
-            report = pd.concat([report, df_result])
-        for column in report.columns:
-            try:
-                report[column] = report[column].astype('float')
-            except:
-                report[column] = report[column].astype(str)
-        report['model_version'] = monitoring_result.model_version
-        return report
 
 
 class MonitoringManager:
-    """класс для проведения процесса мониторинга для выбранной модели.
+    """Orchestrator class for executing model monitoring pipeline.
 
-    Для работы необходимы два конфиг-файла:
-    конфиг мониторинга и конфиг модели. Дополнительно прописываются экстракторы для получения логов и данных с обучения.
-    Также экстрактор для экстраполяции таргета. Расчёт датадрифта производится по стандратному интерфейсу.
-    Возможна передача пользовательского интерфейса DataDrift
+    This class manages the full monitoring lifecycle: loading configurations,
+    extracting data and logs, running monitoring checks, exporting results,
+    and sending notifications.
 
-    Также необходима перегрузка метода review для пользовательской формы отчета
+    :var monitoring_service: Service responsible for executing monitoring checks.
+    :vartype monitoring_service: MonitoringService
+    :var result: Object storing monitoring results.
+    :vartype result: MonitoringResult
+    :var logs: Extracted production logs.
+    :vartype logs: pandas.DataFrame or None
 
-    Parameters:
-         monitoring_config: конфиг для мониторинга
-         models_config: конфиг модели для обучения
-         external_config: конфиг для почты и др. подключений
-         logs_extractor: Extractor - экстрактор логов
-         data_extractor: Extractor - экстрактор данных обучения модели
-         target_extractor: Extractor - экстрактор для экстраполяции таргета
-         monitoring_report: MonitoringReport - форма отчета для мониторина. По умолчанию отчет по датадрифту
-         datadrift_interface: DataDrift - интерфейс для расчёта датадрифта
-         target_extrapolation_models: dict - слоаврь моделей вида {model_name: TargetModel}
-         grafana_connection: подключения для загрузки данных в БД, передается в pd.to_sql()
-         business_metric: BaseMetric - Метрика для расчёта качества модели
-         email: EMailMonitoring - интерфейс для отправки письма
+    .. rubric:: Examples
 
+    .. code-block:: python
+
+        manager = MonitoringManager(
+            monitoring_config='configs/monitoring_test_config.json',
+            models_config='configs/config_example_titanic.json',
+            data_extractor=TitanicExampleExtractor(),
+            logs_extractor=LogsExtractor()
+        )
+        result = manager.review(send_mail=True, to_grafana=True)
     """
 
     def __init__(self,
@@ -81,13 +53,40 @@ class MonitoringManager:
                  logs_extractor: Extractor = None,
                  data_extractor: Extractor = None,
                  target_extractor: Extractor = None,
-                 monitoring_report: MonitoringReport = MonitoringReport(),
-                 datadrift_interface: DataDrift = None,
                  grafana_connection=None,
                  business_metric: BaseMetric = None,
                  email: EMailMonitoring = None,
                  ):
-        self._monitoring_report = monitoring_report
+        """
+        Initializes monitoring manager.
+
+        :param monitoring_config: Monitoring configuration or path to config file.
+        :type monitoring_config: dict or str
+
+        :param models_config: Model training configuration or path to config file.
+        :type models_config: dict or str
+
+        :param external_config: External configuration (email, connections, etc.).
+        :type external_config: module or None
+
+        :param logs_extractor: Extractor for production logs.
+        :type logs_extractor: Extractor or None
+
+        :param data_extractor: Extractor for training data.
+        :type data_extractor: Extractor or None
+
+        :param target_extractor: Extractor for target extrapolation.
+        :type target_extractor: Extractor or None
+
+        :param grafana_connection: Database connection for Grafana export.
+        :type grafana_connection: Any
+
+        :param business_metric: Business metric for model quality evaluation.
+        :type business_metric: BaseMetric or None
+
+        :param email: Email interface for notifications.
+        :type email: EMailMonitoring or None
+        """
         self._monitoring_config = monitoring_config
         self._models_config = models_config
         self._target_extractor = target_extractor
@@ -95,11 +94,6 @@ class MonitoringManager:
             self._external_config = external_config
         else:
             self._external_config = config
-
-        if datadrift_interface is None:
-            self.datadrift = DataDrift(full_calc=True)
-        else:
-            self.datadrift = datadrift_interface
 
         if email is None:
             self.email = EMailMonitoring(config=self._external_config)
@@ -111,57 +105,68 @@ class MonitoringManager:
 
         self._business_metric = business_metric
         self._ds_manager = DataSetsManager(config_name=self._models_config, extractor=data_extractor, external_config=external_config)
-
         self._result_export = ResultExport(ds_manager=self._ds_manager, config=self._external_config)
         self._logs_extractor = logs_extractor
         self.__init_monitoring()
+        self._prod_models_configs = None
+        self.__init_prod_models_configs()
         self.result = MonitoringResult(group_name=self._monitoring_config.group_name)
-        self.logs = None
+        self.result.dataset_name = self._define_dataset_name()
 
-    def review(self, check_datadrift: bool = True,  send_mail: bool = True,
+        self.monitoring_service = MonitoringFactory.create_from_config(
+            self._monitoring_config,
+        )
+
+    def review(self,
+               send_mail: bool = True,
                to_grafana: bool = True) -> MonitoringResult:
+        """
+        Executes monitoring process.
+
+        This method performs the full monitoring cycle:
+        data extraction, model preparation, monitoring checks,
+        report generation, export, and notifications.
+
+        :param send_mail: Whether to send email notification.
+        :type send_mail: bool
+
+        :param to_grafana: Whether to export results to Grafana.
+        :type to_grafana: bool
+
+        :return: Monitoring result object.
+        :rtype: MonitoringResult
+
+        .. rubric:: Examples
+
+        Example usage::
+        manager.review(send_mail=True, to_grafana=True)
+        """
+        self._ds_manager._retro = True
+        self._ds_manager._init_dsmanager()
+        context = MonitoringContext(
+            data_preprocessor=self._ds_manager._data_preprocessor,
+            logs_extractor=self._logs_extractor,
+            monitoring_result=self.result,
+            monitoring_config=self._monitoring_config,
+            models_config=self._prod_models_configs,
+            all_models_config=self.__init_all_models_config(self._models_config)
+        )
+        service_reviews, service_reports = self.monitoring_service.review_all(context=context)
+        self.result.reviews = service_reviews
+        self.result.reports = service_reports
         try:
-            if check_datadrift:
-                self.datadrift_review()
-            report = self.prepare_report()
-            self.result.report = report
             if to_grafana:
-                self._grafana_report(report)
+                for k in self.result.reports.keys():
+                    table_name = self.result.reports[k]['db_table']
+                    if table_name:
+                        self._grafana_report(self.result.reports[k]['df'], table_name)
             if send_mail:
                 self.email.success_mail(self.result)
         except Exception as exc:
-              logger.error(exc)
-              self.email.error_mail(group_name=self.result.group_name, error=exc)
-
+            logger.error(exc)
+            self.email.error_mail(group_name=self.result.group_name, error=exc)
         finally:
             return self.result
-
-    def prepare_report(self) -> pd.DataFrame:
-        logger.info('Preparing report...')
-        return self._monitoring_report.make_report(self.result)
-
-    def datadrift_review(self):
-        if self.logs is None:
-            self.logs = self._logs_extractor.extract_dataset()
-            logger.debug('Logs are loaded')
-
-        for model in self._ds_manager._models_configs:
-            try:
-                logger.debug('Calculating datadrift|| ' + model.name)
-                data_subset = self._ds_manager.get_subset(model_name=model.name)
-                X_test = prepare_dataset(group_name=self._ds_manager.group_name,
-                                         data=self.logs.copy(),
-                                         train_ind=self.logs.index,
-                                         test_ind=pd.Index([]),
-                                         model_config=model,
-                                         ).data
-
-                self.result.datadrift[model.name] = self._datadrift_report(data_subset.X_train, X_test)
-                logger.debug('Finished datadrift|| ' + model.name)
-            except Exception as exc:
-                logger.error(exc)
-                logger.info('No datadrift results for model')
-        return self.result.datadrift
 
 
     def __init_monitoring(self):
@@ -184,24 +189,70 @@ class MonitoringManager:
             logger.error("Config validation error")
             raise ValidationError(e)
 
-    def _datadrift_report(self, X_train, X_test):
-        logger.info('Calculating datadrift...')
-        return self.datadrift.report(X_train, X_test, self._ds_manager.dataset, self.logs)
+    def __init_prod_models_configs(self):
+        with open(f'{self._monitoring_config.prod_models_path}/{self._monitoring_config.pickle_name}.pickle',
+                  'rb') as f:
+            prod_model = pickle.load(f)
+        prod_models_config = []
+        for model in prod_model:
+            if isinstance(prod_model, EnsembleResult):
+                for val in model.models:
+                    prod_models_config.append(ModelConfig.model_validate(val[2]['model_config']))
+            elif isinstance(prod_model, list):
+                prod_models_config.append(ModelConfig.model_validate(model['model_config']))
+            else:
+                logger.error("Invalid prod_models config type")
 
-    def _grafana_report(self, report: pd.DataFrame):
+        self._prod_models_configs = prod_models_config
+
+    def __init_all_models_config(self, models_config):
+        if isinstance(models_config, dict):
+            logger.info("AllModelsConfig config from dict")
+            config = json.dumps(models_config)
+        else:
+            logger.info("AllModelsConfig from path")
+            try:
+                with open(models_config, "r", encoding='utf-8') as f:
+                    config = f.read()
+            except FileNotFoundError:
+                logger.error("Invalid AllModelsConfig config name")
+                raise FileNotFoundError("Invalid config name")
+
+        try:
+            all_models_config = AllModelsConfig.model_validate_json(config)
+        except ValidationError as e:
+            logger.error("Config validation error")
+            raise ValidationError(e)
+        return all_models_config
+
+    def _grafana_report(self, report: pd.DataFrame, table_name: str) -> None:
+        """
+        Exports monitoring report to Grafana database.
+
+        :param report: Monitoring report data.
+        :type report: pandas.DataFrame
+
+        :param table_name: Target database table name.
+        :type table_name: str
+        """
         try:
             GrafanaExport(df=report, connection=self.__grafana_connection,
-                          table_name=self._monitoring_config.grafana_table_name).load_data_to_db()
+                          table_name=table_name).load_data_to_db()
         except Exception as exc:
             logger.error(exc)
             logger.info('No results in grafana')
 
-    def _load_prod_model(self):
 
-        with open(
-                os.path.join(self._monitoring_config.prod_models_path, f"{self._monitoring_config.model_name}.pickle"),
-                "rb") as f:
-            group = pickle.load(f)
-        self.result.model_version = self._monitoring_config.model_name
-        logger.info(self._monitoring_config.model_name + ' is loaded from prod path')
-        return group
+    def _define_dataset_name(self):
+        """
+        Determines dataset name based on data source.
+
+        :return: Dataset name.
+        :rtype: str
+        """
+        if self._monitoring_config.data_source in ['csv', 'parquet']:
+            dataset_name = os.path.basename(os.path.splitext(self._ds_manager.data_config.local_name_source)[0])
+        else:
+            dataset_name = self._monitoring_config.data_config.table_name_source
+
+        return dataset_name

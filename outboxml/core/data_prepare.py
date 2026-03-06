@@ -1,5 +1,6 @@
 import pandas as pd
 from pandas.api.types import is_integer_dtype, is_float_dtype
+import polars as pl
 import numpy as np
 from typing import Tuple, List, Dict, Optional, Union
 from typing_extensions import Literal
@@ -22,7 +23,43 @@ from outboxml.core.errors import ConfigError
 from outboxml.core.enums import EncodingNames
 
 
-class OptiBinningEncoder:
+pl_numeric_dtypes = [
+    pl.datatypes.Decimal,
+    pl.datatypes.Float32,
+    pl.datatypes.Float64,
+    pl.datatypes.Int8,
+    pl.datatypes.Int16,
+    pl.datatypes.Int32,
+    pl.datatypes.Int64,
+    pl.datatypes.Int128,
+    pl.datatypes.UInt8,
+    pl.datatypes.UInt16,
+    pl.datatypes.UInt32,
+    pl.datatypes.UInt64,
+]
+
+
+class Encoder:
+    """
+    Base class for encoders.
+    """
+    def encode_data(self, *params):
+        pass
+
+
+class OptiBinningEncoder(Encoder):
+    """
+    Class for create and apply encodings. Uses ContinuousOptimalBinning method from the optbinning library.
+
+    :param X: Feature values.
+    :param y: Target values.
+    :param type: The feature's type, `numerical` and `categorical` are supported.
+    :param name: The feature's name.
+    :param train_ind: Indices of training subset.
+
+    Default optbinning_params: min_prebin_size=0.05, max_n_bins=5, max_n_prebins=20.
+    """
+
     def __init__(self,
                  X: pd.Series,
                  y: pd.Series,
@@ -36,8 +73,25 @@ class OptiBinningEncoder:
         self._name = name
         self.mapping = {}
         self._train_ind = train_ind
+        self._default_optbinning_params =  {'max_n_bins': 5, 'max_n_prebins': 20, 'min_prebin_size': 0.05,}
 
-    def encode_data(self, mapping: dict = None, bins: np.array = None, num_num: bool = False, optbinning_params: dict = None) -> tuple:
+    def encode_data(
+            self,
+            mapping: Optional[dict] = None,
+            bins: Optional[np.array] = None,
+            num_num: bool = False,
+            optbinning_params: Optional[dict] = None,
+    ) -> tuple:
+        """
+        Creates bins and mappings if they are not given.
+
+        :param mapping: External map values, not calculated if given.
+        :param bins: External bins, not calculated if given.
+        :param num_num: Calculates mappings for bins of numerical feature if True.
+        :param optbinning_params: External optbinning params. Set default params if None.
+
+        :return: Tuple of mappings and bins.
+        """
 
         if self._type == 'numerical':
             try:
@@ -46,7 +100,7 @@ class OptiBinningEncoder:
                 logger.error('Wrong type of X for binning')
         if (mapping is None) and (bins is None):
             if optbinning_params is None:
-                optbinning_params =  {'min_prebin_size': 0.001, 'max_n_bins': 100, 'max_n_prebins': 100}
+                optbinning_params = self._default_optbinning_params
             else:
                 logger.info('User Optbinning params')
             optb = ContinuousOptimalBinning(name=self._name, dtype=self._type, **optbinning_params)
@@ -85,17 +139,87 @@ class OptiBinningEncoder:
         return mapping, bins
 
 
+class CutNumberEncoder(Encoder):
+    """
+    Class for create and apply cut encoding. The valuable strategy is Freedman-diaconis.
+
+    :param max_bins: Maximum number of bins, 5 by default.
+    :param rule: Cut rule, 'Freedman-diaconis' by default.
+    :param round_decimals: Rounding decimals, 2 by default.
+    """
+
+    def __init__(self,
+                 max_bins: int = 5,
+                 rule: str = 'Freedman-diaconis',
+                 round_decimals: int=2):
+        self.max_bins = max_bins
+        self.round_decimals = round_decimals
+        self.rule = rule
+
+    def encode_data(self, serie: pd.Series):
+        """
+        Creates bins.
+
+        :param serie: Feature's values.
+
+        :return: Bins.
+        """
+
+        opt_bins = self.calculate_optimal_bins(serie.dropna())
+        cut_number = None
+        if opt_bins is not None:
+            result, bins = pd.qcut(serie, q=opt_bins, retbins=True, duplicates='drop')
+            bins = np.round(bins, decimals=self.round_decimals)
+            logger.info('bins_for_feature||' + str(bins))
+            if len(bins) > 1:
+                cut_number = '_'.join(map(str, bins[:-1]))
+            else:
+                cut_number = str(bins)
+        return cut_number
+
+
+    def calculate_optimal_bins(self, data: pd.Series):
+        if self.rule == 'Freedman-diaconis':
+            return self._freedman_diaconis_rule(data)
+        else:
+            logger.error('Unknown rule for cut number||Returnin None')
+            return None
+
+
+    def _freedman_diaconis_rule(self, data: pd.Series):
+        try:
+            n = len(data)
+            iqr = np.percentile(data, 75) - np.percentile(data, 25)
+            fd = int(np.ceil((max(data) - min(data)) / (2 * iqr / (n ** (1 / 3)))))
+
+            return min(self.max_bins, fd)
+        except Exception as exc:
+            logger.error(f'No cut values for {data.name} return None||{str(exc)}')
+            return None
+
+
 class PrepareDatasetResult:
+    """
+    Class for prepared dataset.
+
+    :param data: Pandas' or Polars' DataFrame with prepared features' values.
+    :param features_numerical: List of numerical features' names.
+    :param features_categorical: List of categorical features' names.
+    :param model_config: Model's config.
+    :param corr_df: Correlation matrix between features. (Deprecated)
+    :param encoding_map: Mapping for features' bins. (Deprecated)
+    """
+
     def __init__(
             self,
-            data: pd.DataFrame,
+            data: pd.DataFrame | pl.DataFrame,
             features_numerical: Optional[List[str]],
             features_categorical: Optional[List[str]],
             model_config: ModelConfig,
             corr_df: Optional[pd.DataFrame] = None,
-            encoding_map: dict = None
+            encoding_map: Optional[dict] = None
     ):
-        self.data: pd.DataFrame = data
+        self.data: pd.DataFrame | pl.DataFrame = data
         self.features_numerical: Optional[List[str]] = features_numerical
         self.features_categorical: Optional[List[str]] = features_categorical
         self.model_config: ModelConfig = model_config
@@ -103,23 +227,43 @@ class PrepareDatasetResult:
         self.encoding_map = encoding_map
 
 
-def map_num(v: Union[int, float], bins: List[float], mapping: Dict[pd.IntervalIndex, str]) -> Optional[str]:
-    for i, j in zip(bins[:-1], bins[1:]):
-        if (i < v) and (v <= j):
-            for k, m in mapping.items():
-                if k.left == i:
-                    return m
+def map_num(v: Union[int, float], mapping: Dict[pd.IntervalIndex, str]) -> Optional[str]:
+    """
+    Apply mapping to value.
+
+    :param v: Feature's value.
+    :param mapping: Mapping.
+
+    :return: Encoded value.
+    """
+    for k, m in mapping.items():
+        if (k.left < v) and (v <= k.right):
+            return m
+    logger.warning(f"Value {v} is not in mapping.")
     return None
 
 
 def feature_encoding_series(
         feature_data: pd.Series,
         feature: FeatureModelConfig,
-        target: pd.Series = None,
+        target: Optional[pd.Series] = None,
         train_ind: Optional[pd.Index] = None,
         log: bool = True,
         raise_on_error: bool = False,
 ) -> Tuple[pd.Series, Optional[Dict], Optional[List]]:
+    """
+    Encode feature's values, the input type should be Pandas' Series.
+
+    :param feature_data: Feature's values.
+    :param feature: Feature's config.
+    :param target: Target's values.
+    :param train_ind: Indices of training subset.
+    :param log: Whether to log the process.
+    :param raise_on_error: Whether to raise an error if occurs.
+
+    :return: Tuple of encoded values, mapping and bins.
+    """
+
     mapping = feature.mapping
     bins = feature.bins
     if train_ind is None:
@@ -209,6 +353,8 @@ def feature_encoding_series(
                 logger.error(f"{feature.name} || Encoding error || Cannot convert to WoE || {str(e)}")
                 if raise_on_error:
                     raise ValueError(f"{feature.name} || Cannot convert to WoE")
+    elif feature.encoding == EncodingNames.cut_num:
+        pass #Encoding call in prepare_numerical_feature function
     else:
         logger.info("Unknown encoding || Return origin")
         if raise_on_error:
@@ -221,6 +367,14 @@ def feature_encoding(
         feature_value: Union[int, float],
         feature: FeatureModelConfig,
 ) -> Union[int, float]:
+    """
+    Encode feature's one value.
+
+    :param feature_value: Feature's value.
+    :param feature: Feature's config.
+
+    :return: Encoded value.
+    """
 
     if feature.encoding == EncodingNames.to_float:
         try:
@@ -254,7 +408,7 @@ def feature_encoding(
                     list(pd.IntervalIndex.from_arrays(feature.bins[:-1], feature.bins[1:]).astype(str))
                 )
             }
-            feature_value = map_num(feature_value, feature.bins, mapping)
+            feature_value = map_num(feature_value, mapping)
         except Exception as e:
             raise ValueError(f"{feature.name} || Cannot convert to WoE")
 
@@ -264,10 +418,11 @@ def feature_encoding(
         try:
             if not isinstance(feature_value, (float, int)):
                 feature_value = float(feature_value)
-            feature_value = map_num(feature_value, feature.bins, feature.mapping)
+            feature_value = map_num(feature_value, feature.mapping)
         except Exception as e:
             raise ValueError(f"{feature.name} || Cannot convert to WoE")
-
+    elif feature.encoding == EncodingNames.cut_num:
+        pass
     else:
         raise NotImplementedError(f"{feature.name} || Unknown encoding")
 
@@ -278,6 +433,14 @@ def dict_replace(
         feature: FeatureModelConfig,
         dtype: Literal[FeaturesTypes.numerical, FeaturesTypes.categorical]
 ) -> Dict:
+    """
+    Prepares replace dict for categorical and numerical features.
+
+    :param feature: Feature's config.
+    :param dtype: Feature's type. (Deprecated)
+
+    :return: Replace dict.
+    """
 
     dict_replace_temp = {}
 
@@ -310,6 +473,15 @@ def replace_categorical_values_series(
         feature_data: pd.Series,
         feature: FeatureModelConfig,
 ) -> pd.Series:
+    """
+    Replace values in categorical feature's data, the input type should be Pandas' Series.
+
+    :param feature_data: Feature's values.
+    :param feature: Feature's config.
+
+    :return: Series with replaced values.
+    """
+
     dict_replace_temp = dict_replace(feature=feature, dtype=FeaturesTypes.categorical)
     ind = (~feature_data.isin(dict_replace_temp) & pd.notnull(feature_data))
     feature_data = feature_data.map(dict_replace_temp)
@@ -322,6 +494,15 @@ def replace_categorical_values(
         feature_value: Union[int, str],
         feature: FeatureModelConfig,
 ) -> Union[int, float, str]:
+    """
+    Replace categorical feature's one value.
+
+    :param feature_value: Feature's value.
+    :param feature: Feature's config.
+
+    :return: Replaced value.
+    """
+
     dict_replace_temp = dict_replace(feature=feature, dtype=FeaturesTypes.categorical)
     if pd.isnull(feature_value):
         return np.nan
@@ -332,6 +513,15 @@ def replace_numerical_values_series(
         feature_data: pd.Series,
         feature: FeatureModelConfig,
 ) -> pd.Series:
+    """
+    Replace values in numerical feature's data, the input type should be Pandas' Series.
+
+    :param feature_data: Feature's values.
+    :param feature: Feature's config.
+
+    :return: Series with replaced values.
+    """
+
     dict_replace_temp = dict_replace(feature=feature, dtype=FeaturesTypes.numerical)
     return feature_data.replace(dict_replace_temp)
 
@@ -340,11 +530,30 @@ def replace_numerical_values(
         feature_value: Union[int, float],
         feature: FeatureModelConfig,
 ) -> Union[int, float]:
+    """
+    Replace numerical feature's one value.
+
+    :param feature_value: Feature's value.
+    :param feature: Feature's config.
+
+    :return: Replaced value.
+    """
+
     dict_replace_temp = dict_replace(feature=feature, dtype=FeaturesTypes.numerical)
     return dict_replace_temp.get(feature_value, feature_value)
 
 
 def replace_with_default(feature_data: pd.Series, feature: FeatureModelConfig, values: List[str]) -> pd.Series:
+    """
+    Replace values in feature's data with default, the input type should be Pandas' Series.
+
+    :param feature_data: Feature's values.
+    :param feature: Feature's config.
+    :param values: Values to be replaced
+
+    :return: Series with replaced values.
+    """
+
     dict_replace_temp = {value: feature.default for value in values}
     return feature_data.replace(dict_replace_temp)
 
@@ -354,9 +563,51 @@ def prepare_relative_feature_series(
         denominator: pd.Series,
         default_value: Union[float, int],
 ) -> pd.Series:
+    """
+    Prepare relative feature's data, the input numerator's and denominator's types should be Pandas' Series.
+
+    :param numerator: Numerator's values.
+    :param denominator: Denominator's values.
+    :param default_value: Default value for NaNs and infinities.
+
+    :return: Series with calculated values.
+    """
+
     if not isinstance(default_value, (int, float)):
         raise ConfigError("Invalid default value for relative feature")
     return (numerator / denominator).replace([-np.inf, np.inf], np.nan).fillna(default_value)
+
+
+def prepare_relative_feature_series_pl(
+        data: pl.LazyFrame,
+        feature_name: str,
+        numerator_name: str,
+        denominator_name: str,
+        default_value: Union[float, int],
+) -> pl.LazyFrame:
+    """
+    Prepare relative feature's data, the input numerator's and denominator's types should be Polars' LazyFrame.
+
+    :param data: Features' values in Polars' LazyFrame format.
+    :param feature_name: Feature's name.
+    :param numerator_name: Numerator column's name.
+    :param denominator_name: Denominator column's name.
+    :param default_value: Default value for NaNs and infinities.
+
+    :return: LazyFrame with calculated values.
+    """
+
+    if not isinstance(default_value, (int, float)):
+        raise ConfigError("Invalid default value for relative feature")
+    return (
+        data
+        .with_columns(
+            pl.when(pl.col(denominator_name) == 0)
+            .then(pl.lit(default_value))
+            .otherwise(pl.col(numerator_name) / pl.col(denominator_name))
+            .alias(feature_name)
+        )
+    )
 
 
 def prepare_relative_feature(
@@ -364,6 +615,16 @@ def prepare_relative_feature(
         denominator: Union[float, int],
         default_value: Union[float, int],
 ) -> Union[float, int]:
+    """
+    Prepare relative feature's one value.
+
+    :param numerator: Numerator's value.
+    :param denominator: Denominator's value.
+    :param default_value: Default value for NaNs and infinities.
+
+    :return: Calculated value.
+    """
+
     if not isinstance(default_value, (int, float)):
         raise ConfigError("Invalid default value for relative feature")
     if (
@@ -411,20 +672,29 @@ def prepare_categorical_feature_series(
         feature: FeatureModelConfig,
         log: bool = True,
 ) -> pd.Series:
+    """
+    Prepare values in categorical feature's data, the input type should be Pandas' Series.
+
+    :param feature_data: Feature's values.
+    :param feature: Feature's config.
+    :param log: Whether to log the process.
+
+    :return: Series with prepared values.
+    """
 
     feature_data = feature_data.apply(lambda x: to_str(x))
 
     if not isinstance(feature.default, (str, int)):
         raise ConfigError(f"{feature.name}: invalid default value for categorical feature")
 
-    # Схлопывание до базового уровня и Замена значений
+    # Replace values
     if log:
         ind = (~feature_data.isin(feature.replace.keys()) & feature_data.notna())
         if len(feature_data.loc[ind]) > 0:
             logger.info(feature.name + ' || Присвоено default значений: ' + str(len(feature_data.loc[ind])))
     feature_data = replace_categorical_values_series(feature_data, feature)
 
-    # Замена пропусков
+    # Fill missing values
     if pd.isnull(feature_data).sum() > 0:
         if log:
             logger.info(feature.name + ' || Исправлено пропусков: ' + str(feature_data.isna().sum()))
@@ -438,19 +708,72 @@ def prepare_categorical_feature_series(
     return feature_data
 
 
+def prepare_categorical_feature_pl(
+        feature_data: pl.LazyFrame,
+        feature: FeatureModelConfig,
+        data_dtypes: Dict[str, pl.DataType],
+) -> pl.LazyFrame:
+    """
+    Prepare values in categorical feature's data, the input type should be Polars' LazyFrame.
+
+    :param feature_data: Feature's values in Polars' LazyFrame format.
+    :param feature: Feature's config.
+    :param data_dtypes: Features' types.
+
+    :return: Polars' LazyFrame with prepared values.
+    """
+
+    dict_replace_temp = dict_replace(feature=feature, dtype=FeaturesTypes.categorical)
+    fill_null_value = feature.fillna if feature.fillna else feature.default
+
+    feature_data = (
+        feature_data
+        .with_columns(
+            pl.when(
+                ~pl.col(feature.name).is_in(dict_replace_temp)
+                & pl.col(feature.name).is_not_null()
+                & pl.col(feature.name).is_not_nan()
+            )
+            .then(pl.lit(feature.default))
+            .when(
+                (pl.col(feature.name).is_null())
+                | (pl.col(feature.name).is_nan())
+            )
+            .then(pl.lit(fill_null_value))
+            .when(
+                data_dtypes[feature.name] in pl_numeric_dtypes
+            )
+            .then(pl.col(feature.name).cast(pl.String).replace(dict_replace_temp))
+            .otherwise(pl.col(feature.name).str.to_uppercase().replace(dict_replace_temp))
+            .alias(feature.name)
+        )
+    )
+
+    return feature_data
+
+
 def prepare_categorical_feature(
         feature_value: Union[int, str],
         feature: FeatureModelConfig,
 ) -> Union[int, str]:
+    """
+    Prepare categorical feature's one value.
+
+    :param feature_value: Feature's value.
+    :param feature: Feature's config.
+
+    :return: Prepared value.
+    """
+
     feature_value = to_str(feature_value)
 
     if not isinstance(feature.default, (str, int)):
         raise ConfigError(f"{feature.name}: invalid default value for categorical feature")
 
-    # Схлопывание до базового уровня и Замена значений
+    # Replace values
     feature_value = replace_categorical_values(feature_value, feature)
 
-    # Замена пропусков
+    # Fill missing values
     if pd.isnull(feature_value):
         if feature.fillna:
             if not isinstance(feature.fillna, (str, int)):
@@ -468,16 +791,27 @@ def prepare_numerical_feature_series(
         train_ind: Optional[pd.Index] = None,
         log: bool = True,
 ) -> Tuple[pd.Series, Optional[Union[float, int]]]:
+    """
+    Prepare values in numerical feature's data, the input type should be Pandas' Series.
+
+    :param feature_data: Feature's values.
+    :param feature: Feature's config.
+    :param train_ind: Indices of training subset.
+    :param log: Whether to log the process.
+
+    :return: Tuple with Series of prepared values and the default value.
+    """
+
     if train_ind is None:
         train_ind = feature_data.index
 
-    # Замена значений
+    # Replace values
     feature_data = replace_numerical_values_series(feature_data, feature)
 
     if feature_data.dtype not in (int, float):
         feature_data = pd.to_numeric(feature_data, downcast="float", errors="coerce")
 
-    # Замена пропусков
+    # Fill missing values
     val_fill = None
     if feature.default == FeatureEngineering.min:
         val_fill = feature_data.loc[[i for i in train_ind if i in feature_data.index]].min()
@@ -498,7 +832,7 @@ def prepare_numerical_feature_series(
             logger.info(feature.name + ' || Исправлено пропусков: ' + str(feature_data.isna().sum()))
         feature_data.fillna(default_value, inplace=True)
 
-    # Отсечение значений
+    # Clip values
     if feature.clip:
         if (sum(feature_data < feature.clip[FeatureEngineering.min_value])
                 + sum(feature_data > feature.clip[FeatureEngineering.max_value])) > 0:
@@ -513,7 +847,10 @@ def prepare_numerical_feature_series(
                 inplace=True,
             )
 
-    # Группировка
+    # Cut values
+    if feature.encoding == EncodingNames.cut_num and feature.cut_number is None:
+        feature.cut_number = CutNumberEncoder().encode_data(feature_data)
+
     if feature.cut_number:
         val_splits = [-np.inf] + list([float(x) for x in feature.cut_number.split('_')]) + [np.inf]
         feature_data = pd.cut(feature_data, bins=val_splits).astype(str)
@@ -525,8 +862,16 @@ def prepare_numerical_feature(
         feature_value: Union[float, int, str],
         feature: FeatureModelConfig,
 ) -> Union[float, int, str]:
+    """
+    Prepare numerical feature's one value.
 
-    # Замена значений
+    :param feature_value: Feature's value.
+    :param feature: Feature's config.
+
+    :return: Prepared value.
+    """
+
+    # Replace values
     feature_value = replace_numerical_values(feature_value, feature)
 
     if not isinstance(feature_value, (int, float)):
@@ -535,14 +880,16 @@ def prepare_numerical_feature(
         except:
             feature_value = np.nan
 
-    # Замена пропусков
+    # Fill missing values
+    if pd.isnull(feature_value):
+        feature_value = feature.default
     if not isinstance(feature.default, (int, float)):
         raise ConfigError(f"{feature.name}: invalid default value for numerical feature")
 
     if pd.isnull(feature_value):
         feature_value = feature.default
 
-    # Отсечение значений
+    # Clip values
     if feature.clip:
         feature_value = (
             feature.clip[FeatureEngineering.min_value] if feature_value < feature.clip[FeatureEngineering.min_value]
@@ -550,7 +897,7 @@ def prepare_numerical_feature(
             else feature_value
         )
 
-    # Группировка
+    # Cut values
     if feature.cut_number:
         val_splits = [-np.inf] + list([float(x) for x in feature.cut_number.split('_')]) + [np.inf]
         mapping = {
@@ -559,7 +906,7 @@ def prepare_numerical_feature(
                 list(pd.IntervalIndex.from_arrays(val_splits[:-1], val_splits[1:]).astype(str))
             )
         }
-        feature_value = map_num(feature_value, val_splits, mapping)
+        feature_value = map_num(feature_value, mapping)
 
     return feature_value
 
@@ -574,7 +921,7 @@ def prepare_numerical_feature(
 
 def prepare_dataset(
         group_name: str,
-        data: Union[Dict, pd.DataFrame],
+        data: Union[Dict, pd.DataFrame, pl.DataFrame],
         train_ind: Optional[pd.Index],
         test_ind: Optional[pd.Index],
         model_config: ModelConfig,
@@ -587,14 +934,38 @@ def prepare_dataset(
         modify_dtypes: bool = True,
         raise_on_encoding_error: bool = False
 ) -> PrepareDatasetResult:
+    """
+    Prepare dataset. Input data should be Pandas' or Polars' DataFrame or dict of feature and value pairs.
+
+    :param group_name: Models' group name.
+    :param data: Input data.
+    :param train_ind: Indices of training subset.
+    :param test_ind: Indices of testing subset. (Deprecated)
+    :param model_config: Model's config.
+    :param check_prepared: Whether to check prepared dataset.
+    :param calc_corr: Whether to calculate correlation matrix. (Deprecated)
+    :param save_data: Whether to save prepared dataset.
+    :param corr_threshold: Threshold for correlation matrix. (Deprecated)
+    :param target: Target's values.
+    :param log: Whether to log the process.
+    :param modify_dtypes: Whether to modify dtypes to int32, float32 and category respectively.
+    :param raise_on_encoding_error: Whether to raise if an encoding error occurs.
+
+    :return: An instance of the PrepareDatasetResult class.
+    """
 
     as_dict: bool = False
+    as_polars: bool = False
     if isinstance(data, dict):
         as_dict = True
+    elif isinstance(data, pl.DataFrame):
+        as_polars = True
+        lazy_data: pl.LazyFrame = data.lazy()
     elif isinstance(data, pd.DataFrame):
         pd.options.mode.chained_assignment = None
     else:
-        raise TypeError("Invalid data type")
+        logger.error(f"Invalid data type {type(data)}")
+        raise TypeError(f"Invalid data type {type(data)}")
 
     if model_config.relative_features:
         for relative_feature in model_config.relative_features:
@@ -604,6 +975,16 @@ def prepare_dataset(
                     denominator=data[relative_feature.denominator],
                     default_value=relative_feature.default
                 )
+
+            elif as_polars:
+                data = prepare_relative_feature_series_pl(
+                    data=lazy_data,
+                    feature_name=relative_feature.name,
+                    numerator_name=relative_feature.numerator,
+                    denominator_name=relative_feature.denominator,
+                    default_value=relative_feature.default
+                )
+
             else:
                 data[relative_feature.name] = prepare_relative_feature_series(
                     numerator=data[relative_feature.numerator],
@@ -706,7 +1087,7 @@ def prepare_dataset(
         features_numerical = [feature for feature in features_all if
                               (data[feature].dtype != 'object' and data[feature].dtype != 'category')]
 
-    # Изменения типа выходных данных
+    # Change output data types
     # TODO: добавить в конфиг автоматическое определение размера категорий
     if modify_dtypes and not as_dict:
         for column in features_all:
@@ -743,9 +1124,13 @@ def prepare_dataset(
 
     if as_dict:
         data = pd.DataFrame([data])
+    elif as_polars:
+        data = data.collect()
+    else:
+        data = data[features_all]
 
     return PrepareDatasetResult(
-        data=data[features_all],
+        data=data,
         features_numerical=features_numerical,
         features_categorical=features_categorical,
         model_config=model_config,
