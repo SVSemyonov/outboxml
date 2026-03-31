@@ -85,6 +85,8 @@ class ModelDataSubset:
             X: Optional[pd.DataFrame] = None,
             exposure_train: Optional[pd.Series] = None,
             exposure_test: Optional[pd.Series] = None,
+            sample_weight_train: Optional[pd.Series] = None,
+            sample_weight_test: Optional[pd.Series] = None,
             extra_columns: Optional[pd.DataFrame] = None
     ):
         self.model_name: str = model_name
@@ -98,6 +100,8 @@ class ModelDataSubset:
         self.X: Optional[pd.DataFrame] = X
         self.exposure_train: Optional[pd.Series] = exposure_train
         self.exposure_test: Optional[pd.Series] = exposure_test
+        self.sample_weight_train: Optional[pd.Series] = sample_weight_train
+        self.sample_weight_test: Optional[pd.Series] = sample_weight_test
         self.extra_columns = extra_columns
 
     @classmethod
@@ -111,6 +115,7 @@ class ModelDataSubset:
             features_numerical: Optional[List[str]] = None,
             features_categorical: Optional[List[str]] = None,
             column_exposure: Optional[str] = None,
+            column_weight: Optional[str] = None,
             column_target: Optional[str] = None,
             extra_columns: Optional[pd.DataFrame] = None,
     ):
@@ -170,6 +175,8 @@ class ModelDataSubset:
 
         exposure_train = Y[Y.index.isin(Y.index.intersection(index_train))][
             column_exposure] if column_exposure else None
+        sample_weight_train = Y[Y.index.isin(Y.index.intersection(index_train))][
+            column_weight] if column_weight else None
 
         X_test = X[X.index.isin(X.index.intersection(index_test))]
         Y_test = Y[Y.index.isin(Y.index.intersection(index_test))]
@@ -178,6 +185,7 @@ class ModelDataSubset:
             Y_train = Y_train[column_target]
             Y_test = Y_test[column_target]
         exposure_test = Y[Y.index.isin(Y.index.intersection(index_test))][column_exposure] if column_exposure else None
+        sample_weight_test = Y[Y.index.isin(Y.index.intersection(index_test))][column_weight] if column_weight else None
 
         return cls(
             model_name,
@@ -190,6 +198,8 @@ class ModelDataSubset:
             X,
             exposure_train,
             exposure_test,
+            sample_weight_train,
+            sample_weight_test,
             extra_columns
 
         )
@@ -202,6 +212,7 @@ class ModelDataSubset:
             features_numerical: Optional[List[str]] = None,
             features_categorical: Optional[List[str]] = None,
             column_exposure: Optional[str] = None,
+            column_weight: Optional[str] = None,
             column_target: Optional[str] = None,
             extra_columns_list: Optional[List[str]] = None,
     ):
@@ -257,10 +268,12 @@ class ModelDataSubset:
         X_train = X.loc[X["is_train_obml"] == 1].drop(columns=["is_train_obml"])
         y_train = X.loc[X["is_train_obml"] == 1][column_target] if column_target else pd.Series()
         exposure_train = X.loc[X["is_train_obml"] == 1][column_exposure] if column_exposure  else None
+        sample_weight_train = X.loc[X["is_train_obml"] == 1][column_weight] if column_weight else None
 
         X_test = X.loc[X["is_train_obml"] == 0].drop(columns=["is_train_obml"])
         y_test = X.loc[X["is_train_obml"] == 0][column_target] if column_target else pd.Series()
         exposure_test = X.loc[X["is_train_obml"] == 0][column_exposure] if column_exposure else None
+        sample_weight_test = X.loc[X["is_train_obml"] == 0][column_weight] if column_weight else None
 
         extra_columns_data = X[extra_columns_list] if extra_columns_list else None
 
@@ -275,6 +288,8 @@ class ModelDataSubset:
             X=None,
             exposure_train=exposure_train,
             exposure_test=exposure_test,
+            sample_weight_train=sample_weight_train,
+            sample_weight_test=sample_weight_test,
             extra_columns=extra_columns_data,
         )
     def __add__(self, other):
@@ -348,6 +363,8 @@ class ModelDataSubset:
             X=new_X,
             exposure_train=self.exposure_train,
             exposure_test=self.exposure_test,
+            sample_weight_train=self.sample_weight_train,
+            sample_weight_test=self.sample_weight_test,
             extra_columns=new_extra_columns
         )
 
@@ -764,6 +781,8 @@ class DataPreprocessor:
 
                 if model.column_exposure is not None:
                     model_features[model.name].append(model.column_exposure)
+                if model.column_weight is not None:
+                    model_features[model.name].append(model.column_weight)
 
                 if model.column_target is not None:
                     model_features[model.name].append(model.column_target)
@@ -831,6 +850,8 @@ class PickleModelSubset:
         subset.y_test = subset.y_test.copy() if subset.y_test is not None else None
         subset.exposure_train = subset.exposure_train.copy() if subset.exposure_train is not None else None
         subset.exposure_test = subset.exposure_test.copy() if subset.exposure_test is not None else None
+        subset.sample_weight_train = subset.sample_weight_train.copy() if subset.sample_weight_train is not None else None
+        subset.sample_weight_test = subset.sample_weight_test.copy() if subset.sample_weight_test is not None else None
         return subset
 
     def save_subset_to_pickle(self, model_name, subset: ModelDataSubset, rewrite: bool = False):
@@ -1168,6 +1189,7 @@ class PandasInterface(PrepareEngine):
             features_numerical=prepare_dataset_result.features_numerical if model_config is not None else [],
             features_categorical=prepare_dataset_result.features_categorical if model_config is not None else [],
             column_exposure=model_config.column_exposure if model_config.column_exposure else None,
+            column_weight=model_config.column_weight if model_config.column_weight else None,
             column_target=model_config.column_target if model_config.column_target else None,
             extra_columns=self._extra_columns_data if self._extra_columns_data is not None else None)
         logger.debug('Model ' + model_name + ' || Data preparation finished')
@@ -1202,19 +1224,35 @@ class PandasInterface(PrepareEngine):
             target = y
         else:
             target = pd.Series()
-            y = pd.Series()
+            y = pd.Series(index=dataset.index)
+        sample_weight = dataset[model_config.column_weight] if model_config.column_weight else None
         if model_config.column_exposure:
             logger.info('Pandas Engine||Weighting target on exposure')
             exposure[model_name] = dataset[model_config.column_exposure]
             X = dataset.loc[exposure[model_name] > 0]
             y = y.loc[y.index.isin(X.index)]
             target = y / exposure[model_name]
-            y = pd.concat([pd.Series(y, name=model_config.column_target),
-                           pd.Series(exposure[model_name].loc[exposure[model_name].index.isin(X.index)], name=model_config.column_exposure)],axis=1)
+            y_parts = [
+                pd.Series(y, name=model_config.column_target),
+                pd.Series(
+                    exposure[model_name].loc[exposure[model_name].index.isin(X.index)],
+                    name=model_config.column_exposure,
+                ),
+            ]
+            if sample_weight is not None:
+                y_parts.append(
+                    pd.Series(
+                        sample_weight.loc[sample_weight.index.isin(X.index)],
+                        name=model_config.column_weight,
+                    )
+                )
+            y = pd.concat(y_parts, axis=1)
 
         else:
             X = dataset
             y = pd.DataFrame(y)
+            if sample_weight is not None:
+                y[model_config.column_weight] = sample_weight
         return X, y, target
 
 
@@ -1365,6 +1403,7 @@ class PolarsInterface(PrepareEngine):
             features_numerical=prepare_dataset_result.features_numerical,
             features_categorical=prepare_dataset_result.features_categorical,
             column_exposure=model_config.column_exposure if model_config.column_exposure else None,
+            column_weight=model_config.column_weight if model_config.column_weight else None,
             column_target=model_config.column_target if model_config.column_target else None,
             extra_columns_list=self._extra_columns_list,
         )

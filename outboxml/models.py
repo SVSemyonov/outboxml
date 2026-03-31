@@ -43,6 +43,19 @@ class BaseWrapperModel(ABC):
         pass
 
 
+def _catboost_pool_weight(
+        exposure_train: Optional[pd.Series] = None,
+        sample_weight_train: Optional[pd.Series] = None,
+) -> Optional[pd.Series]:
+    if exposure_train is not None and sample_weight_train is not None:
+        return exposure_train * sample_weight_train
+    if sample_weight_train is not None:
+        return sample_weight_train
+    if exposure_train is not None:
+        return exposure_train
+    return None
+
+
 class DefaultModels:
     """Factory class for loading default or baseline models.
 
@@ -463,6 +476,7 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
         self._features_numerical: Optional[List[str]] = data_subset.features_numerical
         self._features_categorical: Optional[List[str]] = data_subset.features_categorical
         self._exposure_train: Optional[pd.Series] = data_subset.exposure_train
+        self._sample_weight_train: Optional[pd.Series] = data_subset.sample_weight_train
         self._params_catboost: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = model_config.params_catboost
         self._model_sm = self.sm_model.model
         self._model_ctb = None
@@ -502,11 +516,13 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
             features_categorical=self._features_categorical,
             params_catboost=self._params_catboost,
             exposure_train=self._exposure_train,
+            sample_weight_train=self._sample_weight_train,
             y_train_pred_glm=y_train_pred
 
         )
         self._X_train = None
         self._exposure_train = None
+        self._sample_weight_train = None
         self._y_train = None
         self.data_subset = None
         logger.debug('Wrapper model||Catboost over glm is fitted')
@@ -552,6 +568,7 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
                        features_categorical: Optional[List[str]] = None,
                        params_catboost: Optional[Dict[str, Optional[Union[int, float]]]] = None,
                        exposure_train: Optional[pd.Series] = None,
+                       sample_weight_train: Optional[pd.Series] = None,
                        y_train_pred_glm: Optional[pd.Series] = None,
                        ):
         features_numerical = features_numerical if features_numerical else []
@@ -570,13 +587,17 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
             task_type=self.work_type_fit,
             **params_catboost if params_catboost else {},
         )
+        pool_weight = _catboost_pool_weight(
+            exposure_train=exposure_train,
+            sample_weight_train=sample_weight_train,
+        )
 
         ctb_train_pool = Pool(
             data=X_train[chain(features_numerical, features_categorical)],
             label=y_train_ctb,
             cat_features=features_categorical,
             has_header=True,
-            weight=exposure_train if exposure_train is not None else None
+            weight=pool_weight
         )
         model_ctb = model_ctb.fit(ctb_train_pool, silent=True)
         return model_ctb
@@ -831,6 +852,7 @@ class CatboostModel(BaseWrapperModel):
         self.features_numerical: Optional[List[str]] = data_subset.features_numerical
         self.features_categorical: Optional[List[str]] = data_subset.features_categorical
         self.exposure_train: Optional[pd.Series] = data_subset.exposure_train
+        self.sample_weight_train: Optional[pd.Series] = data_subset.sample_weight_train
         self.params_catboost: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = model_config.params_catboost
         self._work_type_fit: str = work_type_fit
 
@@ -894,12 +916,16 @@ class CatboostModel(BaseWrapperModel):
             **self.params_catboost if self.params_catboost else {},
         )
         X_train = self.X_train.copy()
+        pool_weight = _catboost_pool_weight(
+            exposure_train=self.exposure_train,
+            sample_weight_train=self.sample_weight_train,
+        )
         ctb_train_pool = Pool(
             data=X_train[chain(features_numerical, features_categorical)],
             label=y_train_ctb,
             cat_features=features_categorical,
             has_header=True,
-            weight=self.exposure_train if self.exposure_train is not None else None
+            weight=pool_weight
         )
         model_ctb = model_ctb.fit(ctb_train_pool, silent=True)
         return GLMCatboostCombineModel(model_name=self.model_name,

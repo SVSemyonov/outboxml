@@ -1,6 +1,13 @@
 from statistics import LinearRegression
 
+import numpy as np
 import pandas as pd
+import sys
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+ROOT_DIR = BASE_DIR.parents[1]
+sys.path.append(str(ROOT_DIR))
 
 from outboxml.automl_manager import AutoMLManager
 from outboxml.core.email import AutoMLReviewEMail
@@ -15,9 +22,11 @@ from sqlalchemy import create_engine
 
 import config
 
-config_name = 'configs/config-example-titanic.json'
-auto_ml_config = 'configs/automl-titanic.json'
-path_to_data = 'data/titanic.csv'
+config_name = str(BASE_DIR / 'configs' / 'config-example-titanic.json')
+auto_ml_config = str(BASE_DIR / 'configs' / 'automl-titanic.json')
+path_to_data = str(BASE_DIR / 'data' / 'titanic.csv')
+config.mlflow_tracking_uri = (BASE_DIR / "mlruns").resolve().as_uri()
+config.mlflow_experiment = "TitanicExample"
 
 
 class TitanicExampleExtractor(Extractor):
@@ -30,6 +39,8 @@ class TitanicExampleExtractor(Extractor):
 
     def extract_dataset(self) -> pd.DataFrame:
         data = pd.read_csv(self.__path_to_file)
+        rng = np.random.default_rng(42)
+        data["ROW_WEIGHT"] = rng.uniform(0.5, 1.5, size=len(data))
     #    data['survived1'] = data['SURVIVED']
     #    data['survived2'] = data['SURVIVED']
         return data

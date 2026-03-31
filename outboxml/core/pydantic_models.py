@@ -116,6 +116,7 @@ class ModelConfig(BaseModel):
     wrapper: Optional[str] = None
     column_target: Optional[str] = None
     column_exposure: Optional[str] = None
+    column_weight: Optional[str] = None
     relative_features: Optional[List[RelativeFeatureModelConfig]] = []
     features: List[FeatureModelConfig]
     intersections: Optional[List[IntersectionModelConfig]] = None
