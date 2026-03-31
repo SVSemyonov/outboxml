@@ -1,11 +1,5 @@
 import numpy as np
 import pandas as pd
-import sys
-from pathlib import Path
-
-BASE_DIR = Path(__file__).resolve().parent
-ROOT_DIR = BASE_DIR.parents[1]
-sys.path.append(str(ROOT_DIR))
 
 from outboxml.automl_manager import AutoMLManager
 from outboxml.extractors import Extractor
@@ -15,11 +9,9 @@ import config
 from outboxml.metrics.base_metrics import BaseMetric
 from outboxml.metrics.business_metrics import BaseCompareBusinessMetric
 
-config_name = str(BASE_DIR / 'configs' / 'config-example-titanic.json')
-auto_ml_config = str(BASE_DIR / 'configs' / 'automl-titanic.json')
-path_to_data = str(BASE_DIR / 'data' / 'titanic.csv')
-config.mlflow_tracking_uri = (BASE_DIR / "mlruns").resolve().as_uri()
-config.mlflow_experiment = "TitanicExample"
+config_name = './configs/config-example-titanic.json'
+auto_ml_config = './configs/automl-titanic.json'
+path_to_data = 'data/titanic.csv'
 
 
 class TitanicExampleExtractor(Extractor):
