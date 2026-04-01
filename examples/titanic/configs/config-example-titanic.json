@@ -21,6 +21,7 @@
     {
       "name": "first",
       "column_target": "SURVIVED",
+      "column_weight": "ROW_WEIGHT",
       "objective": "poisson",
       "wrapper": "catboost",
       "relative_features": [],
@@ -49,6 +50,7 @@
     {
       "name": "second",
       "column_target": "SURVIVED",
+      "column_weight": "ROW_WEIGHT",
       "wrapper": "catboost",
       "objective": "poisson",
       "relative_features": [],

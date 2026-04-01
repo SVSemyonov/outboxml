@@ -335,12 +335,14 @@ class TestPredict(TestCase):
 
     def test_config_builder(self):
         data = pd.read_csv(path_to_data)
+        data["ROW_WEIGHT"] = np.linspace(0.5, 1.5, len(data))
         self.assertIsInstance(AutoMLConfigBuilder().build(), AutoMLConfig)
         self.assertIsInstance(AllModelsConfigBuilder().build(), AllModelsConfig)
         self.assertIsInstance(build_default_auto_ml_config({'group_name': 'test'}), AutoMLConfig)
         all_models_config = build_default_all_models_config(data=data,
                                                               group_name='example',
                                                               column_target='SURVIVED',
+                                                              column_weight='ROW_WEIGHT',
                                                               model_params={'wrapper': 'catboost',
                                                                             'name': 'titanic',
                                                                             },
@@ -349,6 +351,7 @@ class TestPredict(TestCase):
                                                                                })
         self.assertIsInstance(all_models_config,AllModelsConfig)
         self.assertEqual(all_models_config.models_configs[0].column_target,'SURVIVED', )
+        self.assertEqual(all_models_config.models_configs[0].column_weight,'ROW_WEIGHT', )
         self.assertEqual(all_models_config.models_configs[0].features[0].default, '_MEDIAN_', )
         self.assertEqual(all_models_config.models_configs[0].features[2].default, '_NAN_', )
 

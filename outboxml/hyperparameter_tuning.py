@@ -26,6 +26,8 @@ class HPTuningData:
                  y_test: pd.Series,
                  exposure_train: pd.Series,
                  exposure_test: pd.Series,
+                 sample_weight_train: pd.Series,
+                 sample_weight_test: pd.Series,
                  features_numerical,
                  features_categorical):
         """Initialization.
@@ -49,6 +51,8 @@ class HPTuningData:
         """
         self.exposure_test = exposure_test
         self.exposure_train = exposure_train
+        self.sample_weight_train = sample_weight_train
+        self.sample_weight_test = sample_weight_test
         self.y_train = y_train
         self.X_train = X_train
         self.X_test = X_test
@@ -76,6 +80,8 @@ class HPTuningData:
                    y_test=data_subset.y_test,
                    exposure_train=exposure_train,
                    exposure_test=data_subset.exposure_test,
+                   sample_weight_train=data_subset.sample_weight_train,
+                   sample_weight_test=data_subset.sample_weight_test,
                    features_numerical=features_numerical,
                    features_categorical=features_categorical)
 
@@ -276,8 +282,17 @@ class HPTuning:
                             thread_count=-1,
                             objective=objective, verbose=False,
                             **parameters)
+        sample_weight = hp_tuning_data.sample_weight_train
+        if hp_tuning_data.exposure_train is not None and sample_weight is not None:
+            sample_weight = hp_tuning_data.exposure_train * sample_weight
+        elif hp_tuning_data.exposure_train is not None:
+            sample_weight = hp_tuning_data.exposure_train
 
-        return model, None
+        fit_params = None
+        if sample_weight is not None:
+            fit_params = {"sample_weight": sample_weight}
+
+        return model, fit_params
 
     def _prepare_xgb(self, model_name: str, parameters):
         if self.result_configs[model_name].objective is not None:

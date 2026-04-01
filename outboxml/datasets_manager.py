@@ -635,6 +635,7 @@ class DataSetsManager:
 
         model_config = deepcopy(model_result.model_config)
         model_config.column_exposure = None
+        model_config.column_weight = None
         model = model_result.model
         features_numerical = model_result.data_subset.features_numerical
         features_categorical = model_result.data_subset.features_categorical
@@ -788,6 +789,7 @@ class DataSetsManager:
         self.targets_columns_names = list(set(
             [model.column_target for model in self._models_configs if model.column_target]
             + [model.column_exposure for model in self._models_configs if model.column_exposure]
+            + [model.column_weight for model in self._models_configs if model.column_weight]
         ))
 
     def __load_prepare_datasets(self):
