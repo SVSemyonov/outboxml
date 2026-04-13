@@ -21,6 +21,7 @@
     {
       "name": "first",
       "column_target": "SURVIVED",
+     "params_catboost": {"use_best_model": true},
       "column_weight": "ROW_WEIGHT",
       "objective": "poisson",
       "wrapper": "catboost",
