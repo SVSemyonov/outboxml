@@ -8,7 +8,7 @@ from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.ensemble import RandomForestRegressor
 import statsmodels.api as sm
 import statsmodels.formula.api as sf
-from typing import List, Dict, Optional, Union, Any
+from typing import List, Dict, Optional, Union, Any, Tuple
 from typing_extensions import Literal
 import pandas as pd
 from itertools import chain
@@ -54,6 +54,73 @@ def _catboost_pool_weight(
     if exposure_train is not None:
         return exposure_train
     return None
+
+
+def _catboost_eval_pool(
+        X_eval: Optional[pd.DataFrame],
+        y_eval_ctb: Optional[pd.Series],
+        features_numerical: List[str],
+        features_categorical: List[str],
+        exposure_eval: Optional[pd.Series] = None,
+        sample_weight_eval: Optional[pd.Series] = None,
+) -> Optional[Pool]:
+    """Build a CatBoost validation Pool for ``eval_set``, or return None if not usable."""
+    if X_eval is None or y_eval_ctb is None or X_eval.empty or len(y_eval_ctb) == 0:
+        return None
+    if len(X_eval) != len(y_eval_ctb):
+        logger.warning('CatBoost eval_set skipped||X_test and y_test length mismatch')
+        return None
+    feat_cols = list(chain(features_numerical, features_categorical))
+    missing = [c for c in feat_cols if c not in X_eval.columns]
+    if missing:
+        logger.warning('CatBoost eval_set skipped||missing columns in X_test: {}', missing)
+        return None
+    pool_weight = _catboost_pool_weight(
+        exposure_train=exposure_eval,
+        sample_weight_train=sample_weight_eval,
+    )
+    return Pool(
+        data=X_eval[feat_cols].copy(),
+        label=y_eval_ctb,
+        cat_features=features_categorical,
+        has_header=True,
+        weight=pool_weight,
+    )
+
+
+def _catboost_y_scaled_by_exposure(
+        y: pd.Series,
+        exposure: Optional[pd.Series],
+) -> pd.Series:
+    try:
+        return y / exposure
+    except Exception:
+        logger.warning('Error with y/exposure||Exposure = 1 is set')
+        return y
+
+
+def _catboost_eval_gated_params(
+        params_catboost: Optional[Dict[str, Optional[Union[int, float, str, bool]]]],
+        has_eval_data: bool,
+        log_ctx: str = 'CatBoost',
+) -> Tuple[Dict[str, Any], bool]:
+    """Copy CatBoost params for fitting; align ``eval_set`` with ``use_best_model``.
+
+    Hold-out ``eval_set`` is only used when ``use_best_model`` is true in
+    ``params_catboost`` and eval data exists. If ``use_best_model`` is true but
+    there is no eval data, ``use_best_model`` is forced to false so training
+    does not fail at fit time.
+    """
+    params_cb: Dict[str, Any] = dict(params_catboost) if params_catboost else {}
+    want_use_best = bool(params_cb.get('use_best_model', False))
+    use_eval_set = want_use_best and has_eval_data
+    if want_use_best and not has_eval_data:
+        params_cb['use_best_model'] = False
+        logger.warning(
+            '{}||use_best_model=True but no hold-out/eval data; disabling use_best_model',
+            log_ctx,
+        )
+    return params_cb, use_eval_set
 
 
 class DefaultModels:
@@ -477,6 +544,10 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
         self._features_categorical: Optional[List[str]] = data_subset.features_categorical
         self._exposure_train: Optional[pd.Series] = data_subset.exposure_train
         self._sample_weight_train: Optional[pd.Series] = data_subset.sample_weight_train
+        self._X_test: Optional[pd.DataFrame] = data_subset.X_test
+        self._y_test: Optional[pd.Series] = data_subset.y_test
+        self._exposure_test: Optional[pd.Series] = data_subset.exposure_test
+        self._sample_weight_test: Optional[pd.Series] = data_subset.sample_weight_test
         self._params_catboost: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = model_config.params_catboost
         self._model_sm = self.sm_model.model
         self._model_ctb = None
@@ -508,6 +579,20 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
             self._y_train = y
             self._params_catboost = params
         y_train_pred = self.__predict_glm(X=self._X_train)
+        has_test_split = (
+            self._X_test is not None
+            and self._y_test is not None
+            and not self._X_test.empty
+            and len(self._y_test) > 0
+        )
+        use_best_model = bool((self._params_catboost or {}).get('use_best_model', False))
+        use_eval_subset = use_best_model and X is None and y is None and has_test_split
+        y_eval_pred_glm = None
+        X_eval, y_eval = None, None
+        if use_eval_subset:
+            X_eval = self._X_test
+            y_eval = self._y_test
+            y_eval_pred_glm = self.__predict_glm(X=X_eval)
         logger.info('Fitting catboost||Catboost over glm model')
         self._model_ctb = self.__fit_catboost(
             X_train=self._X_train,
@@ -517,8 +602,12 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
             params_catboost=self._params_catboost,
             exposure_train=self._exposure_train,
             sample_weight_train=self._sample_weight_train,
-            y_train_pred_glm=y_train_pred
-
+            y_train_pred_glm=y_train_pred,
+            X_eval=X_eval,
+            y_eval=y_eval,
+            exposure_eval=self._exposure_test if use_eval_subset else None,
+            sample_weight_eval=self._sample_weight_test if use_eval_subset else None,
+            y_eval_pred_glm=y_eval_pred_glm,
         )
         self._X_train = None
         self._exposure_train = None
@@ -570,6 +659,11 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
                        exposure_train: Optional[pd.Series] = None,
                        sample_weight_train: Optional[pd.Series] = None,
                        y_train_pred_glm: Optional[pd.Series] = None,
+                       X_eval: Optional[pd.DataFrame] = None,
+                       y_eval: Optional[pd.Series] = None,
+                       exposure_eval: Optional[pd.Series] = None,
+                       sample_weight_eval: Optional[pd.Series] = None,
+                       y_eval_pred_glm: Optional[pd.Series] = None,
                        ):
         features_numerical = features_numerical if features_numerical else []
         features_categorical = features_categorical if features_categorical else []
@@ -582,10 +676,37 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
             y_train_ctb = (y_train / exposure_train) / y_train_pred_glm
         else:
             y_train_ctb = y_train / y_train_pred_glm
+        eval_rows_ok = (
+            X_eval is not None
+            and y_eval is not None
+            and y_eval_pred_glm is not None
+            and not X_eval.empty
+            and len(y_eval) > 0
+        )
+        eval_pool = None
+        if bool((params_catboost or {}).get('use_best_model')) and eval_rows_ok:
+            assert len(y_eval) == len(y_eval_pred_glm)
+            if exposure_eval is not None:
+                y_eval_ctb = (y_eval / exposure_eval) / y_eval_pred_glm
+            else:
+                y_eval_ctb = y_eval / y_eval_pred_glm
+            eval_pool = _catboost_eval_pool(
+                X_eval,
+                y_eval_ctb,
+                features_numerical,
+                features_categorical,
+                exposure_eval,
+                sample_weight_eval,
+            )
+        params_fit, _ = _catboost_eval_gated_params(
+            params_catboost,
+            eval_pool is not None,
+            log_ctx='CatBoost over GLM',
+        )
         model_ctb = catboost_wrapper(
             objective=catboost_objective,
             task_type=self.work_type_fit,
-            **params_catboost if params_catboost else {},
+            **params_fit,
         )
         pool_weight = _catboost_pool_weight(
             exposure_train=exposure_train,
@@ -599,7 +720,11 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
             has_header=True,
             weight=pool_weight
         )
-        model_ctb = model_ctb.fit(ctb_train_pool, silent=True)
+        fit_kwargs: Dict[str, Any] = {"silent": True}
+        if eval_pool is not None:
+            fit_kwargs["eval_set"] = eval_pool
+            logger.info('CatBoost over GLM||training with eval_set (hold-out, use_best_model)')
+        model_ctb = model_ctb.fit(ctb_train_pool, **fit_kwargs)
         return model_ctb
 
 
@@ -853,12 +978,22 @@ class CatboostModel(BaseWrapperModel):
         self.features_categorical: Optional[List[str]] = data_subset.features_categorical
         self.exposure_train: Optional[pd.Series] = data_subset.exposure_train
         self.sample_weight_train: Optional[pd.Series] = data_subset.sample_weight_train
+        self.X_test: Optional[pd.DataFrame] = data_subset.X_test
+        self.y_test: Optional[pd.Series] = data_subset.y_test
+        self.exposure_test: Optional[pd.Series] = data_subset.exposure_test
+        self.sample_weight_test: Optional[pd.Series] = data_subset.sample_weight_test
         self.params_catboost: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = model_config.params_catboost
         self._work_type_fit: str = work_type_fit
 
     def fit(self):
         """
         Fits CatBoost model and returns unified wrapper.
+
+        When ``params_catboost`` sets ``use_best_model`` to true and the subset has a
+        non-empty hold-out (``X_test``, ``y_test``), that split is passed as CatBoost
+        ``eval_set`` (same condition as CatBoost's ``use_best_model``). If
+        ``use_best_model`` is true but there is no hold-out, it is forced to false
+        so training does not fail.
 
         :return: Wrapped CatBoost model.
         :rtype: GLMCatboostCombineModel
@@ -910,10 +1045,35 @@ class CatboostModel(BaseWrapperModel):
             except:
                 logger.warning('Error with y_train/exposure||Exposure = 1 is set')
                 y_train_ctb = self.y_train
+        has_eval_rows = (
+            self.X_test is not None
+            and self.y_test is not None
+            and not self.X_test.empty
+            and len(self.y_test) > 0
+        )
+        eval_pool = None
+        if bool((self.params_catboost or {}).get('use_best_model')) and has_eval_rows:
+            if self.objective == ModelsParams.binary:
+                y_eval_ctb = self.y_test.copy()
+            else:
+                y_eval_ctb = _catboost_y_scaled_by_exposure(self.y_test, self.exposure_test)
+            eval_pool = _catboost_eval_pool(
+                self.X_test,
+                y_eval_ctb,
+                features_numerical,
+                features_categorical,
+                self.exposure_test,
+                self.sample_weight_test,
+            )
+        params_fit, _ = _catboost_eval_gated_params(
+            self.params_catboost,
+            eval_pool is not None,
+            log_ctx='CatBoost',
+        )
         model_ctb = catboost_wrapper(
             objective=catboost_objective,
             task_type=self._work_type_fit,
-            **self.params_catboost if self.params_catboost else {},
+            **params_fit,
         )
         X_train = self.X_train.copy()
         pool_weight = _catboost_pool_weight(
@@ -927,7 +1087,11 @@ class CatboostModel(BaseWrapperModel):
             has_header=True,
             weight=pool_weight
         )
-        model_ctb = model_ctb.fit(ctb_train_pool, silent=True)
+        fit_kwargs: Dict[str, Any] = {"silent": True}
+        if eval_pool is not None:
+            fit_kwargs["eval_set"] = eval_pool
+            logger.info('CatBoost||training with eval_set (hold-out, use_best_model)')
+        model_ctb = model_ctb.fit(ctb_train_pool, **fit_kwargs)
         return GLMCatboostCombineModel(model_name=self.model_name,
                                        wrapper=self.wrapper,
                                        min_max_scaler=None,
