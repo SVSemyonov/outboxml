@@ -393,6 +393,10 @@ class TestCatboostSampleWeights(TestCase):
                     "random_state": 1,
                     "test_train_proportion": 0.25,
                     "period_column": ["AGE"]
+                },
+                "data": {
+                    "targetcolumns": [],
+                    "targetslices": []
                 }
             },
             "models_configs": [
