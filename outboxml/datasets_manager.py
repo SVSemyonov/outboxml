@@ -566,12 +566,51 @@ class DataSetsManager:
                                                         predictions={'train': predictions_train,
                                                                      'test': predictions_test},
                                                         metrics=metrics[model_name])
+            self.get_importance(model_name, model)
         try:
             metrics.update(self._calculate_business_metric())
         except Exception as exc:
             logger.error('Error while calculation business metric||'+ str(exc))
         return metrics
 
+    def get_importance(self, model_name: str, model, add_random: bool = False):
+        """
+        Метод для расчета и записи в DSManagerResult.
+        """
+        data_subset = self.get_subset(model_name)
+        # Получаем необходимые данные
+        X_test = data_subset.X_test
+        y_test = data_subset.y_test
+        # Предполагаем, что exposure может быть в dataset или data_subset
+        exposure = getattr(data_subset, 'exposure_test', None)
+        # Делегируем расчет новому классу
+        importance_table = self.importance_analyzer.calculate_importance(
+            model=model.model,
+            data=X_test,
+            features=list(chain(model.features_numerical, model.features_categorical)),
+            target=y_test,
+            exposure=exposure,
+            add_random=add_random
+        )
+
+        # Сохраняем в DSManagerResult (предполагаем наличие этого поля)
+        self._results[model_name].feature_importance = importance_table
+        return importance_table
+
+
+    def plot_importance(self, model_name: str):
+        """
+        Метод для получения графиков.
+        """
+        model_res = self._results[model_name]
+
+        if not hasattr(model_res, 'feature_importance') or model_res.feature_importance is None:
+            self.show_importance(model_name)
+
+        return self.importance_analyzer.plot(
+            model_res.feature_importance,
+            title=f"Importance: {model_name}"
+        )
 
     def check_datadrift(self, model_name: str) -> pd.DataFrame:
         """Check data drift between train and test datasets.
