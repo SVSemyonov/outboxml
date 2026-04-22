@@ -545,9 +545,10 @@ class AutoMLManager(DataSetsManager):
             except Exception as exc2:
                 logger.error(str(exc2))
             finally:
-                email.error_mail(group_name=self.group_name,
-                                 error=exc, status=self.status,
-                                 )
+                if send_mail:
+                    email.error_mail(group_name=self.group_name,
+                                     error=exc, status=self.status,
+                                     )
         finally:
           logger.debug('Updating models is finished||'+str(self.status))
         return self.automl_results
