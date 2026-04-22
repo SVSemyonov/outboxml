@@ -1,7 +1,7 @@
 {
   "group_name":"example",
   "prod_models_path":"./prod_models_from_mlflow",
-  "pickle_name":"example_titanic_2026_01_16_07_13_04",
+  "pickle_name":"example_titanic_2025_09_18_08_37_03",
   "dashboard_name":"TitanicMonitoring",
   "grafana_table_name":"TitanicMonitoring",
   "extrapolation_period":12,
