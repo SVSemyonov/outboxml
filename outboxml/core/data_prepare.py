@@ -246,7 +246,7 @@ def map_num(v: Union[int, float], mapping: Dict[pd.IntervalIndex, str]) -> Optio
 def feature_encoding_series(
         feature_data: pd.Series,
         feature: FeatureModelConfig,
-        target: Optional[pd.Series] = None,
+        target: pd.Series=pd.Series(),
         train_ind: Optional[pd.Index] = None,
         log: bool = True,
         raise_on_error: bool = False,
@@ -266,6 +266,7 @@ def feature_encoding_series(
 
     mapping = feature.mapping
     bins = feature.bins
+
     if train_ind is None:
         train_ind = feature_data.index
 
@@ -290,7 +291,7 @@ def feature_encoding_series(
                 raise ValueError(f"{feature.name} || Cannot convert to int")
 
 
-    elif feature.encoding == EncodingNames.woe_cat and not target.empty:
+    elif feature.encoding == EncodingNames.woe_cat: #and not target.empty:
         if log:
             logger.info(f"{feature.name} || Encoding || WoE categorical to numerical")
         if feature.mapping is not None:
@@ -310,7 +311,7 @@ def feature_encoding_series(
                 if raise_on_error:
                     raise ValueError(f"{feature.name} || Cannot convert to WoE")
 
-    elif feature.encoding == EncodingNames.woe_num and not target.empty:
+    elif feature.encoding == EncodingNames.woe_num: # and not target.empty:
         if log:
             logger.info(f"{feature.name} || Encoding || WoE numerical to categorical")
         if feature.bins is not None:
@@ -332,7 +333,7 @@ def feature_encoding_series(
                 if raise_on_error:
                     raise ValueError(f"{feature.name} || Cannot convert to WoE")
 
-    elif feature.encoding == EncodingNames.woe_num_num and not target.empty:
+    elif feature.encoding == EncodingNames.woe_num_num: # and not target.empty:
         if log:
             logger.info(f"{feature.name} || Encoding || WoE numerical to numerical")
         if feature.bins is not None and feature.mapping is not None:
@@ -356,7 +357,7 @@ def feature_encoding_series(
     elif feature.encoding == EncodingNames.cut_num:
         pass #Encoding call in prepare_numerical_feature function
     else:
-        logger.info("Unknown encoding || Return origin")
+        logger.error(f"Unknown encoding {feature.encoding}|| Return origin")
         if raise_on_error:
             raise NotImplementedError(f"{feature.name} || Unknown encoding")
 
@@ -929,7 +930,7 @@ def prepare_dataset(
         calc_corr: bool = False,
         save_data: bool = False,
         corr_threshold: Optional[float] = None,
-        target: Optional[pd.Series] = None,
+        target: Optional[pd.Series] = pd.Series(),
         log: bool = True,
         modify_dtypes: bool = True,
         raise_on_encoding_error: bool = False
