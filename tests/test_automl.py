@@ -150,6 +150,7 @@ class HPTune(TestCase):
         with open(file=auto_ml_config, mode="r") as f:
             auto_ml_config_val = AutoMLConfig.model_validate(json.load(f))
             auto_ml_config_dict = auto_ml_config_val.model_dump()
+            auto_ml_config_dict["hp_tune"]["n_jobs"] = 2
             auto_ml_config_dict["hp_tune"]["parameters"] = {
                 "first": {
                     "iterations": {

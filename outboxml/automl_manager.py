@@ -648,6 +648,7 @@ class AutoMLManager(DataSetsManager):
         """
         new_hp = {}
         trials = self._hp_tuning_config.trials
+        n_jobs = self._hp_tuning_config.n_jobs
         for model in self._models_configs:
             new_hp[model.name] = {}
             try:
@@ -676,7 +677,8 @@ class AutoMLManager(DataSetsManager):
                                               ).best_params(model_name=model.name,
                                                             parameters_for_optuna_func=parameters_for_optuna_func,
                                                             timeout=self.timeout,
-                                                            trials=trials)
+                                                            trials=trials,
+                                                            n_jobs=n_jobs)
                 logger.info(new_hp[model.name])
 
             except Exception as exc:

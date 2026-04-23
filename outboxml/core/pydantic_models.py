@@ -196,6 +196,7 @@ class HPTuneConfig(BaseModel):
     sampling: str ='TPE'
     cv_folds_num: int = 3
     parameters: Optional[Dict[str, Dict[str, OptunaOptimizeConfig]]] = None
+    n_jobs: int = -1
     trials: int = 100
     metric_score: Dict[str, str] = {"default": "neg_mean_absolute_error"}
 
