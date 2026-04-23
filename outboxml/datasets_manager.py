@@ -13,6 +13,7 @@ from loguru import logger
 from typing import List, Dict, Any, Optional, Union, Literal
 from sklearn.preprocessing import LabelEncoder
 
+from outboxml.feature_importance import FeatureImportance
 from outboxml.monitoring_result import DataContext
 from outboxml.core.enums import ModelsParams
 from outboxml.data_subsets import DataPreprocessor, ModelDataSubset

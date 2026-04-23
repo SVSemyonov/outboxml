@@ -23,6 +23,7 @@ from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from pathlib import Path
 
 from outboxml.extractors import BaseExtractor, SimpleExtractor
+from outboxml.feature_importance import FeatureImportance
 from outboxml.models import BaselineModels, ModelsWrapper, StatsmodelsModel, StatsModelsEstimator, CatboostModel, \
     CatboostOverGLMModel, XgboostModel, GLMCatboostCombineModel, BaseWrapperModel
 
@@ -117,6 +118,13 @@ class TestTitanicDS(TestCase):
         results = self.dsManager.fit_models(resultDics,)
         self.assertIsInstance(results, dict)
 
+    def test_feature_importance(self):
+        result = self.dsManager.fit_models()
+        result = self.dsManager.get_result()
+        self.assertIsInstance(result['first'].feature_importance, FeatureImportance)
+        self.assertIsInstance(result['second'].feature_importance, FeatureImportance)
+        self.assertEqual(len(result['first'].feature_importance.importance_data), 3)
+        self.assertEqual(len(result['second'].feature_importance.importance_data), 4)
 
     def test_baseline_classification(self):
         self.assertEqual(len(self.dsManager_base.fit_models().keys()),2)

@@ -1,74 +1,59 @@
+from itertools import chain
 import pandas as pd
 import numpy as np
 import shap
 import plotly.express as px
-from typing import Optional, Dict, List
+from typing import Optional, List, Any
 
-from pandas.core.dtypes.common import is_numeric_dtype
+from loguru import logger
 
 
-class FeatureImportanceAnalyzer:
-    def __init__(self, features_description: Optional[Dict] = None):
-        self.features_description = features_description or {}
+class FeatureImportance:
+    def __init__(self, model_name: str, model: Any,):
+        self.model_name = model_name
+        self.model = model
+        self.importance_data = None
 
     def calculate_importance(
             self,
-            model,
             data: pd.DataFrame,
             target: pd.Series,
-            features: Optional[List[str]],
-            add_random: bool = False,
             calculate_directions: bool = True,
             exposure: Optional[pd.Series] = None,
             zero_corr_threshold: float = 0.0
-    ) -> pd.DataFrame:
-        """
-        Основной метод: считает SHAP и (опционально) направления влияния.
-        """
-        data = self._prepare_data_for_shap(data)
+    ):
+        logger.debug(f"Calculating feature importance for model: {self.model_name}...")
+        try:
+            features = list(chain(self.model.features_numerical, self.model.features_categorical))
+            shap_dict = self._calc_shap_values(self.model.model, data[features])
+        except Exception as e:
+            logger.error(f"Cannot calculate SHAP values for {self.model_name} || {e}")
+            return
 
-        # 1. Расчет SHAP
-        importance_df = self._calc_shap_values(model, data[features])
-
-        # 2. Расчет направлений (корреляций)
+        directions_dict = {}
         if calculate_directions:
-            directions = self._calc_features_directions(
-                data=data,
+            directions_dict = self._calc_features_directions(
+                data=data[features],
                 target=target,
                 exposure=exposure,
                 zero_corr_threshold=zero_corr_threshold
             )
-            # Объединяем SHAP и направления
-            importance_df = importance_df.merge(directions, on='Признак', how='left')
 
-        # 3. Добавляем описания
-        importance_df['Описание'] = importance_df['Признак'].map(self.features_description).fillna(
-            importance_df['Признак'])
+        result = []
+        for feature, shap_value in shap_dict.items():
+            row = {
+                'FEATURE': feature,
+                'SHAP': shap_value
+            }
+            if calculate_directions:
+                row['SIGN'] = directions_dict.get(feature, 0)
 
-        # Если нужно пометить рандомный признак
-        if add_random and 'RANDOM' in importance_df['Признак'].values:
-            importance_df.loc[importance_df['Признак'] == 'RANDOM', 'Описание'] = 'Случайный признак (контроль)'
-        return importance_df
+            result.append(row)
 
-    def _prepare_data_for_shap(self, data: pd.DataFrame) -> pd.DataFrame:
-        """
-        Конвертирует данные в числовой формат.
-        Если колонка категориальная, но содержит числа (после LabelEncoder/WoE),
-        она будет приведена к float.
-        """
-        df = data.copy()
-        for col in df.columns:
-            # Если это категория или объект - пробуем перевести в числа
-            if not is_numeric_dtype(df[col]):
-                # errors='coerce' превратит реальные строки в NaN,
-                # но ваши закодированные '1', '2' станут 1.0, 2.0
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+        self.importance_data = result
 
-        # Заполняем пропуски нулями, если они появились (SHAP не любит NaN в некоторых моделях)
-        return df.fillna(0)
-
-    def _calc_shap_values(self, model, data: pd.DataFrame) -> pd.DataFrame:
-        """Внутренний метод для расчета SHAP."""
+    def _calc_shap_values(self, model, data: pd.DataFrame) -> dict:
+        logger.info("Calculating SHAP values...")
         explainer = shap.TreeExplainer(model)
         shap_values = explainer(data)
 
@@ -77,7 +62,7 @@ class FeatureImportanceAnalyzer:
         else:
             values = np.abs(shap_values.values).mean(axis=0)
 
-        return pd.DataFrame({'Признак': data.columns, 'SHAP': values})
+        return dict(zip(data.columns, values))
 
     def _calc_features_directions(
             self,
@@ -85,60 +70,76 @@ class FeatureImportanceAnalyzer:
             target: pd.Series,
             exposure: Optional[pd.Series] = None,
             zero_corr_threshold: float = 0.0
-    ) -> pd.DataFrame:
-        """
-        Рефакторинг вашей функции calc_features_directions.
-        Работает через Spearman correlation.
-        """
+    ) -> dict:
+        logger.info("Calculating features directions...")
         X = data.copy()
         y = target.copy()
 
         if exposure is not None:
-            # Используем фильтр по экспозиции (аналог вашего exp_filter)
             valid_idx = exposure > 0
             X = X[valid_idx]
             y = y[valid_idx] / exposure[valid_idx]
 
-        results = []
+        directions = {}
         for col in X.columns:
             corr = X[col].corr(y, method='spearman')
-            results.append({'Признак': col, 'Корр': corr})
 
-        df_corr = pd.DataFrame(results)
-        df_corr['Знак'] = 0
-        df_corr.loc[df_corr['Корр'] > zero_corr_threshold, 'Знак'] = 1
-        df_corr.loc[df_corr['Корр'] < -zero_corr_threshold, 'Знак'] = -1
+            if corr > zero_corr_threshold:
+                sign = 1
+            elif corr < -zero_corr_threshold:
+                sign = -1
+            else:
+                sign = 0
 
-        return df_corr[['Признак', 'Знак']]
+            directions[col] = sign
 
-    def plot(self, importance_df: pd.DataFrame, title: str = "Feature Importance"):
-        """Визуализация через Plotly."""
-        df = importance_df.sort_values('SHAP', ascending=True)
+        return directions
 
-        # Определяем цвета на основе направлений, если они есть
-        color_map = {1: 'Прямое', -1: 'Обратное', 0: 'Нейтральное/Категория'}
-        if 'Знак' in df.columns:
-            df['Влияние'] = df['Знак'].map(color_map)
-            color_col = 'Влияние'
-            color_discrete_map = {'Прямое': 'indianred', 'Обратное': 'royalblue', 'Нейтральное/Категория': 'gray'}
+    def plot(self, show: bool = True):
+        logger.info("Plotting feature importance...")
+        df = pd.DataFrame(self.importance_data)
+
+        df = df.sort_values('SHAP', ascending=True)
+
+        color_map_names = {
+            1: 'Direct',
+            -1: 'Inverse',
+            0: 'Neutral/Category'
+        }
+
+        color_discrete_map = {
+            'Direct': 'indianred',
+            'Inverse': 'royalblue',
+            'Neutral/Category': 'gray'
+        }
+
+        if 'SIGN' in df.columns:
+            # Map numeric values to readable labels
+            df['IMPACT'] = df['SIGN'].map(color_map_names)
+            color_col = 'IMPACT'
         else:
             color_col = None
             color_discrete_map = None
 
+
         fig = px.bar(
             df,
             x='SHAP',
-            y='Описание',
+            y='FEATURE',
             orientation='h',
             color=color_col,
             color_discrete_map=color_discrete_map,
-            title=title,
-            labels={'SHAP': 'Mean |SHAP|', 'Описание': 'Признак'}
+            title=f"Importance: {self.model_name}",
+            labels={'SHAP': 'Mean |SHAP|', 'FEATURE': 'FEATURE', 'SIGN': 'Тип влияния'}
         )
 
+        # 5. Настройка внешнего вида
         fig.update_layout(
-            height=max(400, len(df) * 20),
+            height=max(400, len(df) * 30),
             yaxis={'categoryorder': 'total ascending'},
-            template='plotly_white'
+            template='plotly_white',
+            margin=dict(l=150)
         )
+        if show:
+            fig.show()
         return fig
