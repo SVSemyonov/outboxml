@@ -211,10 +211,11 @@ class AutoMLTest(TestCase):
     def setUp(self):
         self.ds_manager1 = DataSetsManager(config_name=str(config_name)
                                            )
+        self.ds_manager1._data_preprocessor._retro = True
         self.ds_manager1.fit_models()
         self.ds_manager2 = DataSetsManager(config_name=str(config_name)
                                            )
-
+        self.ds_manager2._data_preprocessor._retro = True
         self.ds_manager2._results = deepcopy(self.ds_manager1.get_result())
 
         for key in self.ds_manager2._results:
