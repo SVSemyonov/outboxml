@@ -1,4 +1,5 @@
 import asyncio
+import json
 from copy import deepcopy
 from pathlib import Path
 from unittest import TestCase
@@ -140,8 +141,39 @@ class FeatureSelection(TestCase):
 class HPTune(TestCase):
 
     def setUp(self):
-        self.ds_manager = DataSetsManager(config_name=str(config_name)
-                                          )
+        self.ds_manager = DataSetsManager(config_name=str(config_name))
+
+    def test_hp_tune_from_config(self):
+        self.ds_manager._prepare_datasets['first']._model_config.objective = 'poisson'
+        self.ds_manager._prepare_datasets['first']._model_config.wrapper = 'catboost'
+
+        with open(file=auto_ml_config, mode="r") as f:
+            auto_ml_config_val = AutoMLConfig.model_validate(json.load(f))
+            auto_ml_config_dict = auto_ml_config_val.model_dump()
+            auto_ml_config_dict["hp_tune"]["n_jobs"] = 2
+            auto_ml_config_dict["hp_tune"]["parameters"] = {
+                "first": {
+                    "iterations": {
+                        "type": "int",
+                        "low": 800,
+                        "high": 1400,
+                        "step": 100
+                    }
+                }
+            }
+        auto_ml_config_dict["hp_tune"]["trials"] = 5
+        auto_ml = AutoMLManager(auto_ml_config=auto_ml_config_dict,
+                                     models_config=str(config_name),
+                                     hp_tune=True,
+                                     retro=False
+                                     )
+
+        params = auto_ml.hp_tuning()
+        self.assertIsInstance(params, dict)
+        self.assertEqual(list(params.keys()), ['first', 'second'])
+        self.assertEqual(list(params['first'].keys()), ['iterations'])
+        self.assertEqual(params['second'], {})
+
 
     def test_hp_tune_catboost(self):
         self.ds_manager._prepare_datasets['first']._model_config.objective = 'poisson'

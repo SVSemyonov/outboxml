@@ -184,10 +184,20 @@ class FeatureSelectionConfig(BaseModel):
     use_temp_data: bool = False
 
 
+class OptunaOptimizeConfig(BaseModel):
+    type: Literal["int", "float", "categorical"]
+    low: Optional[Union[int, float]] = None
+    high: Optional[Union[int, float]] = None
+    step: Optional[Union[int, float]] = None
+    log: bool = False
+    choices: Optional[List[Union[int, float, str, bool]]] = None
+
 class HPTuneConfig(BaseModel):
     sampling: str ='TPE'
     cv_folds_num: int = 3
-    parameters: dict = {}
+    parameters: Optional[Dict[str, Dict[str, OptunaOptimizeConfig]]] = None
+    n_jobs: int = -1
+    trials: int = 100
     metric_score: Dict[str, str] = {"default": "neg_mean_absolute_error"}
 
 

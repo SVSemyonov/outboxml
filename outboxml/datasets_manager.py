@@ -13,6 +13,7 @@ from loguru import logger
 from typing import List, Dict, Any, Optional, Union, Literal
 from sklearn.preprocessing import LabelEncoder
 
+from outboxml.feature_importance import FeatureImportance
 from outboxml.monitoring_result import DataContext
 from outboxml.core.enums import ModelsParams
 from outboxml.data_subsets import DataPreprocessor, ModelDataSubset
@@ -72,6 +73,7 @@ class DSManagerResult:
                  config: AllModelsConfig = None,
                  predictions: dict = None,
                  metrics: dict = None,
+                 feature_importance: FeatureImportance = None
                  ):
         """Initialize DSManagerResult instance.
         
@@ -103,6 +105,7 @@ class DSManagerResult:
         self.model = model
         self.data_subset = data_subset
         self.model_config = model_config
+        self.feature_importance = feature_importance
 
     def load_metrics(self, metrics: dict, ds_type: str = None):
         """Load metrics into the result object.
@@ -556,7 +559,11 @@ class DataSetsManager:
                                                                           'test': predictions_test})
 
 
-
+            feature_importances = FeatureImportance(model_name=model_name, model=model,)
+            feature_importances.calculate_importance(data=data_subset.X_test,
+                                                    target=data_subset.y_test,
+                                                    exposure=data_subset.exposure_test,
+                                                    )
             self._results[model_name] = DSManagerResult(model_name=model_name,
                                                         model=model,
                                                         config=self.config,
@@ -565,13 +572,13 @@ class DataSetsManager:
                                                             model_name].get_model_config(),
                                                         predictions={'train': predictions_train,
                                                                      'test': predictions_test},
-                                                        metrics=metrics[model_name])
+                                                        metrics=metrics[model_name],
+                                                        feature_importance=feature_importances)
         try:
             metrics.update(self._calculate_business_metric())
         except Exception as exc:
             logger.error('Error while calculation business metric||'+ str(exc))
         return metrics
-
 
     def check_datadrift(self, model_name: str) -> pd.DataFrame:
         """Check data drift between train and test datasets.

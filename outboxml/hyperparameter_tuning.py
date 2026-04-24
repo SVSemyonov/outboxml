@@ -174,7 +174,7 @@ class HPTuning:
         return parameters
 
 
-    def best_params(self, model_name: str, scoring_fun: Callable = None, trials: int = 100, direction: str = 'maximize',
+    def best_params(self, model_name: str, scoring_fun: Callable = None, trials: int = 100, n_jobs:int = -1, direction: str = 'maximize',
                     parameters_for_optuna_func: Callable = None, timeout=None):
         """Calculation the best hyperparameters.
 
@@ -237,7 +237,7 @@ class HPTuning:
         if self._model is None:
             self._model = self._load_model_from_config(model_name, hp_tuning_data)
         logger.debug('Optimizing...')
-        best_params = self._optimize(model_name, hp_tuning_data,  scoring_fun, trials, direction,
+        best_params = self._optimize(model_name, hp_tuning_data,  scoring_fun, trials, n_jobs, direction,
                                      parameters_for_optuna_func, timeout=timeout)
         self._write_parameters(model_name, best_params)
         return best_params
@@ -331,11 +331,11 @@ class HPTuning:
                   hp_tuning_data: HPTuningData,
                   scoring_fun: Callable,
                   trials: int,
+                  n_jobs: int = -1,
                   direction: str='maximize',
                   parameters_for_optuna_func: Callable=None,
                   timeout=None):
 
-        n_jobs = -1
         X = hp_tuning_data.X_train
         y_train = hp_tuning_data.y_train
         if hp_tuning_data.exposure_train is not None:
