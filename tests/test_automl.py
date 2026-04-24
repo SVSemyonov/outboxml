@@ -42,6 +42,7 @@ auto_ml_config = test_configs_path / 'automl-titanic.json'
 
 path_to_target = test_data_path / 'target_extrapolation_test.gzip'
 
+pickle_name = 'example_titanic_2026_04_23_15_55_03'
 
 class TitanicMetric(BaseMetric):
     def __init__(self):
@@ -242,10 +243,11 @@ class AutoMLTest(TestCase):
     def setUp(self):
         self.ds_manager1 = DataSetsManager(config_name=str(config_name)
                                            )
+        self.ds_manager1._data_preprocessor._retro = True
         self.ds_manager1.fit_models()
         self.ds_manager2 = DataSetsManager(config_name=str(config_name)
                                            )
-
+        self.ds_manager2._data_preprocessor._retro = True
         self.ds_manager2._results = deepcopy(self.ds_manager1.get_result())
 
         for key in self.ds_manager2._results:
@@ -347,20 +349,14 @@ class TestPredict(TestCase):
 
         result = asyncio.run(
             main_predict(config=config, group_name=None, features_values=LogsExtractor().extract_dataset()[:100],
-                         second_group_name='example_titanic_2025_09_18_08_37_03', second_features_values=LogsExtractor().extract_dataset()[700:]))
-        self.assertIsInstance(result, dict)
-        self.assertIsInstance(result['main_response'], dict)
-        self.assertIsInstance(result['main_response']['result'], dict)
-        self.assertIsInstance(result['second_response']['result'], dict)
-
-        result = asyncio.run(
-            main_predict(config=config, group_name=None, features_values=LogsExtractor().extract_dataset()[:100],
-                         second_group_name='example_titanic_2025_09_18_08_37_03',
+                         second_group_name=pickle_name,
                          second_features_values=LogsExtractor().extract_dataset()[700:]))
         self.assertIsInstance(result, dict)
         self.assertIsInstance(result['main_response'], dict)
         self.assertIsInstance(result['main_response']['result'], dict)
         self.assertIsInstance(result['second_response']['result'], dict)
+
+
        # Ensemble(config=config).make_ensemble('test', ['first'])
        # ensemble_predict(ensemble_name='test', ensemble=EnsembleResult(model_name='first', models=[load_last_pickle_models_result(config=config)]), )
 
