@@ -82,15 +82,17 @@ class FeatureImportance:
 
         directions = {}
         for col in X.columns:
-            corr = X[col].corr(y, method='spearman')
+            if pd.api.types.is_numeric_dtype(X[col]):
+                corr = X[col].corr(y, method='spearman')
 
-            if corr > zero_corr_threshold:
-                sign = 1
-            elif corr < -zero_corr_threshold:
-                sign = -1
+                if corr > zero_corr_threshold:
+                    sign = 1
+                elif corr < -zero_corr_threshold:
+                    sign = -1
+                else:
+                    sign = 0
             else:
                 sign = 0
-
             directions[col] = sign
 
         return directions

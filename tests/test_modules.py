@@ -1,3 +1,4 @@
+import json
 from array import array
 from copy import deepcopy
 from unittest import TestCase
@@ -13,7 +14,7 @@ from outboxml.core.data_prepare import OptiBinningEncoder, PrepareDatasetResult
 from outboxml.core.enums import ModelsParams
 from outboxml.core.predict import one_model_predict
 from outboxml.core.prepared_datasets import PrepareDataset
-from outboxml.core.pydantic_models import DataModelConfig, DataConfig
+from outboxml.core.pydantic_models import DataModelConfig, DataConfig, AllModelsConfig
 from outboxml.dataset_retro import RetroDataset
 from outboxml.datasets_manager import DataSetsManager, DSManagerResult
 import pandas as pd
@@ -119,8 +120,14 @@ class TestTitanicDS(TestCase):
         self.assertIsInstance(results, dict)
 
     def test_feature_importance(self):
-        result = self.dsManager.fit_models()
-        result = self.dsManager.get_result()
+        with open(file=config_name, mode="r") as f:
+            all_models_config_val = AllModelsConfig.model_validate(json.load(f))
+            all_models_config_dict = all_models_config_val.model_dump()
+            all_models_config_dict["models_configs"][0]["features"][0]["replace"] = {"MALE": "MALE", "FEMALE": "MALE"}
+
+        dsManager_fi = DataSetsManager(config_name=all_models_config_dict)
+        result = dsManager_fi.fit_models()
+        result = dsManager_fi.get_result()
         self.assertIsInstance(result['first'].feature_importance, FeatureImportance)
         self.assertIsInstance(result['second'].feature_importance, FeatureImportance)
         self.assertEqual(len(result['first'].feature_importance.importance_data), 3)
