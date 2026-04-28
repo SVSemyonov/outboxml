@@ -18,6 +18,7 @@ from outboxml.core.utils import (
     update_model_config_default,
     update_model_config_replace,
     find_drop_values,
+    find_drop_values_pl,
 )
 from outboxml.core.errors import ConfigError
 from outboxml.core.enums import EncodingNames
@@ -792,6 +793,72 @@ def prepare_numerical_feature_series(
     return feature_data
 
 
+def prepare_numerical_feature_pl(
+        lazy_data: pl.LazyFrame,
+        feature: FeatureModelConfig,
+        data_dtypes: Dict[str, pl.DataType],
+        default_value: float | int,
+) -> pl.LazyFrame:
+    """
+    Prepare values in numerical feature's data, the input type should be Polars' LazyFrame.
+
+    :param lazy_data: Feature's values in Polars' LazyFrame format.
+    :param feature: Feature's config.
+    :param data_dtypes: Features' types.
+    :param default_value: Default value for NaNs.
+
+    :return: Polars' LazyFrame with prepared values.
+    """
+
+    dict_replace_temp = dict_replace(feature=feature, dtype=FeaturesTypes.numerical)
+
+    lazy_data = (
+        lazy_data
+        .with_columns(
+            pl.when(
+                (pl.col(feature.name).is_null())
+                | (pl.col(feature.name).is_nan() if data_dtypes[feature.name].is_numeric() else True)
+            )
+            .then(pl.lit(default_value))
+            .when(
+                data_dtypes[feature.name].is_numeric()
+            )
+            .then(pl.col(feature.name).replace(dict_replace_temp))
+            .otherwise(pl.col(feature.name).cast(pl.Float64).replace(dict_replace_temp))
+            .alias(feature.name)
+        )
+    )
+
+    # Clip values
+    if feature.clip:
+        lazy_data = (
+            lazy_data
+            .with_columns(
+                pl.col(feature.name).clip(
+                    feature.clip[FeatureEngineering.min_value],
+                    feature.clip[FeatureEngineering.max_value],
+                )
+                .alias(feature.name)
+            )
+        )
+
+    # Cut values
+    # TODO:
+    # if feature.encoding == EncodingNames.cut_num and feature.cut_number is None:
+    #     feature.cut_number = CutNumberEncoder().encode_data(feature_data)
+
+    if feature.cut_number:
+        val_splits = list([float(x) for x in feature.cut_number.split('_')])
+        lazy_data = (
+            lazy_data
+            .with_columns(
+                pl.col(feature.name).cut(val_splits).cast(pl.String).alias(feature.name)
+            )
+        )
+
+    return lazy_data
+
+
 def prepare_numerical_feature(
         feature_value: Union[float, int, str],
         feature: FeatureModelConfig,
@@ -973,8 +1040,8 @@ def prepare_dataset(
                 lazy_data = prepare_numerical_feature_pl(
                     lazy_data=lazy_data,
                     feature=feature,
-                    default_value=default_value,
                     data_dtypes=data_dtypes,
+                    default_value=default_value,
                 )
 
             elif as_pandas:
@@ -1007,24 +1074,50 @@ def prepare_dataset(
                     log=log,
                 )
 
+    if as_polars:
+        data = lazy_data.collect()
+
     if check_prepared and not as_dict:
         logger.info('Find drop values for features')
-        if train_ind is None:
-            train_ind = data.index
+
         for feature in model_config.features:
             if feature.replace.get(FeatureEngineering.feature_type) != FeatureEngineering.numerical:
                 replace_dict = dict_replace(feature=feature, dtype=FeaturesTypes.categorical)
-                drop_values = find_drop_values(data[feature.name], replace_dict, train_ind)
+
+                if as_pandas:
+                    if train_ind is None:
+                        train_ind = data.index
+                        drop_values = find_drop_values(data[feature.name], replace_dict, train_ind)
+                elif as_polars:
+                    drop_values = find_drop_values_pl(
+                        data.filter(pl.col(ColumnsNames.is_train_obml) == 1)[feature.name],
+                        replace_dict,
+                    )
+
                 try:
                     if len(drop_values) > 0:
                         logger.info('Dropping unused levels in ' + feature.name + '||' + str(drop_values))
                         model_config = update_model_config_replace(model_config, {feature.name: drop_values})
 
-                        data.loc[[i for i in train_ind if i in data.index]][feature.name] = replace_with_default(
-                            data.loc[[i for i in train_ind if i in data.index]][feature.name], feature, drop_values
-                        )
+                        if as_pandas:
+                            data.loc[[i for i in train_ind if i in data.index]][feature.name] = replace_with_default(
+                                data.loc[[i for i in train_ind if i in data.index]][feature.name], feature, drop_values
+                            )
+                        elif as_polars:
+                            data = (
+                                data
+                                .with_columns(
+                                    pl.when(pl.col(feature.name).is_in(drop_values))
+                                    .then(pl.lit(feature.default))
+                                    .otherwise(pl.col(feature.name))
+                                    .alias(feature.name)
+                                )
+                            )
+
                 except NotImplementedError as exc:
                     logger.error(exc)
+
+
 
     #FIXME Перевести внутрь цикла. Не записываются атрибут
     for feature in model_config.features:
@@ -1034,7 +1127,7 @@ def prepare_dataset(
                 feature=feature,
             )
 
-        elif feature.encoding is not None:
+        elif feature.encoding is not None and as_pandas:
             if log:
                 logger.info('Feature preparation||Encoding from config ' + str(feature.encoding))
             data[feature.name], mapping, bins = feature_encoding_series(
@@ -1048,16 +1141,31 @@ def prepare_dataset(
             feature.mapping = mapping
             feature.bins = bins
 
-    # if model_config.intersections:
-    #     for feature_intersection in model_config.intersections:
-    #         data[feature_intersection.name] = prepare_intersection(
-    #             data[feature_intersection.features_to_intersect], feature_intersection
-    #         )
+        elif feature.encoding is not None and as_polars:
+            if log:
+                logger.info('Feature preparation||Encoding from config ' + str(feature.encoding))
+            feature_data = data.select(feature.name, ColumnsNames.is_train_obml).to_pandas()
+
+            encoded_data, mapping, bins = feature_encoding_series(
+                feature_data=feature_data[feature.name],
+                feature=feature,
+                target=target,
+                train_ind=feature_data.loc[ColumnsNames.is_train_obml == 1].index,
+                log=log,
+                raise_on_error=raise_on_encoding_error,
+            )
+            data = (
+                data
+                .with_columns(
+                    encoded_data.alias(feature.name)
+                )
+            )
+            feature.mapping = mapping
+            feature.bins = bins
 
     features_all = list(set(chain(
         [feature.name for feature in model_config.relative_features] if model_config.relative_features else [],
         [feature.name for feature in model_config.features] if model_config.features else [],
-        # [feature.name for feature in model_config.intersections] if model_config.intersections else [],
     )))
 
     if as_dict:
@@ -1068,7 +1176,7 @@ def prepare_dataset(
         data = pd.DataFrame([data])
 
     elif as_polars:
-        data = lazy_data.select(features_all).collect()
+        data = lazy_data.select(features_all)
         data_dtypes_prepared = data.schema
         features_categorical = [feature for feature in features_all if not data_dtypes_prepared[feature].is_numeric()]
         features_numerical = [feature for feature in features_all if data_dtypes_prepared[feature].is_numeric()]

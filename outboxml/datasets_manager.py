@@ -8,6 +8,7 @@ from pathlib import Path
 from pydantic import ValidationError
 from sklearn.base import is_classifier
 import pandas as pd
+import polars as pl
 import numpy as np
 from loguru import logger
 from typing import List, Dict, Any, Optional, Union, Literal
@@ -447,7 +448,7 @@ class DataSetsManager:
         """
         return self._results
 
-    def load_dataset(self, data: pd.DataFrame = None) -> pd.DataFrame:
+    def load_dataset(self, data: pd.DataFrame | pl.DataFrame = None) -> pd.DataFrame | pl.DataFrame:
         """Load data from source according to config or user-defined extractor object.
         
         Uses .env file or external config for extractor. Can also load dataset directly via parameter.

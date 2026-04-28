@@ -81,10 +81,10 @@ class SimpleExtractor(Extractor):
     """Simple extractor for pre-loaded data.
 
     This extractor is used when data is already loaded into memory as a
-    pandas DataFrame.
+    Pandas' DataFrame or Polars' DataFrame. It does not require any.
 
     :param data: Pre-loaded dataset.
-    :type data: pd.DataFrame
+    :type data: Pandas' DataFrame or Polars' DataFrame
     :param *params: Additional parameters (currently unused).
 
     Example::
@@ -93,7 +93,7 @@ class SimpleExtractor(Extractor):
         extractor = SimpleExtractor(data=data)
         dataset = extractor.extract_dataset()
     """
-    def __init__(self, data: pd.DataFrame, *params):
+    def __init__(self, data: pd.DataFrame | pl.DataFrame, *params):
         """Initialization.
         :param data: Dataset.
         :type data: pandas.DataFrame.
@@ -102,7 +102,7 @@ class SimpleExtractor(Extractor):
         super().__init__(*params)
         self.data = data
 
-    def extract_dataset(self) -> pd.DataFrame:
+    def extract_dataset(self) -> pd.DataFrame | pl.DataFrame:
         """Extract dataset.
 
         :return: Dataset.

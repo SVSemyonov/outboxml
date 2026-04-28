@@ -2,6 +2,7 @@ from copy import deepcopy
 from pathlib import Path
 import mlflow
 import pandas as pd
+import polars as pl
 import os
 from typing import Any, List, Dict, Optional
 
@@ -99,6 +100,17 @@ def calculate_correlations(data: pd.DataFrame, features: List[str], max_corr_coe
 def find_drop_values(serie: pd.Series, replace_dict: dict, train_ind: pd.Index) -> List:
 
     values_train = serie.loc[[i for i in train_ind if i in serie.index]].unique()
+    values_config = replace_dict.values()
+
+    values_diff = list(set(values_config) - set(values_train))
+    drop_values = values_diff
+
+    return drop_values
+
+
+def find_drop_values_pl(data_train: pl.Series, replace_dict: dict) -> List:
+
+    values_train = data_train.unique().to_list()
     values_config = replace_dict.values()
 
     values_diff = list(set(values_config) - set(values_train))

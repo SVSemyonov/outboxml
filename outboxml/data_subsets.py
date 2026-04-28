@@ -13,6 +13,7 @@ from loguru import logger
 
 from outboxml import config
 from outboxml.core.data_prepare import prepare_dataset
+from outboxml.core.enums import ColumnsNames
 from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes, TrainTestIndexesPl, PrepareDatasetPl
 from outboxml.core.pydantic_models import DataConfig, DataModelConfig, SeparationModelConfig, ModelConfig
 from outboxml.extractors import Extractor
@@ -205,10 +206,10 @@ class ModelDataSubset:
             column_target: Optional[str] = None,
             extra_columns_list: Optional[List[str]] = None,
     ):
-        """Build a ModelDataSubset from a polars DataFrame with split flags.
+        """Build a ModelDataSubset from a Polars' DataFrame with split flags.
         
-        Expects a boolean/int column 'is_train_obml' to indicate split. Extracts
-        target/exposure columns if provided and returns a pandas-based subset.
+        Expects a boolean/int column 'is_train_obml' to indicate split.
+        Extracts target/exposure columns if provided and returns a pandas-based subset.
         
         :param model_name: Model name for the subset.
         :type model_name: str
@@ -254,13 +255,13 @@ class ModelDataSubset:
         """
         X = data.to_pandas()
 
-        X_train = X.loc[X["is_train_obml"] == 1].drop(columns=["is_train_obml"])
-        y_train = X.loc[X["is_train_obml"] == 1][column_target] if column_target else pd.Series()
-        exposure_train = X.loc[X["is_train_obml"] == 1][column_exposure] if column_exposure  else None
+        X_train = X.loc[X[ColumnsNames.is_train_obml] == 1].drop(columns=[ColumnsNames.is_train_obml])
+        y_train = X.loc[X[ColumnsNames.is_train_obml] == 1][column_target] if column_target else pd.Series()
+        exposure_train = X.loc[X[ColumnsNames.is_train_obml] == 1][column_exposure] if column_exposure else None
 
-        X_test = X.loc[X["is_train_obml"] == 0].drop(columns=["is_train_obml"])
-        y_test = X.loc[X["is_train_obml"] == 0][column_target] if column_target else pd.Series()
-        exposure_test = X.loc[X["is_train_obml"] == 0][column_exposure] if column_exposure else None
+        X_test = X.loc[X[ColumnsNames.is_train_obml] == 0].drop(columns=[ColumnsNames.is_train_obml])
+        y_test = X.loc[X[ColumnsNames.is_train_obml] == 0][column_target] if column_target else pd.Series()
+        exposure_test = X.loc[X[ColumnsNames.is_train_obml] == 0][column_exposure] if column_exposure else None
 
         extra_columns_data = X[extra_columns_list] if extra_columns_list else None
 
@@ -277,6 +278,7 @@ class ModelDataSubset:
             exposure_test=exposure_test,
             extra_columns=extra_columns_data,
         )
+
     def __add__(self, other):
         """Combine two ModelDataSubset objects by concatenating aligned columns.
         
