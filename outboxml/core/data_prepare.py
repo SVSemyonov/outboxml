@@ -109,7 +109,7 @@ class OptiBinningEncoder(Encoder):
                     optb2 = ContinuousOptimalBinning(name=self._name, dtype='categorical',  **optbinning_params)
 
                     optb2.fit(
-                        pd.cut(self._X.loc[[i for i in self._train_ind if i in self._X.index]], bins=bins),
+                        pd.cut(self._X.loc[[i for i in self._train_ind if i in self._X.index]], bins=bins, precision=5),
                         self._y.loc[[i for i in self._train_ind if i in self._X.index]]
                     )
                     t2 = optb2.binning_table.build()
@@ -231,7 +231,7 @@ def map_num(v: Union[int, float], mapping: Dict[pd.IntervalIndex, str]) -> Optio
 def feature_encoding_series(
         feature_data: pd.Series,
         feature: FeatureModelConfig,
-        target: Optional[pd.Series] = None,
+        target: pd.Series = pd.Series(),
         train_ind: Optional[pd.Index] = None,
         log: bool = True,
         raise_on_error: bool = False,
@@ -251,6 +251,7 @@ def feature_encoding_series(
 
     mapping = feature.mapping
     bins = feature.bins
+
     if train_ind is None:
         train_ind = feature_data.index
 
@@ -275,7 +276,7 @@ def feature_encoding_series(
                 raise ValueError(f"{feature.name} || Cannot convert to int")
 
 
-    elif feature.encoding == EncodingNames.woe_cat and not target.empty:
+    elif feature.encoding == EncodingNames.woe_cat:
         if log:
             logger.info(f"{feature.name} || Encoding || WoE categorical to numerical")
         if feature.mapping is not None:
@@ -295,12 +296,12 @@ def feature_encoding_series(
                 if raise_on_error:
                     raise ValueError(f"{feature.name} || Cannot convert to WoE")
 
-    elif feature.encoding == EncodingNames.woe_num and not target.empty:
+    elif feature.encoding == EncodingNames.woe_num:
         if log:
             logger.info(f"{feature.name} || Encoding || WoE numerical to categorical")
         if feature.bins is not None:
             feature_data = feature_data.astype("float")
-            feature_data = pd.cut(feature_data, bins=feature.bins)
+            feature_data = pd.cut(feature_data, bins=feature.bins, precision=5)
         else:
             try:
                 feature_data = feature_data.astype("float")
@@ -311,18 +312,18 @@ def feature_encoding_series(
                     name=feature.name,
                     train_ind=train_ind,
                 ).encode_data(mapping=mapping, bins=bins, optbinning_params=feature.optbinning_params)
-                feature_data = pd.cut(feature_data, bins=bins)
+                feature_data = pd.cut(feature_data, bins=bins, precision=5)
             except Exception as e:
                 logger.error(f"{feature.name} || Encoding error || Cannot convert to WoE || {str(e)}")
                 if raise_on_error:
                     raise ValueError(f"{feature.name} || Cannot convert to WoE")
 
-    elif feature.encoding == EncodingNames.woe_num_num and not target.empty:
+    elif feature.encoding == EncodingNames.woe_num_num:
         if log:
             logger.info(f"{feature.name} || Encoding || WoE numerical to numerical")
         if feature.bins is not None and feature.mapping is not None:
             feature_data = feature_data.astype("float")
-            feature_data = pd.cut(feature_data, bins=bins).map(mapping).astype("float")
+            feature_data = pd.cut(feature_data, bins=bins, precision=5).map(mapping).astype("float")
         else:
             try:
                 feature_data = feature_data.astype("float")
@@ -333,7 +334,7 @@ def feature_encoding_series(
                     name=feature.name,
                     train_ind=train_ind,
                 ).encode_data(mapping=mapping, bins=bins, num_num=True,  optbinning_params=feature.optbinning_params)
-                feature_data = pd.cut(feature_data, bins=bins).map(mapping).astype("float")
+                feature_data = pd.cut(feature_data, bins=bins, precision=5).map(mapping).astype("float")
             except Exception as e:
                 logger.error(f"{feature.name} || Encoding error || Cannot convert to WoE || {str(e)}")
                 if raise_on_error:
@@ -341,7 +342,7 @@ def feature_encoding_series(
     elif feature.encoding == EncodingNames.cut_num:
         pass #Encoding call in prepare_numerical_feature function
     else:
-        logger.info("Unknown encoding || Return origin")
+        logger.error(f"Unknown encoding {feature.encoding}|| Return origin")
         if raise_on_error:
             raise NotImplementedError(f"{feature.name} || Unknown encoding")
 
@@ -1017,6 +1018,8 @@ def prepare_dataset(
         pd.options.mode.chained_assignment = None
         if train_ind is None:
             train_ind = data.index
+        if target is None:
+            target = pd.Series()
     else:
         logger.error(f"Invalid data type {type(data)}, {type(target)}")
         raise TypeError(f"Invalid data type {type(data)}, {type(target)}")
@@ -1208,7 +1211,7 @@ def prepare_dataset(
             encoded_data, mapping, bins = feature_encoding_series(
                 feature_data=feature_data[feature.name],
                 feature=feature,
-                target=target.to_pandas()[model_config.column_target] if target is not None else None,
+                target=target.to_pandas()[model_config.column_target] if target is not None else pd.Series(),
                 train_ind=feature_data.loc[ColumnsNames.is_train_obml == 1].index,
                 log=log,
                 raise_on_error=raise_on_encoding_error,

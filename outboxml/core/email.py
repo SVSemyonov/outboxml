@@ -1208,7 +1208,7 @@ class HTMLReport:
             # Adds HTML table to report content
         """
         self.html_content.append(df.to_html(classes='dataframe', border=0,
-                                            justify='right', index=False))
+                                                            justify='right', index=False))
 
     def _add_plot(self, figure, plot_name):
         """Add a Plotly figure to the report as an embedded iframe.
@@ -1448,7 +1448,7 @@ class HTMLReport:
             # Adds section header and HTML table to report
         """
         self._add_section(text="Model metrics comparison:")
-        self._add_table(compare_metrics_df)
+        self._add_table(compare_metrics_df.reset_index())
 
     def _plots(self, figures):
         """Add model plots to the report.

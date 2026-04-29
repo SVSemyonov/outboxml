@@ -38,7 +38,6 @@
                   "min_value": 0.536,
                   "max_value": 15.0001
                },
-               "WoE_num_to_catber": null,
                "fillna": null,
                "encoding": "cut_num",
                "optbinning_params": null,
@@ -55,7 +54,6 @@
                   "min_value": 2.0,
                   "max_value": 52.0
                },
-               "WoE_num_to_catber": null,
                "fillna": null,
                "encoding": "WoE_num_to_cat",
                "optbinning_params": null,
@@ -72,7 +70,6 @@
                   "min_value": 1.7499018224806437,
                   "max_value": 34.19969808542019
                },
-               "WoE_num_to_catber": null,
                "fillna": null,
                "encoding": "WoE_num_to_cat",
                "optbinning_params": null,
@@ -89,7 +86,6 @@
                   "min_value": 0.6751866666666667,
                   "max_value": 6.617231958763142
                },
-               "WoE_num_to_catber": null,
                "fillna": null,
                "encoding": "WoE_num_to_cat",
                "optbinning_params": null,
@@ -106,7 +102,6 @@
                   "min_value": 17.639,
                   "max_value": 10372.681000000095
                },
-               "WoE_num_to_catber": null,
                "fillna": null,
                "encoding": "WoE_num_to_cat",
                "optbinning_params": null,
@@ -123,7 +118,6 @@
                   "min_value": 1.2987380918748712,
                   "max_value": 13.630443486590115
                },
-               "WoE_num_to_catber": null,
                "fillna": null,
                "encoding": "WoE_num_to_cat",
                "optbinning_params": null,
@@ -140,7 +134,6 @@
                   "min_value": 32.57,
                   "max_value": 41.75361000000001
                },
-               "WoE_num_to_catber": null,
                "fillna": null,
                "encoding": "WoE_num_to_cat",
                "optbinning_params": null,
@@ -157,7 +150,6 @@
                   "min_value": -124.18,
                   "max_value": -114.64639
                },
-               "WoE_num_to_catber": null,
                "fillna": null,
                "encoding": "WoE_num_to_cat",
                "optbinning_params": null,

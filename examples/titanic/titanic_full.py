@@ -1,5 +1,6 @@
 from statistics import LinearRegression
 
+import numpy as np
 import pandas as pd
 
 from outboxml.automl_manager import AutoMLManager
@@ -30,6 +31,8 @@ class TitanicExampleExtractor(Extractor):
 
     def extract_dataset(self) -> pd.DataFrame:
         data = pd.read_csv(self.__path_to_file)
+        rng = np.random.default_rng(42)
+        data["ROW_WEIGHT"] = rng.uniform(0.5, 1.5, size=len(data))
     #    data['survived1'] = data['SURVIVED']
     #    data['survived2'] = data['SURVIVED']
         return data

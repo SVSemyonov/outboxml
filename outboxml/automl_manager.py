@@ -5,7 +5,9 @@ import shutil
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
+
+import optuna
 import pandas as pd
 import mlflow
 from dotenv.main import rewrite
@@ -235,14 +237,18 @@ class MLFlowWrapper:
         logger.debug('Exporting results to MLFlow')
         with mlflow.start_run(run_name=self.group_name + str(automl_results.run_time['start']), ):
             log = os.path.join(self.results_path, "log.log")
+            report = os.path.join(self.results_path, "automl_report.html")
+            pickle_model = os.path.join(self.results_path, automl_results.result_pickle_name)
+
             mlflow.log_artifact(log)
-            mlflow.log_artifact(os.path.join(self.results_path, automl_results.result_pickle_name))
+            mlflow.log_artifact(report)
+            mlflow.log_artifact(pickle_model)
             mlflow.set_tag(key='Deployment_decision', value=automl_results.deployment)
             #mlflow.set_tags()
             try:
                 mlflow.log_artifact(os.path.join(self.results_path, automl_results.all_models_config))
             except:
-                pass
+                logger.error('MLflow export||No model config')
             if automl_results.compare_business_metric is not None:
                 if automl_results.compare_business_metric['difference'] is not None:
                     business_metric = {'business_metric': automl_results.compare_business_metric['difference']}
@@ -260,6 +266,8 @@ class MLFlowWrapper:
                                                 f"{model_name}_features_numerical.json")
                     features_cat = os.path.join(self.results_path, self.group_name, model_name,
                                                 f"{model_name}_features_categorical.json")
+                    model_plot = os.path.join(self.results_path,
+                                                f"{model_name}.html")
                     model = os.path.join(self.results_path, self.group_name, model_name, f"{model_name}_model.pickle")
 
 
@@ -271,6 +279,7 @@ class MLFlowWrapper:
                     mlflow.log_artifact(features_num)  # модель
                     mlflow.log_artifact(features_cat)
                     mlflow.log_artifact(model)
+                    mlflow.log_artifact(model_plot)
                     mlflow.log_artifact(model_config)
                     try:
                         mlflow.log_params(dict(automl_results.new_hp[model_name]))
@@ -536,9 +545,10 @@ class AutoMLManager(DataSetsManager):
             except Exception as exc2:
                 logger.error(str(exc2))
             finally:
-                email.error_mail(group_name=self.group_name,
-                                 error=exc, status=self.status,
-                                 )
+                if send_mail:
+                    email.error_mail(group_name=self.group_name,
+                                     error=exc, status=self.status,
+                                     )
         finally:
           logger.debug('Updating models is finished||'+str(self.status))
         return self.automl_results
@@ -637,17 +647,26 @@ class AutoMLManager(DataSetsManager):
             # {'learning_rate': 0.15, ...}
         """
         new_hp = {}
-
+        trials = self._hp_tuning_config.trials
+        n_jobs = self._hp_tuning_config.n_jobs
         for model in self._models_configs:
             new_hp[model.name] = {}
             try:
-
                 parameters_for_optuna_func = None
-                if parameters_for_optuna is not None:
+                if self._hp_tuning_config.parameters:
+                    logger.info(f"HP_Tune || Use parameters from config")
+                    try:
+                        model_params = self._hp_tuning_config.parameters[model.name]
+                        parameters_for_optuna_func = lambda trial: self.__sample_parameters(trial, model_params)
+                    except KeyError:
+                        logger.warning(f'HP_Tune || No parameters for model in config {model.name}')
+                        continue
+                elif parameters_for_optuna is not None:
+                    logger.info(f"HP_Tune || Use parameters from func")
                     try:
                         parameters_for_optuna_func = parameters_for_optuna[model.name]
                     except KeyError:
-                        logger.warning('HP_Tune||No parameters for model')
+                        logger.warning(f'HP_Tune || No parameters for model "{model.name}"')
                 new_hp[model.name] = HPTuning(data_preprocessor=self._data_preprocessor,
                                               sampler=self._hp_tuning_config.sampling,
                                               scoring_fun=self._hp_tuning_config.metric_score[model.name],
@@ -657,7 +676,9 @@ class AutoMLManager(DataSetsManager):
                                               work_type=self._work_type_hptune,
                                               ).best_params(model_name=model.name,
                                                             parameters_for_optuna_func=parameters_for_optuna_func,
-                                                            timeout=self.timeout)
+                                                            timeout=self.timeout,
+                                                            trials=trials,
+                                                            n_jobs=n_jobs)
                 logger.info(new_hp[model.name])
 
             except Exception as exc:
@@ -665,6 +686,23 @@ class AutoMLManager(DataSetsManager):
                 logger.error(str(exc))
                 logger.info('Returning {}')
         return new_hp
+
+    def __sample_parameters(self, trial: optuna.Trial, config) -> Dict[str, Any]:
+        sampled_params = {}
+
+        for name, spec in config.items():
+            if spec.type == "int":
+                sampled_params[name] = trial.suggest_int(
+                    name, int(spec.low), int(spec.high), step=spec.step, log=spec.log
+                )
+            elif spec.type == "float":
+                sampled_params[name] = trial.suggest_float(
+                    name, spec.low, spec.high, step=spec.step, log=spec.log
+                )
+            elif spec.type == "categorical":
+                sampled_params[name] = trial.suggest_categorical(name, spec.choices)
+
+        return sampled_params
 
     def save_results(self, results: dict):
         """Save model results to disk and export to Grafana.

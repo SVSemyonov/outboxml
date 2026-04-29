@@ -85,6 +85,7 @@ class FeatureTypesForSelection(str, Enum):
 
 
 class ModelTypes(str, Enum):
+
     regression = 'regression'
     classification = 'classification'
     clustering = 'clustering'

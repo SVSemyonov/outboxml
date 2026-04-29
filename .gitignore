@@ -16,3 +16,6 @@ venv/
 /examples/energy_efficiency/.ipynb_checkpoints/example-checkpoint.ipynb
 /examples/energy_efficiency/.ipynb_checkpoints/
 /examples/energy_efficiency/configs/.ipynb_checkpoints/
+/catboost_info
+/results
+.coverage

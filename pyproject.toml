@@ -1,35 +1,87 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "outboxml"
-version = "0.9.5"
+version = "0.10.1"
+description = "Framework for ML and DS: Automating pipelines from training to deployment"
+readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
 authors = [
-  {name = "", email = "pradyun@example.com"},
+    { name = "Vladimir Suvorov", email = "justsuvorov@gmail.com" },
+    { name = "Semyon Semyonov" },
+    { name = "Dmitry Bochkarev" },
+    { name = "Maxim Matcera" },
+   { name = "Dmitry Zotov"}
 ]
-maintainers = [
-  {name = "", email = "example@example.com"}
-]
-description = ""
-readme = "README.rst"
-license = "MIT"
-license-files = ["LICEN[CS]E.*"]
-keywords = []
 classifiers = [
-  "Development Status :: 4 - Beta",
-  "Programming Language :: Python"
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Framework :: FastAPI",
 ]
 
-[project.urls]
-Homepage = "https://example.com"
-Documentation = "https://readthedocs.org"
-Repository = "https://github.com/me/spam.git"
-"Bug Tracker" = "https://github.com/me/spam/issues"
-Changelog = "https://github.com/me/spam/blob/master/CHANGELOG.md"
 
-[project.scripts]
-spam-cli = "spam:main_cli"
+dependencies = [
+    "catboost==1.2.8",
+    "shap==0.50.0",
+    "loguru==0.7.2",
+    "scikit-learn==1.7.2",
+    "pydantic==2.12.4",
+    "statsmodels==0.14.5",
+    "pyarrow==22.0.0",
+    "SQLAlchemy>=2.0.31",
+    "plotly==5.22.0",
+    "kaleido==0.2.1",
+    "mlflow==3.6.0",
+    "pandas==2.3.3",
+    "polars==1.35.0",
+    "numpy==2.3.5",
+    "environs>=11.0.0",
+    "pretty_html_table==0.9.16",
+    "optbinning==0.20.0",
+    "ortools==9.15.6755",
+    "optuna==4.6.0",
+    "openpyxl==3.1.5",
+    "nbformat==5.10.4",
+    "phik==0.12.5",
+    "fastapi==0.121.2",
+    "uvicorn==0.38.0",
+    "schedule==1.2.2",
+    "psycopg2-binary",
+    "scipy>=1.15.3",
+    "xgboost==3.1.1",
+]
 
-[project.gui-scripts]
-spam-gui = "spam:main_gui"
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "ruff",
+    "jupyter"
+]
 
-[project.entry-points."spam.magical"]
-tomatoes = "spam:main_tomatoes"
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = [
+    "tests*",
+    "examples*",
+    "results*",
+    "docs*",
+    "notebooks*",
+    "prod_models_from_mlflow*",
+    "scripts*"
+]
+
+[tool.ruff]
+line-length = 88
+select = ["E", "F", "I"]
+
+[tool.black]
+line-length = 88

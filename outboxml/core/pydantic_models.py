@@ -141,6 +141,7 @@ class ModelConfig(BaseModel):
     wrapper: Optional[str] = None
     column_target: Optional[str] = None
     column_exposure: Optional[str] = None
+    column_weight: Optional[str] = None
     relative_features: Optional[List[RelativeFeatureModelConfig]] = []
     features: List[FeatureModelConfig]
     intersections: Optional[List[IntersectionModelConfig]] = None
@@ -192,27 +193,37 @@ class ServiceRequest(BaseModel):
 
 class FeatureSelectionConfig(BaseModel):
     top_feautures_to_select: int = 10
-    count_category: int = 100,
-    cutoff_1_category: float = 0.99,
-    cutoff_nan: float = 0.7,
+    count_category: int = 100
+    cutoff_1_category: float = 0.99
+    cutoff_nan: float = 0.7
     max_corr_value: float = 0.6
     metric_eval: dict = {'metric_name': 0}
     cv_diff_value:  Optional[float] = None
     encoding_cat: str = 'WoE_cat_to_num'
     encoding_num: str = 'WoE_num_to_num'
-    default_cat: str = '_NAN_',
-    default_num: str = '_MEDIAN_',
+    default_cat: str = '_NAN_'
+    default_num: str = '_MEDIAN_'
     depth: float = 0.01
     features_to_ignore: List[str] = []
     params: dict = {}
     use_temp_data: bool = False
 
 
+class OptunaOptimizeConfig(BaseModel):
+    type: Literal["int", "float", "categorical"]
+    low: Optional[Union[int, float]] = None
+    high: Optional[Union[int, float]] = None
+    step: Optional[Union[int, float]] = None
+    log: bool = False
+    choices: Optional[List[Union[int, float, str, bool]]] = None
+
 class HPTuneConfig(BaseModel):
     sampling: str ='TPE'
     cv_folds_num: int = 3
-    parameters: dict = None
-    metric_score: Dict[str, str] = None
+    parameters: Optional[Dict[str, Dict[str, OptunaOptimizeConfig]]] = None
+    n_jobs: int = -1
+    trials: int = 100
+    metric_score: Dict[str, str] = {"default": "neg_mean_absolute_error"}
 
 
 class ModelInferenceConfig(BaseModel):

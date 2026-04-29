@@ -1,4 +1,5 @@
 import asyncio
+import json
 from copy import deepcopy
 from pathlib import Path
 from unittest import TestCase
@@ -41,6 +42,7 @@ auto_ml_config = test_configs_path / 'automl-titanic.json'
 
 path_to_target = test_data_path / 'target_extrapolation_test.gzip'
 
+pickle_name = 'example_titanic_2026_04_23_15_55_03'
 
 class TitanicMetric(BaseMetric):
     def __init__(self):
@@ -140,8 +142,39 @@ class FeatureSelection(TestCase):
 class HPTune(TestCase):
 
     def setUp(self):
-        self.ds_manager = DataSetsManager(config_name=str(config_name)
-                                          )
+        self.ds_manager = DataSetsManager(config_name=str(config_name))
+
+    def test_hp_tune_from_config(self):
+        self.ds_manager._prepare_datasets['first']._model_config.objective = 'poisson'
+        self.ds_manager._prepare_datasets['first']._model_config.wrapper = 'catboost'
+
+        with open(file=auto_ml_config, mode="r") as f:
+            auto_ml_config_val = AutoMLConfig.model_validate(json.load(f))
+            auto_ml_config_dict = auto_ml_config_val.model_dump()
+            auto_ml_config_dict["hp_tune"]["n_jobs"] = 2
+            auto_ml_config_dict["hp_tune"]["parameters"] = {
+                "first": {
+                    "iterations": {
+                        "type": "int",
+                        "low": 800,
+                        "high": 1400,
+                        "step": 100
+                    }
+                }
+            }
+        auto_ml_config_dict["hp_tune"]["trials"] = 5
+        auto_ml = AutoMLManager(auto_ml_config=auto_ml_config_dict,
+                                     models_config=str(config_name),
+                                     hp_tune=True,
+                                     retro=False
+                                     )
+
+        params = auto_ml.hp_tuning()
+        self.assertIsInstance(params, dict)
+        self.assertEqual(list(params.keys()), ['first', 'second'])
+        self.assertEqual(list(params['first'].keys()), ['iterations'])
+        self.assertEqual(params['second'], {})
+
 
     def test_hp_tune_catboost(self):
         self.ds_manager._prepare_datasets['first']._model_config.objective = 'poisson'
@@ -210,10 +243,11 @@ class AutoMLTest(TestCase):
     def setUp(self):
         self.ds_manager1 = DataSetsManager(config_name=str(config_name)
                                            )
+        self.ds_manager1._data_preprocessor._retro = True
         self.ds_manager1.fit_models()
         self.ds_manager2 = DataSetsManager(config_name=str(config_name)
                                            )
-
+        self.ds_manager2._data_preprocessor._retro = True
         self.ds_manager2._results = deepcopy(self.ds_manager1.get_result())
 
         for key in self.ds_manager2._results:
@@ -315,32 +349,28 @@ class TestPredict(TestCase):
 
         result = asyncio.run(
             main_predict(config=config, group_name=None, features_values=LogsExtractor().extract_dataset()[:100],
-                         second_group_name='example_titanic_2025_09_18_08_37_03', second_features_values=LogsExtractor().extract_dataset()[700:]))
-        self.assertIsInstance(result, dict)
-        self.assertIsInstance(result['main_response'], dict)
-        self.assertIsInstance(result['main_response']['result'], dict)
-        self.assertIsInstance(result['second_response']['result'], dict)
-
-        result = asyncio.run(
-            main_predict(config=config, group_name=None, features_values=LogsExtractor().extract_dataset()[:100],
-                         second_group_name='example_titanic_2025_09_18_08_37_03',
+                         second_group_name=pickle_name,
                          second_features_values=LogsExtractor().extract_dataset()[700:]))
         self.assertIsInstance(result, dict)
         self.assertIsInstance(result['main_response'], dict)
         self.assertIsInstance(result['main_response']['result'], dict)
         self.assertIsInstance(result['second_response']['result'], dict)
+
+
        # Ensemble(config=config).make_ensemble('test', ['first'])
        # ensemble_predict(ensemble_name='test', ensemble=EnsembleResult(model_name='first', models=[load_last_pickle_models_result(config=config)]), )
 
 
     def test_config_builder(self):
         data = pd.read_csv(path_to_data)
+        data["ROW_WEIGHT"] = np.linspace(0.5, 1.5, len(data))
         self.assertIsInstance(AutoMLConfigBuilder().build(), AutoMLConfig)
         self.assertIsInstance(AllModelsConfigBuilder().build(), AllModelsConfig)
         self.assertIsInstance(build_default_auto_ml_config({'group_name': 'test'}), AutoMLConfig)
         all_models_config = build_default_all_models_config(data=data,
                                                               group_name='example',
                                                               column_target='SURVIVED',
+                                                              column_weight='ROW_WEIGHT',
                                                               model_params={'wrapper': 'catboost',
                                                                             'name': 'titanic',
                                                                             },
@@ -349,6 +379,7 @@ class TestPredict(TestCase):
                                                                                })
         self.assertIsInstance(all_models_config,AllModelsConfig)
         self.assertEqual(all_models_config.models_configs[0].column_target,'SURVIVED', )
+        self.assertEqual(all_models_config.models_configs[0].column_weight,'ROW_WEIGHT', )
         self.assertEqual(all_models_config.models_configs[0].features[0].default, '_MEDIAN_', )
         self.assertEqual(all_models_config.models_configs[0].features[2].default, '_NAN_', )
 

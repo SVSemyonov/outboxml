@@ -26,6 +26,8 @@ class HPTuningData:
                  y_test: pd.Series,
                  exposure_train: pd.Series,
                  exposure_test: pd.Series,
+                 sample_weight_train: pd.Series,
+                 sample_weight_test: pd.Series,
                  features_numerical,
                  features_categorical):
         """Initialization.
@@ -49,6 +51,8 @@ class HPTuningData:
         """
         self.exposure_test = exposure_test
         self.exposure_train = exposure_train
+        self.sample_weight_train = sample_weight_train
+        self.sample_weight_test = sample_weight_test
         self.y_train = y_train
         self.X_train = X_train
         self.X_test = X_test
@@ -76,6 +80,8 @@ class HPTuningData:
                    y_test=data_subset.y_test,
                    exposure_train=exposure_train,
                    exposure_test=data_subset.exposure_test,
+                   sample_weight_train=data_subset.sample_weight_train,
+                   sample_weight_test=data_subset.sample_weight_test,
                    features_numerical=features_numerical,
                    features_categorical=features_categorical)
 
@@ -168,7 +174,7 @@ class HPTuning:
         return parameters
 
 
-    def best_params(self, model_name: str, scoring_fun: Callable = None, trials: int = 100, direction: str = 'maximize',
+    def best_params(self, model_name: str, scoring_fun: Callable = None, trials: int = 100, n_jobs:int = -1, direction: str = 'maximize',
                     parameters_for_optuna_func: Callable = None, timeout=None):
         """Calculation the best hyperparameters.
 
@@ -231,7 +237,7 @@ class HPTuning:
         if self._model is None:
             self._model = self._load_model_from_config(model_name, hp_tuning_data)
         logger.debug('Optimizing...')
-        best_params = self._optimize(model_name, hp_tuning_data,  scoring_fun, trials, direction,
+        best_params = self._optimize(model_name, hp_tuning_data,  scoring_fun, trials, n_jobs, direction,
                                      parameters_for_optuna_func, timeout=timeout)
         self._write_parameters(model_name, best_params)
         return best_params
@@ -276,8 +282,17 @@ class HPTuning:
                             thread_count=-1,
                             objective=objective, verbose=False,
                             **parameters)
+        sample_weight = hp_tuning_data.sample_weight_train
+        if hp_tuning_data.exposure_train is not None and sample_weight is not None:
+            sample_weight = hp_tuning_data.exposure_train * sample_weight
+        elif hp_tuning_data.exposure_train is not None:
+            sample_weight = hp_tuning_data.exposure_train
 
-        return model, None
+        fit_params = None
+        if sample_weight is not None:
+            fit_params = {"sample_weight": sample_weight}
+
+        return model, fit_params
 
     def _prepare_xgb(self, model_name: str, parameters):
         if self.result_configs[model_name].objective is not None:
@@ -316,11 +331,11 @@ class HPTuning:
                   hp_tuning_data: HPTuningData,
                   scoring_fun: Callable,
                   trials: int,
+                  n_jobs: int = -1,
                   direction: str='maximize',
                   parameters_for_optuna_func: Callable=None,
                   timeout=None):
 
-        n_jobs = -1
         X = hp_tuning_data.X_train
         y_train = hp_tuning_data.y_train
         if hp_tuning_data.exposure_train is not None:

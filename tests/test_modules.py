@@ -22,7 +22,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from pathlib import Path
 
-from outboxml.extractors import BaseExtractor
+from outboxml.extractors import BaseExtractor, SimpleExtractor
+from outboxml.feature_importance import FeatureImportance
 from outboxml.models import BaselineModels, ModelsWrapper, StatsmodelsModel, StatsModelsEstimator, CatboostModel, \
     CatboostOverGLMModel, XgboostModel, GLMCatboostCombineModel, BaseWrapperModel
 
@@ -117,6 +118,13 @@ class TestTitanicDS(TestCase):
         results = self.dsManager.fit_models(resultDics,)
         self.assertIsInstance(results, dict)
 
+    def test_feature_importance(self):
+        result = self.dsManager.fit_models()
+        result = self.dsManager.get_result()
+        self.assertIsInstance(result['first'].feature_importance, FeatureImportance)
+        self.assertIsInstance(result['second'].feature_importance, FeatureImportance)
+        self.assertEqual(len(result['first'].feature_importance.importance_data), 3)
+        self.assertEqual(len(result['second'].feature_importance.importance_data), 4)
 
     def test_baseline_classification(self):
         self.assertEqual(len(self.dsManager_base.fit_models().keys()),2)
@@ -371,6 +379,75 @@ class ModelsTest(TestCase):
                                models_configs=[self.model_config],
                                work_type_fit='CPU').models_dict()
         self.assertIsInstance(models, dict)
+
+
+class TestCatboostSampleWeights(TestCase):
+    def setUp(self):
+        self.data = pd.DataFrame({
+            "SURVIVED": [0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0],
+            "SEX": ["male", "female", "female", "male", "female", "male", "female", "male", "female", "male", "female", "male"],
+            "AGE": [22, 38, 26, 35, 28, 2, 54, 27, 14, 4, 58, 20],
+            "ROW_WEIGHT": np.linspace(0.5, 1.6, 12),
+        })
+        self.config = {
+            "group_name": "example",
+            "project": "weighted",
+            "version": "weights",
+            "data_config": {
+                "source": "csv",
+                "local_name_source": "unused.csv",
+                "separation": {
+                    "kind": "random",
+                    "random_state": 1,
+                    "test_train_proportion": 0.25,
+                    "period_column": ["AGE"]
+                },
+                "data": {
+                    "targetcolumns": [],
+                    "targetslices": []
+                }
+            },
+            "models_configs": [
+                {
+                    "name": "weighted_model",
+                    "column_target": "SURVIVED",
+                    "column_weight": "ROW_WEIGHT",
+                    "objective": "binary",
+                    "wrapper": "catboost",
+                    "features": [
+                        {
+                            "name": "SEX",
+                            "default": "0",
+                            "replace": {
+                                "male": "1",
+                                "female": "2"
+                            }
+                        },
+                        {
+                            "name": "AGE",
+                            "default": 0,
+                            "replace": {"_TYPE_": "_NUM_"}
+                        }
+                    ]
+                }
+            ]
+        }
+        self.ds_manager = DataSetsManager(
+            config_name=self.config,
+            extractor=SimpleExtractor(data=self.data)
+        )
+
+    def test_catboost_with_sample_weights(self):
+        subset = self.ds_manager.get_subset("weighted_model")
+        self.assertIsNotNone(subset.sample_weight_train)
+        self.assertGreater(subset.sample_weight_train.nunique(), 1)
+
+        model = CatboostModel(
+            data_subset=subset,
+            model_config=self.ds_manager._models_configs[0],
+        ).fit()
+
+        self.assertIsInstance(model.predict(X=subset.X_test), pd.Series)
 
 
 class TestPrepareDatasets(TestCase):

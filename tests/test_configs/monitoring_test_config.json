@@ -1,6 +1,6 @@
 {
   "group_name":"example",
-  "prod_models_path":"./prod_models_from_mlflow",
+  "prod_models_path":"../prod_models_from_mlflow",
   "pickle_name":"example_titanic_2026_01_16_07_13_04",
   "dashboard_name":"TitanicMonitoring",
   "grafana_table_name":"TitanicMonitoring",
