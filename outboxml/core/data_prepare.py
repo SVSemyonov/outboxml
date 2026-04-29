@@ -454,6 +454,54 @@ def dict_replace(
     return dict_replace_temp
 
 
+def dict_replace_pl(
+        feature: FeatureModelConfig,
+        is_numeric_dtype: bool
+) -> Dict:
+    """
+    Prepares replace dict for categorical and numerical features.
+
+    :param feature: Feature's config.
+    :param is_numeric_dtype: If feature values' type is numeric, then it's True, otherwise False.
+
+    :return: Replace dict.
+    """
+
+    dict_replace_temp = {}
+
+    for key, val in feature.replace.items():
+        if (
+            key != FeatureEngineering.feature_type
+            and val != FeatureEngineering.nan
+        ):
+            if val != FeatureEngineering.not_changed:
+                new_val = val
+            else:
+                new_val = key
+        elif val == FeatureEngineering.nan:
+            new_val = None
+        else:
+            continue
+
+        if is_numeric_dtype:
+            try:
+                key_float = float(key)
+                if new_val is None:
+                    new_val_numeric = None
+                else:
+                    try:
+                        new_val_numeric = int(new_val)
+                    except ValueError:
+                        new_val_numeric = float(new_val)
+                dict_replace_temp[key_float] = new_val_numeric
+            except ValueError:
+                pass
+        else:
+            dict_replace_temp[key] = str(new_val) if new_val is not None else None
+
+    return dict_replace_temp
+
+
 def replace_categorical_values_series(
         feature_data: pd.Series,
         feature: FeatureModelConfig,
@@ -685,7 +733,7 @@ def prepare_categorical_feature_pl(
     :return: Polars' LazyFrame with prepared values.
     """
 
-    dict_replace_temp = dict_replace(feature=feature, dtype=FeaturesTypes.categorical)
+    dict_replace_temp = dict_replace_pl(feature=feature, is_numeric_dtype=data_dtypes[feature.name].is_numeric())
     fill_null_value = feature.fillna if feature.fillna else feature.default
 
     lazy_data = (
@@ -698,15 +746,11 @@ def prepare_categorical_feature_pl(
             )
             .then(pl.lit(feature.default))
             .when(
-                (pl.col(feature.name).is_null())
-                | (pl.col(feature.name).is_nan() if data_dtypes[feature.name].is_numeric() else True)
-            )
-            .then(pl.lit(fill_null_value))
-            .when(
                 data_dtypes[feature.name].is_numeric()
             )
             .then(pl.col(feature.name).cast(pl.String).replace(dict_replace_temp))
             .otherwise(pl.col(feature.name).str.to_uppercase().replace(dict_replace_temp))
+            .fill_null(fill_null_value)
             .alias(feature.name)
         )
     )
@@ -744,7 +788,7 @@ def prepare_numerical_feature_series(
         feature: FeatureModelConfig,
         default_value: float | int,
         log: bool = True,
-) -> Tuple[pd.Series, Optional[Union[float, int]]]:
+) -> pd.Series:
     """
     Prepare values in numerical feature's data, the input type should be Pandas' Series.
 
@@ -810,21 +854,16 @@ def prepare_numerical_feature_pl(
     :return: Polars' LazyFrame with prepared values.
     """
 
-    dict_replace_temp = dict_replace(feature=feature, dtype=FeaturesTypes.numerical)
+    dict_replace_temp = dict_replace_pl(feature=feature, is_numeric_dtype=data_dtypes[feature.name].is_numeric())
 
     lazy_data = (
         lazy_data
         .with_columns(
-            pl.when(
-                (pl.col(feature.name).is_null())
-                | (pl.col(feature.name).is_nan() if data_dtypes[feature.name].is_numeric() else True)
-            )
-            .then(pl.lit(default_value))
-            .when(
-                data_dtypes[feature.name].is_numeric()
-            )
-            .then(pl.col(feature.name).replace(dict_replace_temp))
-            .otherwise(pl.col(feature.name).cast(pl.Float64).replace(dict_replace_temp))
+            pl.col(feature.name)
+            .replace(dict_replace_temp)
+            .cast(pl.Float64)
+            .fill_null(float(default_value))
+            .fill_nan(float(default_value))
             .alias(feature.name)
         )
     )
@@ -848,11 +887,29 @@ def prepare_numerical_feature_pl(
     #     feature.cut_number = CutNumberEncoder().encode_data(feature_data)
 
     if feature.cut_number:
+        # For equal result with Pandas' cut function
+        def format_cut_boundary(value):
+            if value == float("-inf"):
+                return "-inf"
+            if value == float("inf"):
+                return "inf"
+            return float(value)
+
         val_splits = list([float(x) for x in feature.cut_number.split('_')])
+        val_splits_inf = [float("-inf")] + val_splits + [float("inf")]
         lazy_data = (
             lazy_data
             .with_columns(
-                pl.col(feature.name).cut(val_splits).cast(pl.String).alias(feature.name)
+                pl.col(feature.name)
+                .cut(
+                    val_splits,
+                    labels=[
+                        f"({format_cut_boundary(val_splits_inf[i])}, {format_cut_boundary(val_splits_inf[i+1])}]"
+                        for i in range(len(val_splits) + 1)
+                    ],
+                )
+                .cast(pl.String)
+                .alias(feature.name)
             )
         )
 

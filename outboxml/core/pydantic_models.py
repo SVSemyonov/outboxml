@@ -127,6 +127,8 @@ class FeatureModelConfig(BaseModel):
                     if not isinstance(val, (float, int)):
                         raise ConfigError(f"{self.name}: invalid clip value for numerical feature")
 
+        return self
+
 
 class IntersectionModelConfig(BaseModel):
     name: str
