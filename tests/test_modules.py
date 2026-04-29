@@ -126,10 +126,21 @@ class TestTitanicDS(TestCase):
             all_models_config_dict["models_configs"][0]["features"][0]["replace"] = {"MALE": "MALE", "FEMALE": "MALE"}
 
         dsManager_fi = DataSetsManager(config_name=all_models_config_dict)
-        dsManager_fi.fit_models()
+        dsManager_fi.fit_models(calc_feature_importance=True)
         result = dsManager_fi.get_result()
         self.assertIsInstance(result['first'].feature_importance, FeatureImportance)
         self.assertIsInstance(result['second'].feature_importance, FeatureImportance)
+        self.assertEqual(len(result['first'].feature_importance.importance_data), 3)
+        self.assertEqual(len(result['second'].feature_importance.importance_data), 4)
+
+        with open(file=config_name, mode="r") as f:
+            all_models_config_val = AllModelsConfig.model_validate(json.load(f))
+            all_models_config_dict = all_models_config_val.model_dump()
+            all_models_config_dict["data_config"]["separation"]["kind"] = "none"
+
+        dsManager_fi = DataSetsManager(config_name=all_models_config_dict)
+        dsManager_fi.fit_models(calc_feature_importance=True)
+        result = dsManager_fi.get_result()
         self.assertEqual(len(result['first'].feature_importance.importance_data), 3)
         self.assertEqual(len(result['second'].feature_importance.importance_data), 4)
 
