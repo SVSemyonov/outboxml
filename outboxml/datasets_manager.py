@@ -559,11 +559,14 @@ class DataSetsManager:
                                                                           'test': predictions_test})
 
 
-            feature_importances = FeatureImportance(model_name=model_name, model=model,)
-            feature_importances.calculate_importance(data=data_subset.X_test,
-                                                    target=data_subset.y_test,
-                                                    exposure=data_subset.exposure_test,
-                                                    )
+            feature_importances = FeatureImportance(
+                model_name=model_name,
+                model=model,
+                data=data_subset.X_test,
+                target=data_subset.y_test,
+                exposure=data_subset.exposure_test
+            )
+            feature_importances.calculate_importance()
             self._results[model_name] = DSManagerResult(model_name=model_name,
                                                         model=model,
                                                         config=self.config,

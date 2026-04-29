@@ -126,7 +126,7 @@ class TestTitanicDS(TestCase):
             all_models_config_dict["models_configs"][0]["features"][0]["replace"] = {"MALE": "MALE", "FEMALE": "MALE"}
 
         dsManager_fi = DataSetsManager(config_name=all_models_config_dict)
-        result = dsManager_fi.fit_models()
+        dsManager_fi.fit_models()
         result = dsManager_fi.get_result()
         self.assertIsInstance(result['first'].feature_importance, FeatureImportance)
         self.assertIsInstance(result['second'].feature_importance, FeatureImportance)

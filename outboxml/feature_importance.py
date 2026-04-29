@@ -6,36 +6,59 @@ import plotly.express as px
 from typing import Optional, List, Any
 
 from loguru import logger
+from shap.utils._exceptions import InvalidModelError
+from statsmodels.genmod.generalized_linear_model import GLMResultsWrapper
+
+from outboxml.models import GLMCatboostCombineModel, CatboostOverGLMModel
 
 
 class FeatureImportance:
-    def __init__(self, model_name: str, model: Any,):
+    def __init__(
+            self,
+            model_name: str,
+            model: Any,
+            data: pd.DataFrame,
+            target: pd.Series,
+            exposure: Optional[pd.Series] = None,
+    ):
         self.model_name = model_name
         self.model = model
+        self.data = data
+        self.target = target
+        self.exposure = exposure
+        self._features = []
         self.importance_data = None
+
+    def _init_model(self):
+        if isinstance(self.model, GLMCatboostCombineModel):
+            self._features = list(chain(self.model.features_numerical, self.model.features_categorical))
+            self.model = self.model.model
+        elif isinstance(self.model, (CatboostOverGLMModel, GLMResultsWrapper)):
+            #TODO
+            logger.warning(f"Can't calculate SHAP values for model class || {type(self.model)}")
+        else:
+            self.model = self.model.predict
+            self._features = self.data.columns.tolist()
 
     def calculate_importance(
             self,
-            data: pd.DataFrame,
-            target: pd.Series,
             calculate_directions: bool = True,
-            exposure: Optional[pd.Series] = None,
             zero_corr_threshold: float = 0.0
     ):
         logger.debug(f"Calculating feature importance for model: {self.model_name}...")
+        self._init_model()
         try:
-            features = list(chain(self.model.features_numerical, self.model.features_categorical))
-            shap_dict = self._calc_shap_values(self.model.model, data[features])
+            shap_dict = self._calc_shap_values(self.model, self.data[self._features])
         except Exception as e:
-            logger.error(f"Cannot calculate SHAP values for {self.model_name} || {e}")
+            logger.error(f"Can't calculate SHAP values for {self.model_name} with model class {type(self.model)}|| {e}")
             return
 
         directions_dict = {}
         if calculate_directions:
             directions_dict = self._calc_features_directions(
-                data=data[features],
-                target=target,
-                exposure=exposure,
+                data=self.data[self._features],
+                target=self.target,
+                exposure=self.exposure,
                 zero_corr_threshold=zero_corr_threshold
             )
 
@@ -49,13 +72,16 @@ class FeatureImportance:
                 row['SIGN'] = directions_dict.get(feature, 0)
 
             result.append(row)
-
         self.importance_data = result
 
     def _calc_shap_values(self, model, data: pd.DataFrame) -> dict:
         logger.info("Calculating SHAP values...")
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer(data)
+        try:
+            explainer = shap.TreeExplainer(model)
+            shap_values = explainer(data)
+        except InvalidModelError:
+            explainer = shap.Explainer(model, data)
+            shap_values = explainer(data)
 
         if isinstance(shap_values, list):  # Для мультикласса
             values = np.abs(np.array([v.values for v in shap_values])).mean(axis=(0, 1))
