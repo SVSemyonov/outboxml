@@ -974,7 +974,7 @@ def prepare_dataset(
         calc_corr: bool = False,
         save_data: bool = False,
         corr_threshold: Optional[float] = None,
-        target: Optional[pd.Series] = None,
+        target: Optional[pd.Series | pl.DataFrame] = None,
         log: bool = True,
         modify_dtypes: bool = True,
         raise_on_encoding_error: bool = False
@@ -1004,16 +1004,22 @@ def prepare_dataset(
     as_pandas: bool = False
     if isinstance(data, dict):
         as_dict = True
-    elif isinstance(data, pl.DataFrame):
+    elif isinstance(data, pl.DataFrame) and (isinstance(target, pl.DataFrame) or target is None):
         as_polars = True
+        if ColumnsNames.is_train_obml not in data.columns:
+            data = data.with_columns(pl.lit(1).alias(ColumnsNames.is_train_obml))
+        if target is not None and ColumnsNames.is_train_obml not in target.columns:
+            target = target.with_columns(pl.lit(1).alias(ColumnsNames.is_train_obml))
         data_dtypes = data.schema
         lazy_data: pl.LazyFrame = data.lazy()
-    elif isinstance(data, pd.DataFrame):
+    elif isinstance(data, pd.DataFrame) and (isinstance(target, pd.DataFrame) or target is None):
         as_pandas = True
         pd.options.mode.chained_assignment = None
+        if train_ind is None:
+            train_ind = data.index
     else:
-        logger.error(f"Invalid data type {type(data)}")
-        raise TypeError(f"Invalid data type {type(data)}")
+        logger.error(f"Invalid data type {type(data)}, {type(target)}")
+        raise TypeError(f"Invalid data type {type(data)}, {type(target)}")
 
     if model_config.relative_features:
         for relative_feature in model_config.relative_features:
@@ -1142,9 +1148,7 @@ def prepare_dataset(
                 replace_dict = dict_replace(feature=feature, dtype=FeaturesTypes.categorical)
 
                 if as_pandas:
-                    if train_ind is None:
-                        train_ind = data.index
-                        drop_values = find_drop_values(data[feature.name], replace_dict, train_ind)
+                    drop_values = find_drop_values(data[feature.name], replace_dict, train_ind)
                 elif as_polars:
                     drop_values = find_drop_values_pl(
                         data.filter(pl.col(ColumnsNames.is_train_obml) == 1)[feature.name],
@@ -1173,8 +1177,6 @@ def prepare_dataset(
 
                 except NotImplementedError as exc:
                     logger.error(exc)
-
-
 
     #FIXME Перевести внутрь цикла. Не записываются атрибут
     for feature in model_config.features:
@@ -1206,7 +1208,7 @@ def prepare_dataset(
             encoded_data, mapping, bins = feature_encoding_series(
                 feature_data=feature_data[feature.name],
                 feature=feature,
-                target=target,
+                target=target.to_pandas()[model_config.column_target] if target is not None else None,
                 train_ind=feature_data.loc[ColumnsNames.is_train_obml == 1].index,
                 log=log,
                 raise_on_error=raise_on_encoding_error,

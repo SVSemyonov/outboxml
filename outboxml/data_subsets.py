@@ -1289,18 +1289,12 @@ class PolarsInterface(PrepareEngine):
         ).train_test_split()
 
     def _filter_data_by_exposure(self, dataset: pl.DataFrame) -> (pl.DataFrame, pl.DataFrame | None):
-        """Filter/weight by exposure if configured and return X and target columns.
+        """
+        Filter and weight by exposure if configured and return X and target.
         
-        :param dataset: Input polars DataFrame (with split flag).
-        :type dataset: polars.DataFrame
-        :return: Tuple of (X, target_df_or_none) with 'is_train_obml' retained.
-        :rtype: tuple[polars.DataFrame, polars.DataFrame or None]
-        
-        .. rubric:: Examples
-        
-		.. code-block:: python
-        
-            X, target = engine._filter_data_by_exposure(split_df)
+        :param dataset: Input Polars' DataFrame.
+
+        :return: Tuple of X and target or None with an 'is_train_obml' column.
         """
         model_config = self._prepare_interface.get_model_config()
 
@@ -1308,7 +1302,10 @@ class PolarsInterface(PrepareEngine):
             logger.info("Polars Engine||Weighting target on exposure")
             X = dataset.filter(pl.col(model_config.column_exposure) > 0)
             target = (
-                X.select(pl.col(model_config.column_target) / pl.col(model_config.column_exposure), "is_train_obml")
+                X.select(
+                    pl.col(model_config.column_target) / pl.col(model_config.column_exposure),
+                    ColumnsNames.is_train_obml,
+                )
                 if model_config.column_target else None
             )
 
@@ -1316,7 +1313,7 @@ class PolarsInterface(PrepareEngine):
             logger.info("Polars Engine||Target without exposure")
             X = dataset
             target = (
-                X.select(model_config.column_target, "is_train_obml")
+                X.select(model_config.column_target, ColumnsNames.is_train_obml)
                 if model_config.column_target else None
             )
 
