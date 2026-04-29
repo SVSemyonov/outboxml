@@ -124,7 +124,7 @@ class OptiBinningEncoder(Encoder):
                     optb2 = ContinuousOptimalBinning(name=self._name, dtype='categorical',  **optbinning_params)
 
                     optb2.fit(
-                        pd.cut(self._X.loc[[i for i in self._train_ind if i in self._X.index]], bins=bins),
+                        pd.cut(self._X.loc[[i for i in self._train_ind if i in self._X.index]], bins=bins, precision=5),
                         self._y.loc[[i for i in self._train_ind if i in self._X.index]]
                     )
                     t2 = optb2.binning_table.build()
@@ -316,7 +316,7 @@ def feature_encoding_series(
             logger.info(f"{feature.name} || Encoding || WoE numerical to categorical")
         if feature.bins is not None:
             feature_data = feature_data.astype("float")
-            feature_data = pd.cut(feature_data, bins=feature.bins)
+            feature_data = pd.cut(feature_data, bins=feature.bins, precision=5)
         else:
             try:
                 feature_data = feature_data.astype("float")
@@ -327,7 +327,7 @@ def feature_encoding_series(
                     name=feature.name,
                     train_ind=train_ind,
                 ).encode_data(mapping=mapping, bins=bins, optbinning_params=feature.optbinning_params)
-                feature_data = pd.cut(feature_data, bins=bins)
+                feature_data = pd.cut(feature_data, bins=bins, precision=5)
             except Exception as e:
                 logger.error(f"{feature.name} || Encoding error || Cannot convert to WoE || {str(e)}")
                 if raise_on_error:
@@ -338,7 +338,7 @@ def feature_encoding_series(
             logger.info(f"{feature.name} || Encoding || WoE numerical to numerical")
         if feature.bins is not None and feature.mapping is not None:
             feature_data = feature_data.astype("float")
-            feature_data = pd.cut(feature_data, bins=bins).map(mapping).astype("float")
+            feature_data = pd.cut(feature_data, bins=bins, precision=5).map(mapping).astype("float")
         else:
             try:
                 feature_data = feature_data.astype("float")
