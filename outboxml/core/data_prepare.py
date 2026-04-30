@@ -1067,7 +1067,7 @@ def prepare_dataset(
                 elif as_pandas:
                     feature_data_train = (
                         data
-                        .loc[[i for i in train_ind if i in data.index] if train_ind else data.index]
+                        .loc[[i for i in train_ind if i in data.index]]
                         [feature.name]
                     )
 
