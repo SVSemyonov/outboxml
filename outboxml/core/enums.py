@@ -63,6 +63,7 @@ class SeparationParams(str, Enum):
 class ColumnsNames(str, Enum):
     is_train = "is_train"
     is_test = "is_test"
+    is_train_obml = "is_train_obml"
 
 
 class EncodingNames(str, Enum):

@@ -10,7 +10,7 @@ import pandas as pd
 import polars as pl
 from typing import Optional, Callable
 
-from outboxml.core.enums import SeparationParams, FeatureTypesForSelection
+from outboxml.core.enums import SeparationParams, FeatureTypesForSelection, ColumnsNames
 from outboxml.core.pydantic_models import ModelConfig, SeparationModelConfig, FeatureModelConfig, DataConfig
 from outboxml.core.data_prepare import PrepareDatasetResult
 from outboxml.extractors import Extractor
@@ -326,7 +326,7 @@ class TrainTestIndexesPl:
         :return: Dataset with the split column `is_train_obml`.
         """
 
-        if "is_train_obml" in self.dataset.columns:
+        if ColumnsNames.is_train_obml in self.dataset.columns:
             logger.info("Separation polars already exists")
 
         elif self._separation_config.kind == SeparationParams.rand:
@@ -342,7 +342,7 @@ class TrainTestIndexesPl:
             self.dataset = (
                 self.dataset
                 .with_columns(
-                    pl.lit(1).cast(pl.Int32).alias("is_train_obml")
+                    pl.lit(1).cast(pl.Int32).alias(ColumnsNames.is_train_obml)
                 )
             )
 
@@ -351,7 +351,7 @@ class TrainTestIndexesPl:
             self.dataset = (
                 self.dataset
                 .with_columns(
-                    pl.lit(1).cast(pl.Int32).alias("is_train_obml")
+                    pl.lit(1).cast(pl.Int32).alias(ColumnsNames.is_train_obml)
                 )
             )
 
@@ -423,7 +423,7 @@ class RandomSeparationPl(BaseSeparation):
                 .shuffle(seed=self._separation_config.random_state)
                 .gt(pl.len() * self._separation_config.test_train_proportion)
                 .cast(pl.Int32)
-                .alias("is_train_obml")
+                .alias(ColumnsNames.is_train_obml)
             )
         )
 
@@ -483,7 +483,7 @@ class DateSeparationPl(BaseSeparation):
                 .when(pl.col(column_period).is_between(*self._separation_config.test_period))
                 .then(pl.lit(0).cast(pl.Int32))
                 .otherwise(pl.lit(None))
-                .alias("is_train_obml")
+                .alias(ColumnsNames.is_train_obml)
             )
         )
 
