@@ -501,7 +501,7 @@ class DataSetsManager:
         """
         return self._data_preprocessor.data_subsets()
 
-    def fit_models(self, models_dict: dict = None, need_fit: bool = False, model_name: str = None,
+    def fit_models(self, models_dict: dict = None, need_fit: bool = False, model_name: str = None, calc_feature_importance: bool = False
                   ) -> dict:
         """Fit models and calculate metrics.
         
@@ -558,12 +558,6 @@ class DataSetsManager:
                                                ).result_dict(predictions={'train': predictions_train,
                                                                           'test': predictions_test})
 
-
-            feature_importances = FeatureImportance(model_name=model_name, model=model,)
-            feature_importances.calculate_importance(data=data_subset.X_test,
-                                                    target=data_subset.y_test,
-                                                    exposure=data_subset.exposure_test,
-                                                    )
             self._results[model_name] = DSManagerResult(model_name=model_name,
                                                         model=model,
                                                         config=self.config,
@@ -572,13 +566,29 @@ class DataSetsManager:
                                                             model_name].get_model_config(),
                                                         predictions={'train': predictions_train,
                                                                      'test': predictions_test},
-                                                        metrics=metrics[model_name],
-                                                        feature_importance=feature_importances)
+                                                        metrics=metrics[model_name])
+        if calc_feature_importance:
+            self._calculate_importances(self._results, use_test=True)
         try:
             metrics.update(self._calculate_business_metric())
         except Exception as exc:
             logger.error('Error while calculation business metric||'+ str(exc))
         return metrics
+
+    def _calculate_importances(
+            self,
+            results: dict,
+            use_test: bool = True,
+    ):
+
+        for model_name, ds_result in self._results.items():
+            feature_importances = FeatureImportance(
+                model_name=model_name,
+                model=ds_result.model,
+                data_subset=self._results[model_name].data_subset,
+            )
+            feature_importances.calculate_importance(use_test=use_test)
+            self._results[model_name].feature_importance = feature_importances
 
     def check_datadrift(self, model_name: str) -> pd.DataFrame:
         """Check data drift between train and test datasets.

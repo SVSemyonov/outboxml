@@ -3,37 +3,74 @@ import pandas as pd
 import numpy as np
 import shap
 import plotly.express as px
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict, Tuple
 
 from loguru import logger
+from shap.utils._exceptions import InvalidModelError
+from statsmodels.genmod.generalized_linear_model import GLMResultsWrapper
+
+from outboxml.data_subsets import ModelDataSubset
+from outboxml.models import GLMCatboostCombineModel, CatboostOverGLMModel
 
 
 class FeatureImportance:
-    def __init__(self, model_name: str, model: Any,):
+    def __init__(
+            self,
+            model_name: str,
+            model: Any,
+            data_subset: ModelDataSubset,
+    ):
         self.model_name = model_name
         self.model = model
-        self.importance_data = None
+        self.data_subset = data_subset
+        self.importance_data: Optional[List[Dict]] = None
+
+    def _get_explainer_items(self) -> Tuple[Any, List[str]]:
+
+        if isinstance(self.model, GLMCatboostCombineModel):
+            features = list(chain(self.model.features_numerical,
+                                  self.model.features_categorical))
+            return self.model.model, features
+
+        elif isinstance(self.model, (CatboostOverGLMModel, GLMResultsWrapper)):
+            # TODO
+            logger.warning(f"Can't calculate SHAP values for model class || {type(self.model)}")
+            return None, None
+        else:
+            features = self.data_subset.X_train.columns.tolist()
+            return self.model, features
 
     def calculate_importance(
             self,
-            data: pd.DataFrame,
-            target: pd.Series,
+            use_test: bool = True,
             calculate_directions: bool = True,
-            exposure: Optional[pd.Series] = None,
             zero_corr_threshold: float = 0.0
-    ):
+    ) -> List[Dict]:
         logger.debug(f"Calculating feature importance for model: {self.model_name}...")
+
+        model_to_explain, features = self._get_explainer_items()
+
+        if use_test and not self.data_subset.X_test.empty:
+            data = self.data_subset.X_test[features]
+            target = self.data_subset.y_test
+            exposure = getattr(self.data_subset, 'exposure_test', None)
+        else:
+            if use_test:
+                logger.warning("X_test is empty || Use X_train")
+            data = self.data_subset.X_train[features]
+            target = self.data_subset.y_train
+            exposure = getattr(self.data_subset, 'exposure_train', None)
+
         try:
-            features = list(chain(self.model.features_numerical, self.model.features_categorical))
-            shap_dict = self._calc_shap_values(self.model.model, data[features])
+            shap_dict = self._calc_shap_values(model_to_explain, data)
         except Exception as e:
-            logger.error(f"Cannot calculate SHAP values for {self.model_name} || {e}")
-            return
+            logger.error(f"Can't calculate SHAP values for {self.model_name}: {e}")
+            return []
 
         directions_dict = {}
         if calculate_directions:
             directions_dict = self._calc_features_directions(
-                data=data[features],
+                data=data,
                 target=target,
                 exposure=exposure,
                 zero_corr_threshold=zero_corr_threshold
@@ -47,20 +84,31 @@ class FeatureImportance:
             }
             if calculate_directions:
                 row['SIGN'] = directions_dict.get(feature, 0)
-
             result.append(row)
 
         self.importance_data = result
+        return result
 
-    def _calc_shap_values(self, model, data: pd.DataFrame) -> dict:
-        logger.info("Calculating SHAP values...")
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer(data)
+    def _calc_shap_values(self, model, data: pd.DataFrame) -> Dict[str, float]:
+        logger.info(f"Running SHAP explainer for {len(data)} samples...")
 
-        if isinstance(shap_values, list):  # Для мультикласса
-            values = np.abs(np.array([v.values for v in shap_values])).mean(axis=(0, 1))
+        try:
+            explainer = shap.TreeExplainer(model)
+            shap_values = explainer(data)
+        except (InvalidModelError, Exception):
+            predict_fn = model.predict if hasattr(model, 'predict') else model
+            explainer = shap.Explainer(predict_fn, data)
+            shap_values = explainer(data)
+
+        if hasattr(shap_values, "values"):
+            vals = shap_values.values
         else:
-            values = np.abs(shap_values.values).mean(axis=0)
+            vals = shap_values
+
+        if isinstance(vals, list):  # Мультикласс
+            values = np.abs(np.array(vals)).mean(axis=(0, 1))
+        else:
+            values = np.abs(vals).mean(axis=0)
 
         return dict(zip(data.columns, values))
 
@@ -70,57 +118,52 @@ class FeatureImportance:
             target: pd.Series,
             exposure: Optional[pd.Series] = None,
             zero_corr_threshold: float = 0.0
-    ) -> dict:
-        logger.info("Calculating features directions...")
-        X = data.copy()
-        y = target.copy()
+    ) -> Dict[str, int]:
+        logger.info("Calculating features directions via Spearman correlation...")
 
-        if exposure is not None:
+        working_data = data.copy()
+        working_target = target.copy()
+
+        if exposure is not None and not exposure.empty:
             valid_idx = exposure > 0
-            X = X[valid_idx]
-            y = y[valid_idx] / exposure[valid_idx]
+            working_data = working_data[valid_idx]
+            working_target = working_target[valid_idx] / exposure[valid_idx]
 
         directions = {}
-        for col in X.columns:
-            corr = X[col].corr(y, method='spearman')
+        for col in working_data.columns:
+            if pd.api.types.is_numeric_dtype(working_data[col]):
+                corr = working_data[col].corr(working_target, method='spearman')
 
-            if corr > zero_corr_threshold:
-                sign = 1
-            elif corr < -zero_corr_threshold:
-                sign = -1
+                if corr > zero_corr_threshold:
+                    sign = 1
+                elif corr < -zero_corr_threshold:
+                    sign = -1
+                else:
+                    sign = 0
             else:
                 sign = 0
-
             directions[col] = sign
 
         return directions
 
     def plot(self, show: bool = True):
-        logger.info("Plotting feature importance...")
-        df = pd.DataFrame(self.importance_data)
+        if not self.importance_data:
+            logger.error("No importance data to plot. Run calculate_importance() first.")
+            return None
 
+        df = pd.DataFrame(self.importance_data)
         df = df.sort_values('SHAP', ascending=True)
 
-        color_map_names = {
-            1: 'Direct',
-            -1: 'Inverse',
-            0: 'Neutral/Category'
-        }
-
-        color_discrete_map = {
-            'Direct': 'indianred',
-            'Inverse': 'royalblue',
-            'Neutral/Category': 'gray'
-        }
+        # Маппинг для легенды
+        color_map_names = {1: 'Direct', -1: 'Inverse', 0: 'Neutral/Category'}
+        color_discrete_map = {'Direct': 'indianred', 'Inverse': 'royalblue', 'Neutral/Category': 'gray'}
 
         if 'SIGN' in df.columns:
-            # Map numeric values to readable labels
             df['IMPACT'] = df['SIGN'].map(color_map_names)
             color_col = 'IMPACT'
         else:
             color_col = None
             color_discrete_map = None
-
 
         fig = px.bar(
             df,
@@ -129,17 +172,16 @@ class FeatureImportance:
             orientation='h',
             color=color_col,
             color_discrete_map=color_discrete_map,
-            title=f"Importance: {self.model_name}",
-            labels={'SHAP': 'Mean |SHAP|', 'FEATURE': 'FEATURE', 'SIGN': 'Тип влияния'}
+            title=f"Feature Importance (SHAP): {self.model_name}",
+            labels={'SHAP': 'Mean |SHAP|', 'FEATURE': 'Feature', 'IMPACT': 'Impact Type'}
         )
 
-        # 5. Настройка внешнего вида
         fig.update_layout(
-            height=max(400, len(df) * 30),
-            yaxis={'categoryorder': 'total ascending'},
+            height=max(400, len(df) * 25),
             template='plotly_white',
-            margin=dict(l=150)
+            yaxis={'categoryorder': 'total ascending'}
         )
+
         if show:
             fig.show()
         return fig
