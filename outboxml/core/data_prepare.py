@@ -1013,7 +1013,7 @@ def prepare_dataset(
             target = target.with_columns(pl.lit(1).alias(ColumnsNames.is_train_obml))
         data_dtypes = data.schema
         lazy_data: pl.LazyFrame = data.lazy()
-    elif isinstance(data, pd.DataFrame) and (isinstance(target, pd.DataFrame) or target is None):
+    elif isinstance(data, pd.DataFrame) and (isinstance(target, pd.Series) or target is None):
         as_pandas = True
         pd.options.mode.chained_assignment = None
         if train_ind is None:

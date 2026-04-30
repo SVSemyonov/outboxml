@@ -115,19 +115,19 @@ class FeatureModelConfig(BaseModel):
 
         return self
 
-    @model_validator(mode="after")
-    def check_clip(self):
-        # Numerical
-        if self.replace.get(FeatureEngineering.feature_type) == FeatureEngineering.numerical:
-            if not self.clip:
-                raise ConfigError(f"{self.name}: clip value is required for numerical feature")
-            else:
-                for key in [FeatureEngineering.min_value, FeatureEngineering.max_value]:
-                    val = self.clip.get(key)
-                    if not isinstance(val, (float, int)):
-                        raise ConfigError(f"{self.name}: invalid clip value for numerical feature")
-
-        return self
+    # @model_validator(mode="after")
+    # def check_clip(self):
+    #     # Numerical
+    #     if self.replace.get(FeatureEngineering.feature_type) == FeatureEngineering.numerical:
+    #         if not self.clip:
+    #             raise ConfigError(f"{self.name}: clip value is required for numerical feature")
+    #         else:
+    #             for key in [FeatureEngineering.min_value, FeatureEngineering.max_value]:
+    #                 val = self.clip.get(key)
+    #                 if not isinstance(val, (float, int)):
+    #                     raise ConfigError(f"{self.name}: invalid clip value for numerical feature")
+    #
+    #     return self
 
 
 class IntersectionModelConfig(BaseModel):
