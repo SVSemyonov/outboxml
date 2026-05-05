@@ -8,7 +8,7 @@ from outboxml.core.config_builders import FeatureBuilder
 from outboxml.core.data_prepare import prepare_dataset
 import pandas as pd
 import polars as pl
-from typing import Optional, Callable
+from typing import Optional, Callable, List
 
 from outboxml.core.enums import SeparationParams, FeatureTypesForSelection, ColumnsNames
 from outboxml.core.pydantic_models import ModelConfig, SeparationModelConfig, FeatureModelConfig, DataConfig
@@ -108,9 +108,6 @@ class PrepareDataset(BasePrepareDataset):
         :return: An instance of the PrepareDatasetResult class.
         """
 
-        if self._model_config.data_filter_condition is not None:
-            data = data.query(self._model_config.data_filter_condition)
-
         if self._data_pred_prep_func is not None:
             logger.info('User pred prep function')
             try:
@@ -179,19 +176,17 @@ class PrepareDatasetPl(BasePrepareDataset):
         self._check_prepared: bool = check_prepared
 
     def prepare_dataset(
-            self, data: pl.DataFrame, target: pl.DataFrame | None = None
+            self, data: pl.DataFrame, target: pl.DataFrame | None = None, extra_columns_list: List[str] | None = None
     ) -> PrepareDatasetResult:
         """
         Prepares dataset in Polars format.
 
         :param data: Dataset.
         :param target: Target's values.
+        :param extra_columns_list: List of extra columns to be added to the dataset.
 
         :return: An instance of the PrepareDatasetResult class.
         """
-
-        if self._model_config.data_filter_condition is not None:
-            data = data.filter(self._model_config.data_filter_condition)
 
         if self._data_pred_prep_func is not None:
             logger.info("User pred prep polars function")
@@ -202,7 +197,7 @@ class PrepareDatasetPl(BasePrepareDataset):
                 logger.error("User pred prep error")
                 raise NotImplementedError("User pred prep error")
 
-        prepare_dataset_result = self._prepare_dataset(data, target)
+        prepare_dataset_result = self._prepare_dataset(data, target, extra_columns_list=extra_columns_list)
 
         if self._data_post_prep_func is not None:
             logger.info("User post prep polars function")
@@ -216,7 +211,7 @@ class PrepareDatasetPl(BasePrepareDataset):
         return prepare_dataset_result
 
     def _prepare_dataset(
-            self, data: pl.DataFrame, target: pl.DataFrame | None = None
+            self, data: pl.DataFrame, target: pl.DataFrame | None = None, extra_columns_list: List[str] | None = None
     ) -> PrepareDatasetResult:
 
         prepare_dataset_result = prepare_dataset(
@@ -231,6 +226,7 @@ class PrepareDatasetPl(BasePrepareDataset):
             log=True,
             modify_dtypes=True,
             raise_on_encoding_error=True,
+            extra_columns_list=extra_columns_list,
         )
 
         return prepare_dataset_result

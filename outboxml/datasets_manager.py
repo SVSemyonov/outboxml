@@ -380,8 +380,8 @@ class DataSetsManager:
             self._external_config = config
         else:
             self._external_config = external_config
-        self._work_type_fit = self._external_config.work_type_fit
-        self._work_type_hptune = self._external_config.work_type_hptune
+        self._work_type_fit = self._external_config.work_type_fit if "work_type_fit" in self._external_config.__dict__ else "CPU"
+        self._work_type_hptune = self._external_config.work_type_hptune if "work_type_hptune" in self._external_config.__dict__ else "CPU"
         self._use_temp_files = use_temp_files
         self._prepare_engine = prepare_engine
         self._exposure = {}
