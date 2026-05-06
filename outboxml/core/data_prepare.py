@@ -498,7 +498,7 @@ def dict_replace_pl(
             except ValueError:
                 pass
         else:
-            dict_replace_temp[key] = str(new_val) if new_val is not None else None
+            dict_replace_temp[key.upper()] = str(new_val).upper() if new_val is not None else None
 
     return dict_replace_temp
 
@@ -741,7 +741,11 @@ def prepare_categorical_feature_pl(
         lazy_data
         .with_columns(
             pl.when(
-                ~pl.col(feature.name).is_in(dict_replace_temp)
+                ~(
+                    pl.col(feature.name).is_in(dict_replace_temp)
+                    if data_dtypes[feature.name].is_numeric()
+                    else pl.col(feature.name).str.to_uppercase().is_in(dict_replace_temp)
+                )
                 & pl.col(feature.name).is_not_null()
                 & (pl.col(feature.name).is_not_nan() if data_dtypes[feature.name].is_numeric() else True)
             )
@@ -978,7 +982,8 @@ def prepare_dataset(
         target: Optional[pd.Series | pl.DataFrame] = None,
         log: bool = True,
         modify_dtypes: bool = True,
-        raise_on_encoding_error: bool = False
+        raise_on_encoding_error: bool = False,
+        extra_columns_list: List[str] | None = None,
 ) -> PrepareDatasetResult:
     """
     Prepare dataset. Input data should be Pandas' or Polars' DataFrame or dict of feature and value pairs.
@@ -996,6 +1001,7 @@ def prepare_dataset(
     :param log: Whether to log the process.
     :param modify_dtypes: Whether to modify dtypes to int32, float32 and category respectively.
     :param raise_on_encoding_error: Whether to raise if an encoding error occurs.
+    :param extra_columns_list: List of extra columns to be added to the dataset (for Polars only).
 
     :return: An instance of the PrepareDatasetResult class.
     """
@@ -1148,11 +1154,13 @@ def prepare_dataset(
 
         for feature in model_config.features:
             if feature.replace.get(FeatureEngineering.feature_type) != FeatureEngineering.numerical:
-                replace_dict = dict_replace(feature=feature, dtype=FeaturesTypes.categorical)
 
                 if as_pandas:
+                    replace_dict = dict_replace(feature=feature, dtype=FeaturesTypes.categorical)
                     drop_values = find_drop_values(data[feature.name], replace_dict, train_ind)
+
                 elif as_polars:
+                    replace_dict = dict_replace_pl(feature=feature, is_numeric_dtype=data_dtypes[feature.name].is_numeric())
                     drop_values = find_drop_values_pl(
                         data.filter(pl.col(ColumnsNames.is_train_obml) == 1)[feature.name],
                         replace_dict,
@@ -1212,14 +1220,14 @@ def prepare_dataset(
                 feature_data=feature_data[feature.name],
                 feature=feature,
                 target=target.to_pandas()[model_config.column_target] if target is not None else pd.Series(),
-                train_ind=feature_data.loc[ColumnsNames.is_train_obml == 1].index,
+                train_ind=feature_data.loc[feature_data[ColumnsNames.is_train_obml] == 1].index,
                 log=log,
                 raise_on_error=raise_on_encoding_error,
             )
             data = (
                 data
                 .with_columns(
-                    encoded_data.alias(feature.name)
+                    pl.from_pandas(encoded_data).alias(feature.name)
                 )
             )
             feature.mapping = mapping
@@ -1238,10 +1246,16 @@ def prepare_dataset(
         data = pd.DataFrame([data])
 
     elif as_polars:
-        data = lazy_data.select(features_all)
+        data = data.select(
+            [ColumnsNames.is_train_obml, model_config.column_target]
+            + ([model_config.column_exposure] if model_config.column_exposure is not None else [])
+            + ([model_config.column_weight] if model_config.column_weight is not None else [])
+            + (extra_columns_list if extra_columns_list is not None else [])
+            + features_all
+        )
         data_dtypes_prepared = data.schema
-        features_categorical = [feature for feature in features_all if not data_dtypes_prepared[feature].is_numeric()]
-        features_numerical = [feature for feature in features_all if data_dtypes_prepared[feature].is_numeric()]
+        features_categorical = [feature_name for feature_name in features_all if not data_dtypes_prepared[feature_name].is_numeric()]
+        features_numerical = [feature_name for feature_name in features_all if data_dtypes_prepared[feature_name].is_numeric()]
 
     else:
         data = data[features_all]

@@ -4,7 +4,7 @@ from abc import abstractmethod, ABC
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Dict, Union, Callable, Literal
+from typing import Optional, List, Dict, Union, Callable, Literal, Tuple
 import multiprocessing as mp
 
 import pandas as pd
@@ -209,7 +209,7 @@ class ModelDataSubset:
     def load_subset_pl(
             cls,
             model_name: str,
-            data: pl.DataFrame,
+            X: pl.DataFrame,
             features_numerical: Optional[List[str]] = None,
             features_categorical: Optional[List[str]] = None,
             column_exposure: Optional[str] = None,
@@ -224,8 +224,8 @@ class ModelDataSubset:
         
         :param model_name: Model name for the subset.
         :type model_name: str
-        :param data: Polars DataFrame with an 'is_train_obml' column.
-        :type data: polars.DataFrame
+        :param X: Polars DataFrame with an 'is_train_obml' column.
+        :type X: polars.DataFrame
         :param features_numerical: Numerical feature names.
         :type features_numerical: list[str], optional
         :param features_categorical: Categorical feature names.
@@ -264,14 +264,24 @@ class ModelDataSubset:
                 extra_columns_list=["keep_me"],
             )
         """
-        X = data.to_pandas()
+        X = X.to_pandas()
 
-        X_train = X.loc[X[ColumnsNames.is_train_obml] == 1].drop(columns=[ColumnsNames.is_train_obml])
+        X_train = X.loc[X[ColumnsNames.is_train_obml] == 1].drop(columns=(
+            [ColumnsNames.is_train_obml, column_target]
+            + ([column_exposure] if column_exposure else [])
+            + ([column_weight] if column_weight else [])
+            + (extra_columns_list if extra_columns_list else [])
+        ))
         y_train = X.loc[X[ColumnsNames.is_train_obml] == 1][column_target] if column_target else pd.Series()
         exposure_train = X.loc[X[ColumnsNames.is_train_obml] == 1][column_exposure] if column_exposure else None
         sample_weight_train = X.loc[X[ColumnsNames.is_train_obml] == 1][column_weight] if column_weight else None
 
-        X_test = X.loc[X[ColumnsNames.is_train_obml] == 0].drop(columns=[ColumnsNames.is_train_obml])
+        X_test = X.loc[X[ColumnsNames.is_train_obml] == 0].drop(columns=(
+            [ColumnsNames.is_train_obml, column_target]
+            + ([column_exposure] if column_exposure else [])
+            + ([column_weight] if column_weight else [])
+            + (extra_columns_list if extra_columns_list else [])
+        ))
         y_test = X.loc[X[ColumnsNames.is_train_obml] == 0][column_target] if column_target else pd.Series()
         exposure_test = X.loc[X[ColumnsNames.is_train_obml] == 0][column_exposure] if column_exposure else None
         sample_weight_test = X.loc[X[ColumnsNames.is_train_obml] == 0][column_weight] if column_weight else None
@@ -1167,6 +1177,11 @@ class PandasInterface(PrepareEngine):
         index_train, index_test = self.get_train_test_indexes()
         model_config = self._prepare_interface.get_model_config()
         model_name = model_config.name
+
+        if model_config.data_filter_condition is not None:
+            logger.info("Pandas Engine||Filtering data on model condition")
+            self.dataset = self.dataset.query(self._model_config.data_filter_condition)
+
         X, y, target = self._filter_data_by_exposure(model_name=model_name, dataset=self.dataset)
 
         if prepare_func is not None:
@@ -1294,7 +1309,7 @@ class PolarsInterface(PrepareEngine):
             data: pl.DataFrame,
             prepare_interface: PrepareDatasetPl,
             separation_config: SeparationModelConfig,
-            extra_columns: List[str] | None = None
+            extra_columns: List[str] | None = None,
     ):
         if not isinstance(data, pl.DataFrame):
             logger.error(f"PolarsEngine||data must be polars DataFrame, get {type(data)}")
@@ -1326,7 +1341,7 @@ class PolarsInterface(PrepareEngine):
             dataset=self.dataset, separation_config=self.separation_config
         ).train_test_split()
 
-    def _filter_data_by_exposure(self, dataset: pl.DataFrame) -> (pl.DataFrame, pl.DataFrame | None):
+    def _filter_data_by_exposure(self, dataset: pl.DataFrame) -> Tuple[pl.DataFrame, pl.DataFrame | None]:
         """
         Filter and weight by exposure if configured and return X and target.
         
@@ -1387,18 +1402,24 @@ class PolarsInterface(PrepareEngine):
         model_config = self._prepare_interface.get_model_config()
         model_name = model_config.name
 
+        if model_config.data_filter_condition is not None:
+            logger.info("Polars Engine||Filtering data on model condition")
+            self.dataset = self.dataset.filter(model_config.data_filter_condition)
+
         X, target = self._filter_data_by_exposure(self.dataset)
 
         if prepare_func is not None:
             prepare_dataset_result = prepare_func(X, target, **args_dict)
         else:
-            prepare_dataset_result = self._prepare_interface.prepare_dataset(X, target)
+            prepare_dataset_result = self._prepare_interface.prepare_dataset(
+                X, target, extra_columns_list=self._extra_columns_list
+            )
 
         self._prepare_interface._model_config = deepcopy(prepare_dataset_result.model_config)
 
         data_subset = ModelDataSubset.load_subset_pl(
             model_name=model_name,
-            data=prepare_dataset_result.data,
+            X=prepare_dataset_result.data,
             features_numerical=prepare_dataset_result.features_numerical,
             features_categorical=prepare_dataset_result.features_categorical,
             column_exposure=model_config.column_exposure if model_config.column_exposure else None,
