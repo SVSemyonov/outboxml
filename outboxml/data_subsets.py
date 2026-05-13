@@ -1180,9 +1180,11 @@ class PandasInterface(PrepareEngine):
 
         if model_config.data_filter_condition is not None:
             logger.info("Pandas Engine||Filtering data on model condition")
-            self.dataset = self.dataset.query(self._model_config.data_filter_condition)
+            dataset = self.dataset.query(model_config.data_filter_condition)
+        else:
+            dataset = self.dataset
 
-        X, y, target = self._filter_data_by_exposure(model_name=model_name, dataset=self.dataset)
+        X, y, target = self._filter_data_by_exposure(model_name=model_name, dataset=dataset)
 
         if prepare_func is not None:
             prepare_dataset_result = prepare_func(X, index_train, index_test, target,
@@ -1352,7 +1354,7 @@ class PolarsInterface(PrepareEngine):
         model_config = self._prepare_interface.get_model_config()
 
         if model_config.column_exposure:
-            logger.info("Polars Engine||Weighting target on exposure")
+            logger.info("Polars Engine | Weighting target on exposure.")
             X = dataset.filter(pl.col(model_config.column_exposure) > 0)
             target = (
                 X.select(
@@ -1363,7 +1365,7 @@ class PolarsInterface(PrepareEngine):
             )
 
         else:
-            logger.info("Polars Engine||Target without exposure")
+            logger.info("Polars Engine | Target without exposure.")
             X = dataset
             target = (
                 X.select(model_config.column_target, ColumnsNames.is_train_obml)
@@ -1375,7 +1377,8 @@ class PolarsInterface(PrepareEngine):
     def prepared_subset(
             self,  prepare_func: Callable = None, args_dict: dict = None
     ) -> ModelDataSubset:
-        """Prepare a subset using polars path and return ModelDataSubset.
+        """
+        Prepare a subset using Polars and return ModelDataSubset.
         
         :param prepare_func: Optional custom function to prepare the dataset.
             Signature should be (X_pl_df, target_pl_df_or_none, **kwargs).
@@ -1403,10 +1406,23 @@ class PolarsInterface(PrepareEngine):
         model_name = model_config.name
 
         if model_config.data_filter_condition is not None:
-            logger.info("Polars Engine||Filtering data on model condition")
-            self.dataset = self.dataset.filter(model_config.data_filter_condition)
+            logger.info(f"Polars Engine | Filtering data on model condition {model_config.data_filter_condition}.")
+            query = " ".join([
+                "select *",
+                "from self",
+                f"where {model_config.data_filter_condition.replace('&', 'and')}",
+            ])
+            dataset = self.dataset.sql(query)
+            if not dataset.is_empty():
+                logger.debug(f"Data is filtered | shape: {dataset.shape}.")
+            else:
+                logger.error(f"No data after filtering.")
+                raise ValueError(f"No data after filtering.")
 
-        X, target = self._filter_data_by_exposure(self.dataset)
+        else:
+            dataset = self.dataset
+
+        X, target = self._filter_data_by_exposure(dataset)
 
         if prepare_func is not None:
             prepare_dataset_result = prepare_func(X, target, **args_dict)
@@ -1428,5 +1444,5 @@ class PolarsInterface(PrepareEngine):
             extra_columns_list=self._extra_columns_list,
         )
 
-        logger.debug('Model ' + model_name + ' || Data preparation finished')
+        logger.debug(f"Model '{model_name}' | Data preparation finished.")
         return data_subset
