@@ -1160,7 +1160,7 @@ def prepare_dataset(
                     drop_values = find_drop_values(data[feature.name], replace_dict, train_ind)
 
                 elif as_polars:
-                    replace_dict = dict_replace_pl(feature=feature, is_numeric_dtype=data_dtypes[feature.name].is_numeric())
+                    replace_dict = dict_replace_pl(feature=feature, is_numeric_dtype=False)
                     drop_values = find_drop_values_pl(
                         data.filter(pl.col(ColumnsNames.is_train_obml) == 1)[feature.name],
                         replace_dict,
