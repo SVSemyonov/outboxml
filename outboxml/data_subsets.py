@@ -1410,7 +1410,7 @@ class PolarsInterface(PrepareEngine):
             query = " ".join([
                 "select *",
                 "from self",
-                f"where {model_config.data_filter_condition.replace("&", "and")}",
+                f"where {model_config.data_filter_condition.replace('&', 'and')}",
             ])
             dataset = self.dataset.sql(query)
             if not dataset.is_empty():
