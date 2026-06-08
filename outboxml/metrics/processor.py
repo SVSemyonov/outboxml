@@ -11,10 +11,25 @@ from outboxml.metrics.base_metrics import BaseMetrics
 
 
 class ModelMetrics:
+    """Class for calculating model metrics for different model types.
+    
+    Supports classification, regression, and clustering model types.
+    Calculates metrics for full datasets and data slices if configured.
+    """
+    
     def __init__(self,
                  model_config: ModelConfig,
                  data_subset: ModelDataSubset,
                  data_config: DataModelConfig=None):
+        """Initialize ModelMetrics instance.
+        
+        :param model_config: Configuration object for the model.
+        :type model_config: ModelConfig
+        :param data_subset: Object containing train/test data subsets.
+        :type data_subset: ModelDataSubset
+        :param data_config: Optional configuration for data slices and preprocessing.
+        :type data_config: DataModelConfig, optional
+        """
         self._data_config = data_config
         self._model_config = model_config
         self._data_subset = data_subset
@@ -27,6 +42,20 @@ class ModelMetrics:
 
 
     def result_dict(self, predictions: Dict[str, pd.Series])->dict:
+        """Calculate metrics dictionary for train and test predictions.
+        
+        :param predictions: Dictionary with 'train' and 'test' keys containing prediction Series.
+        :type predictions: Dict[str, pd.Series]
+        :return: Dictionary with metrics for train and test sets, including slice metrics if configured.
+        :rtype: dict
+        
+        .. rubric:: Examples
+        
+        >>> predictions = {'train': train_pred, 'test': test_pred}
+        >>> metrics = model_metrics.result_dict(predictions)
+        >>> metrics['train']['full']
+        {'mae': 0.1234, 'rmse': 0.5678, 'r2': 0.9012}
+        """
         logger.debug(f'Model metrics {self.model_type}||{self._model_config.name}')
 
         result_metrics = {'train': {}, 'test':{}}
@@ -53,6 +82,23 @@ class ModelMetrics:
         return result_metrics
 
     def calculate_metrics(self, y_pred: pd.Series, y_true: pd.Series=None, weights: pd.Series=None):
+        """Calculate metrics for given predictions and true values.
+        
+        :param y_pred: Series of predicted values.
+        :type y_pred: pd.Series
+        :param y_true: Series of true values. Optional for clustering models.
+        :type y_true: pd.Series, optional
+        :param weights: Series of exposure/weight values for weighted metrics.
+        :type weights: pd.Series, optional
+        :return: Dictionary containing calculated metrics based on model type.
+        :rtype: dict
+        
+        .. rubric:: Examples
+        
+        >>> metrics = model_metrics.calculate_metrics(y_pred=pred, y_true=actual, weights=exposure)
+        >>> metrics
+        {'mae': 0.1234, 'rmse': 0.5678, 'r2': 0.9012}
+        """
 
         logger.debug('Calculating metrics')
         metrics_dict = BaseMetrics(y_true=y_true,y_pred=y_pred, exposure=weights,
@@ -61,9 +107,23 @@ class ModelMetrics:
         return metrics_dict
 
     def _metric_loop(self, X: pd.DataFrame, y_pred: pd.Series, y_true: pd.Series=None, weights: pd.Series=None) -> Dict[str, dict]:
-       results = {}
-       slicedDf = pd.DataFrame()
-       for data_slice in self._data_config.data.targetslices:
+        """Calculate metrics for each data slice defined in data_config.
+        
+        :param X: DataFrame with feature data used for slicing.
+        :type X: pd.DataFrame
+        :param y_pred: Series of predicted values.
+        :type y_pred: pd.Series
+        :param y_true: Series of true values. Optional for clustering models.
+        :type y_true: pd.Series, optional
+        :param weights: Series of exposure/weight values for weighted metrics.
+        :type weights: pd.Series, optional
+        :return: Dictionary with slice names as keys and metric dictionaries as values.
+        :rtype: Dict[str, dict]
+        :raises Exception: If slice type is not 'numerical' or 'categorical'.
+        """
+        results = {}
+        slicedDf = pd.DataFrame()
+        for data_slice in self._data_config.data.targetslices:
 
             logger.info('Model metrics||Collecting slices')
             logger.info('Metrics for slice ' + data_slice['column'])
@@ -91,6 +151,6 @@ class ModelMetrics:
                                                            weights=weights_indexed)
 
 
-       return results
+        return results
 
 

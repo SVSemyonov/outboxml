@@ -28,6 +28,7 @@ class ModelConfigBuilder(ConfigBuilder):
         self.features: List[FeatureModelConfig] = params.get('features', [])
         self.column_target: Optional[str] = params.get('column_target')
         self.column_exposure: Optional[str] = params.get('column_exposure')
+        self.column_weight: Optional[str] = params.get('column_weight')
         self.relative_features: Optional[List] = params.get('relative_features', [])
         self.intersections:[] = None
         self.params_catboost: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = params.get('params_catboost')
@@ -44,6 +45,7 @@ class ModelConfigBuilder(ConfigBuilder):
                            wrapper=self.wrapper,
                            column_target=self.column_target,
                            column_exposure=self.column_exposure,
+                           column_weight=self.column_weight,
                            relative_features=self.relative_features,
                            features=self.features,
                            params_catboost=self.params_catboost,

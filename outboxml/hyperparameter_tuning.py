@@ -1,3 +1,4 @@
+"""Module for hyperparameter tuning using optuna algorithm."""
 from typing import Callable, Union
 import pandas as pd
 from catboost import CatBoostRegressor, CatBoostClassifier
@@ -13,9 +14,11 @@ from outboxml.datasets_manager import DataSetsManager, ModelDataSubset
 from outboxml.models import StatsModelsEstimator
 
 class OptunaModel:
+    """Legacy class. Not used."""
     def __init__(self,):
         pass
 class HPTuningData:
+    """Class for storage data for hyperparameter tuning."""
     def __init__(self,
                  X_train: pd.DataFrame,
                  y_train: pd.Series,
@@ -23,10 +26,33 @@ class HPTuningData:
                  y_test: pd.Series,
                  exposure_train: pd.Series,
                  exposure_test: pd.Series,
+                 sample_weight_train: pd.Series,
+                 sample_weight_test: pd.Series,
                  features_numerical,
                  features_categorical):
+        """Initialization.
+
+        :param X_train: Train dataset with factors.
+        :type X_train: pd.DataFrame
+        :param y_train: Train series with target.
+        :type y_train: pd.Series
+        :param X_test: Test dataset with factors.
+        :type X_test: pd.DataFrame
+        :param y_test: Test series with target.
+        :type y_test: pd.Series
+        :param exposure_train: Train series with exposure column.
+        :type exposure_train: pd.Series
+        :param exposure_test: Test series with exposure column.
+        :type exposure_test: pd.Series
+        :param features_numerical: Array of numerical features.
+        :type features_numerical: list[str]
+        :param features_categorical: Array of categorical features.
+        :type features_categorical: list[str]
+        """
         self.exposure_test = exposure_test
         self.exposure_train = exposure_train
+        self.sample_weight_train = sample_weight_train
+        self.sample_weight_test = sample_weight_test
         self.y_train = y_train
         self.X_train = X_train
         self.X_test = X_test
@@ -37,7 +63,14 @@ class HPTuningData:
 
     @classmethod
     def load_from_ds_manager_subset(cls, data_subset: ModelDataSubset):
+        """
+        Create class instance using model dataset object.
 
+        :param data_subset: Model dataset.
+        :type data_subset: ModelDataSubset
+        :return: Class instance.
+        :rtype: HPTuningData
+        """
         features_numerical = data_subset.features_numerical
         features_categorical = data_subset.features_categorical
         exposure_train = data_subset.exposure_train# if data_subset.exposure_train else 1
@@ -47,14 +80,16 @@ class HPTuningData:
                    y_test=data_subset.y_test,
                    exposure_train=exposure_train,
                    exposure_test=data_subset.exposure_test,
+                   sample_weight_train=data_subset.sample_weight_train,
+                   sample_weight_test=data_subset.sample_weight_test,
                    features_numerical=features_numerical,
                    features_categorical=features_categorical)
 
 
 class HPTuning:
-    """Класс для подбора гиперпараметров на основе optuna решателя.
-    Для задания параметров необходима функция вида:
+    """Class for hyperparameter tuning using optuna algorithm.
 
+    To set the range of hyperparameters values pass function like this:
     def parameters_for_optuna(trial):
         return {
             'iterations': trial.suggest_int('iterations', 100, 1200, step=100),
@@ -65,30 +100,7 @@ class HPTuning:
             'colsample_bylevel': trial.suggest_float("colsample_bylevel", 0.05, 1.0),
             'min_data_in_leaf': trial.suggest_int("min_data_in_leaf", 1, 101, step=10),
         }
-
-    Parameters:
-    ____________
-    ds_manager: Initilized DS Manager with preprared_datasets
-
-    sampler: Name of optuna sampler 'TPE', 'RandomSampler' or'CmaEsSampler':
-
-    model: external model
-
-    scoring_fun: function for calculating score for CV callback of str name from sklearn.metrics
-
-    folds_num_for_cv: number of KFolds for CV
-
-    objective = objective of model
-
-    random_state = seed for sampler
-    ___________
-    Methods
-    _________
-    best_params( model_name: str, scoring_fun: Callable = None, trials: int = 100, direction: str = 'maximize')
-        - returns best dict of params values
-
-    parameters_for_optuna(trial) : parmeters setting method for optuna API
-    """
+  """
 
     def __init__(self,
                  data_preprocessor: DataPreprocessor,
@@ -100,7 +112,24 @@ class HPTuning:
                  random_state: int = 42,
                  work_type: str = 'CPU'
                  ):
+        """Initialization.
 
+        :param data_preprocessor: Object of data processing.
+        :type data_preprocessor: DataPreprocessor
+        :param sampler: Sampler of optuna algorith: 'TPE', 'RandomSampler', 'CmaEsSampler', None.
+        :type sampler: str
+        :param model: Default model using in hyperparameter tuning.
+        :param scoring_fun: Default scoring function for calculating score for cross-validation. Name from sklearn.metrics.
+        :type scoring_fun: Callable
+        :param folds_num_for_cv: Cross-validation folds count.
+        :type folds_num_for_cv: int
+        :param objective: Default model objective.
+        :type objective: str
+        :param random_state: Seed for sampler.
+        :type  random_state: int
+        :param work_type: Work type: 'CPU', 'GPU'.
+        :type work_type: str
+        """
         self._glm_model = None
         self._folds_num = folds_num_for_cv
         self._data_preprocessor = data_preprocessor
@@ -119,6 +148,15 @@ class HPTuning:
 
     @staticmethod
     def parameters_for_optuna(trial, work_type: str = 'CPU'):
+        """Default function for calculation hyperparameters values for current trial.
+
+        :param trial: Trial of hyperparameter tuning.
+        :type trial: optuna.trial.Trial
+        :param work_type: Work type: 'CPU', 'GPU'.
+        :type work_type: str
+        :return: Hyperparameters values for current trial.
+        :rtype: dict
+        """
         parameters = {
             'iterations': trial.suggest_int('iterations', 100, 1200, step=100),
             'depth': trial.suggest_int('depth', 1, 15, step=2),
@@ -136,8 +174,61 @@ class HPTuning:
         return parameters
 
 
-    def best_params(self, model_name: str, scoring_fun: Callable = None, trials: int = 100, direction: str = 'maximize',
+    def best_params(self, model_name: str, scoring_fun: Callable = None, trials: int = 100, n_jobs:int = -1, direction: str = 'maximize',
                     parameters_for_optuna_func: Callable = None, timeout=None):
+        """Calculation the best hyperparameters.
+
+        :param model_name: Model name.
+        :type model_name: str
+        :param scoring_fun: Scoring function.
+        :type scoring_fun: Callable
+        :param trials: Trials count.
+        :type trials: int
+        :param direction: Optimization direction: 'minimize', 'maximize'.
+        :type direction: str
+        :param parameters_for_optuna_func:  Function for calculation hyperparameters values for current trial.
+        :type parameters_for_optuna_func: Callable
+        :param timeout: Hyperparameter tuning timeout is seconds.
+        :type timeout: float
+        :return: Best hyperparameters.
+        :type: dict[str, Any]
+
+        .. rubric:: Example
+
+        def titanic_parameters_for_optuna(trial):
+            parameters = {
+                'iterations': trial.suggest_int('iterations', 100, 1200, step=100),
+                'depth': trial.suggest_int('depth', 1, 15, step=2),
+            }
+            return parameters
+
+        tuning = HPTuning(
+             titanic_data_preprocessor,
+             sampler='TPE',
+             model=None,
+             scoring_fun='neg_mean_absolute_error',
+             folds_num_for_cv=3,
+             objective='RMSE',
+             random_state=42,
+             work_type='CPU'
+        )
+        best_params2 = tuning.best_params(
+            model_name='titanic_first',
+            scoring_fun='neg_mean_absolute_error',
+            trials=50,
+            direction='maximize',
+            parameters_for_optuna_func=titanic_parameters_for_optuna,
+            timeout=600
+        )
+        best_params2 = tuning.best_params(
+            model_name='titanic_first',
+            scoring_fun='neg_mean_poisson_deviance',
+            trials=50,
+            direction='maximize',
+            parameters_for_optuna_func=titanic_parameters_for_optuna,
+            timeout=600
+        )
+        """
         logger.debug('HP Tuning||Preparing data')
         hp_tuning_data = self._prepare_data(model_name)
         if scoring_fun is None:
@@ -146,7 +237,7 @@ class HPTuning:
         if self._model is None:
             self._model = self._load_model_from_config(model_name, hp_tuning_data)
         logger.debug('Optimizing...')
-        best_params = self._optimize(model_name, hp_tuning_data,  scoring_fun, trials, direction,
+        best_params = self._optimize(model_name, hp_tuning_data,  scoring_fun, trials, n_jobs, direction,
                                      parameters_for_optuna_func, timeout=timeout)
         self._write_parameters(model_name, best_params)
         return best_params
@@ -191,8 +282,17 @@ class HPTuning:
                             thread_count=-1,
                             objective=objective, verbose=False,
                             **parameters)
+        sample_weight = hp_tuning_data.sample_weight_train
+        if hp_tuning_data.exposure_train is not None and sample_weight is not None:
+            sample_weight = hp_tuning_data.exposure_train * sample_weight
+        elif hp_tuning_data.exposure_train is not None:
+            sample_weight = hp_tuning_data.exposure_train
 
-        return model, None
+        fit_params = None
+        if sample_weight is not None:
+            fit_params = {"sample_weight": sample_weight}
+
+        return model, fit_params
 
     def _prepare_xgb(self, model_name: str, parameters):
         if self.result_configs[model_name].objective is not None:
@@ -231,11 +331,11 @@ class HPTuning:
                   hp_tuning_data: HPTuningData,
                   scoring_fun: Callable,
                   trials: int,
+                  n_jobs: int = -1,
                   direction: str='maximize',
                   parameters_for_optuna_func: Callable=None,
                   timeout=None):
 
-        n_jobs = -1
         X = hp_tuning_data.X_train
         y_train = hp_tuning_data.y_train
         if hp_tuning_data.exposure_train is not None:

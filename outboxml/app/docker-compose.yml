@@ -97,7 +97,8 @@ services:
     image: tiangolo/uvicorn-gunicorn-fastapi:python3.11
     container_name: fastapi
     command: >
-      sh -c "python -m pip cache purge &&
+      sh -c "python -m pip cache purge && 
+      pip install --upgrade pip && 
       pip install --no-cache-dir -r /app/requirements.txt &&
       uvicorn main_app:app --host 0.0.0.0 --port 8000 --reload
       "

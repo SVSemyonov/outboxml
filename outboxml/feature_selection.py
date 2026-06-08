@@ -24,24 +24,45 @@ correlation filtering, and CV stability checks.
 
 
 class SelectionInterface(ABC):
-    """Base interface for feature selection algorithms."""
+    """Base interface for feature selection algorithms.
+
+    Abstract base class that defines the interface for feature selection
+    implementations. All feature selection algorithms should inherit from
+    this class and implement the ``feature_selection`` method.
+    """
     def feature_selection(self, *params) -> list:
         """Main feature selection method.
 
+        This method should be implemented by subclasses to perform the
+        actual feature selection logic.
+
+        :param *params: Variable number of parameters depending on the
+            specific implementation.
         :return: List of selected feature names.
-        :rtype: list
+        :rtype: list[str]
         """
         pass
 
 
 class FeatureSelection(ABC):
-    """Abstract base class for feature selection implementations."""
-    def select_features(self, *params)->ModelDataSubset:
-        """Executes feature selection.
+    """Abstract base class for feature selection implementations.
 
-                :return: Dataset subset with selected features.
-                :rtype: ModelDataSubset
-                """
+    This class provides the interface for feature selection that returns
+    a ModelDataSubset with selected features. Subclasses should implement
+    the ``select_features`` method.
+    """
+    def select_features(self, *params) -> ModelDataSubset:
+        """Execute feature selection.
+
+        This method should be implemented by subclasses to perform feature
+        selection and return a ModelDataSubset containing only the selected
+        features.
+
+        :param *params: Variable number of parameters depending on the
+            specific implementation.
+        :return: Dataset subset with selected features.
+        :rtype: ModelDataSubset
+        """
         pass
 
 
@@ -59,7 +80,15 @@ class FeatureSelectionInterface(SelectionInterface):
     """
 
     def __init__(self, feature_selection_config: FeatureSelectionConfig, objective: str = 'RMSE'):
-        """Initializes feature selection interface."""
+        """Initialize feature selection interface.
+
+        :param feature_selection_config: Configuration for feature selection.
+        :type feature_selection_config: FeatureSelectionConfig
+        :param objective: CatBoost objective name. Supports 'RMSE', 'poisson',
+            'gamma', 'binary', 'binomial', or any valid CatBoost objective.
+            Defaults to 'RMSE'.
+        :type objective: str
+        """
         self.to_drop = []
         self.last = None
         self.params = {}

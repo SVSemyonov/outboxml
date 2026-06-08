@@ -1,0 +1,12 @@
+# Sphinx build directory
+_build/
+*.doctrees
+
+# Generated documentation
+*.html
+*.pdf
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo

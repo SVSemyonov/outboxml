@@ -158,6 +158,7 @@ def build_default_auto_ml_config(params:dict={}):
 def build_default_all_models_config(data:pd.DataFrame=None,
                                     column_target: str=None,
                                     column_exposure: str=None,
+                                    column_weight: str=None,
                                     group_name:str = 'example',
                                     project:str = 'test',
                                     version: str = '1',
@@ -225,6 +226,9 @@ def build_default_all_models_config(data:pd.DataFrame=None,
         if column_exposure is not None:
             data = data.drop(columns=column_exposure)
             model_params['column_exposure'] = column_exposure
+        if column_weight is not None:
+            data = data.drop(columns=column_weight)
+            model_params['column_weight'] = column_weight
 
         for columns_name, series in data.items():
             params = feature_params(serie=series,

@@ -42,7 +42,13 @@ class RelativeFeatureModelConfig(BaseModel):
     name: str
     numerator: str
     denominator: str
-    default: Any
+    default: int | float | Literal[FeatureEngineering.nan]
+
+    @model_validator(mode="after")
+    def check_rel_default(self):
+        if not (self.default == FeatureEngineering.nan or isinstance(self.default, (float, int))):
+            raise ConfigError(f"{self.name}: invalid default value for numerical feature {self.default}")
+        return self
 
 
 class FeatureModelConfig(BaseModel):
@@ -51,7 +57,7 @@ class FeatureModelConfig(BaseModel):
     replace: Dict
     clip: Optional[Dict] = None
     cut_number: Optional[str] = None
-    fillna: Optional[Union[int, float, str]] = None
+    fillna: Optional[Union[int, float, str]] = None  # For categorical features only
     encoding: Optional[str] = None
     optbinning_params: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None
     bins: Optional[List] = None
@@ -88,12 +94,17 @@ class FeatureModelConfig(BaseModel):
     def check_default(self):
         # Numerical
         if self.replace.get(FeatureEngineering.feature_type) == FeatureEngineering.numerical:
-            if self.default not in [FeatureEngineering.nan, FeatureEngineering.median,
-                            FeatureEngineering.mean, FeatureEngineering.max, FeatureEngineering.min]:
-                if not isinstance(self.default, (float, int)):
-                    raise ConfigError(f"{self.name}: invalid default value for numerical feature")
-                if not (isinstance(self.fillna, (float, int)) or self.fillna is None):
-                    raise ConfigError(f"{self.name}: invalid fillna value for numerical feature")
+            if not (
+                self.default in [
+                    FeatureEngineering.nan,
+                    FeatureEngineering.median,
+                    FeatureEngineering.mean,
+                    FeatureEngineering.max,
+                    FeatureEngineering.min,
+                ]
+                or isinstance(self.default, (float, int))
+            ):
+                raise ConfigError(f"{self.name}: invalid default value for numerical feature")
 
         # Categorical
         else:
@@ -103,6 +114,20 @@ class FeatureModelConfig(BaseModel):
                 raise ConfigError(f"{self.name}: invalid fillna value for categorical feature")
 
         return self
+
+    # @model_validator(mode="after")
+    # def check_clip(self):
+    #     # Numerical
+    #     if self.replace.get(FeatureEngineering.feature_type) == FeatureEngineering.numerical:
+    #         if not self.clip:
+    #             raise ConfigError(f"{self.name}: clip value is required for numerical feature")
+    #         else:
+    #             for key in [FeatureEngineering.min_value, FeatureEngineering.max_value]:
+    #                 val = self.clip.get(key)
+    #                 if not isinstance(val, (float, int)):
+    #                     raise ConfigError(f"{self.name}: invalid clip value for numerical feature")
+    #
+    #     return self
 
 
 class IntersectionModelConfig(BaseModel):
@@ -116,6 +141,7 @@ class ModelConfig(BaseModel):
     wrapper: Optional[str] = None
     column_target: Optional[str] = None
     column_exposure: Optional[str] = None
+    column_weight: Optional[str] = None
     relative_features: Optional[List[RelativeFeatureModelConfig]] = []
     features: List[FeatureModelConfig]
     intersections: Optional[List[IntersectionModelConfig]] = None
@@ -167,27 +193,37 @@ class ServiceRequest(BaseModel):
 
 class FeatureSelectionConfig(BaseModel):
     top_feautures_to_select: int = 10
-    count_category: int = 100,
-    cutoff_1_category: float = 0.99,
-    cutoff_nan: float = 0.7,
+    count_category: int = 100
+    cutoff_1_category: float = 0.99
+    cutoff_nan: float = 0.7
     max_corr_value: float = 0.6
     metric_eval: dict = {'metric_name': 0}
     cv_diff_value:  Optional[float] = None
     encoding_cat: str = 'WoE_cat_to_num'
     encoding_num: str = 'WoE_num_to_num'
-    default_cat: str = '_NAN_',
-    default_num: str = '_MEDIAN_',
+    default_cat: str = '_NAN_'
+    default_num: str = '_MEDIAN_'
     depth: float = 0.01
     features_to_ignore: List[str] = []
     params: dict = {}
     use_temp_data: bool = False
 
 
+class OptunaOptimizeConfig(BaseModel):
+    type: Literal["int", "float", "categorical"]
+    low: Optional[Union[int, float]] = None
+    high: Optional[Union[int, float]] = None
+    step: Optional[Union[int, float]] = None
+    log: bool = False
+    choices: Optional[List[Union[int, float, str, bool]]] = None
+
 class HPTuneConfig(BaseModel):
     sampling: str ='TPE'
     cv_folds_num: int = 3
-    parameters: dict = None
-    metric_score: Dict[str, str] = None
+    parameters: Optional[Dict[str, Dict[str, OptunaOptimizeConfig]]] = None
+    n_jobs: int = -1
+    trials: int = 100
+    metric_score: Dict[str, str] = {"default": "neg_mean_absolute_error"}
 
 
 class ModelInferenceConfig(BaseModel):

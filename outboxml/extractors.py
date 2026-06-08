@@ -1,3 +1,4 @@
+""""Module for dataset extraction."""
 import abc
 from abc import ABC
 from pathlib import Path
@@ -6,53 +7,144 @@ import pandas as pd
 import polars as pl
 import pickle
 from loguru import logger
+from pydantic import ValidationError
 from sqlalchemy import create_engine, text
 import os
 import shutil
 import subprocess
-from typing import Optional
+from typing import Optional, List, Tuple
 
 from outboxml import config
 from outboxml.core.errors import ConfigError
-from outboxml.core.pydantic_models import DataModelConfig
+from outboxml.core.pydantic_models import DataModelConfig, AllModelsConfig, ModelConfig
 from outboxml.core.utils import FilesNames
 
 
 class Extractor(ABC):
-    """
-    Base interface for extracting data.
-    Inherited user classes should contain the `extract_dataset` method which returns pandas or polars Dataframe.
+    """Base interface for extracting data.
+
+    Abstract base class that defines the interface for data extraction.
+    Inherited user classes should implement the ``extract_dataset`` method
+    which returns a pandas or polars DataFrame.
+
+    :var __connection_config: Internal connection configuration.
+    :var load_config_from_env: Whether to load configuration from environment.
+    :var connection_config: Connection configuration object.
+
+    .. note::
+        Subclasses must implement the :meth:`extract_dataset` method.
+
+    Example::
+
+        class MyExtractor(Extractor):
+            def extract_dataset(self) -> pd.DataFrame:
+                # Your extraction logic here
+                return pd.read_csv('data.csv')
     """
 
     def __init__(self, *params):
+        """Initialization."""
         self.__connection_config = None
         self.load_config_from_env = False
         self.connection_config = None
 
     @abc.abstractmethod
     def extract_dataset(self) -> pd.DataFrame | pl.DataFrame:
+        """Extract dataset.
+
+        :return: Dataset.
+        :rtype: pandas.DataFrame, polars.DataFrame
+        """
         pass
 
     def load_config(self, connection_config):
+        """Load connection config.
+
+        :param connection_config: Connection config.
+        """
         self.connection_config = connection_config
 
     def __check_object(self, dataset: pd.DataFrame | pl.DataFrame):
-        """Проверка данных на выходе парсера"""
+        """Check and validate dataset.
+
+        This method can be overridden in subclasses to perform data validation
+        and verification.
+
+        :param dataset: Dataset to check.
+        :type dataset: pandas.DataFrame or polars.DataFrame
+        :return: None
+        :rtype: None
+        """
         pass
 
 
 class SimpleExtractor(Extractor):
-    def __init__(self, data: pd.DataFrame, *params):
+    """Simple extractor for pre-loaded data.
+
+    This extractor is used when data is already loaded into memory as a
+    Pandas' DataFrame or Polars' DataFrame. It does not require any.
+
+    :param data: Pre-loaded dataset.
+    :type data: Pandas' DataFrame or Polars' DataFrame
+    :param *params: Additional parameters (currently unused).
+
+    Example::
+
+        data = pd.read_csv('my_data.csv')
+        extractor = SimpleExtractor(data=data)
+        dataset = extractor.extract_dataset()
+    """
+    def __init__(self, data: pd.DataFrame | pl.DataFrame, *params):
+        """Initialization.
+        :param data: Dataset.
+        :type data: pandas.DataFrame.
+        :param params: Parameters.
+        """
         super().__init__(*params)
         self.data = data
 
-    def extract_dataset(self) -> pd.DataFrame:
+    def extract_dataset(self) -> pd.DataFrame | pl.DataFrame:
+        """Extract dataset.
+
+        :return: Dataset.
+        :rtype: pandas.DataFrame
+        """
         return self.data
 
 
 class BaseExtractor(Extractor):
+    """Base class for extractor supporting multiple data sources.
+
+    Supports extraction from:
+    - CSV files
+    - Pickle files
+    - Parquet files
+    - Databases (PostgreSQL, etc.)
+
+    :param data_config: Data configuration object specifying the data source
+        and connection parameters.
+    :type data_config: DataModelConfig
+
+    :var __data_config: Internal data configuration object.
+
+    Example::
+
+        from outboxml.core.pydantic_models import DataModelConfig
+
+        config = DataModelConfig(
+            source="csv",
+            local_name_source="data.csv"
+        )
+        extractor = BaseExtractor(data_config=config)
+        dataset = extractor.extract_dataset()
+    """
 
     def __init__(self, data_config: DataModelConfig):
+        """Initialization.
+
+        :param data_config: Object of data config.
+        :type data_config: DataModelConfig
+        """
         super().__init__()
         self.__data_config = data_config
 
@@ -107,6 +199,11 @@ class BaseExtractor(Extractor):
             conn.execute(text(trigger_sql))
 
     def extract_dataset(self) -> pd.DataFrame:
+        """Extract dataset.
+
+        :return: Dataset.
+        :rtype: pandas.DataFrame
+        """
         source = self.__data_config.source
 
         if source in (FilesNames.csv, FilesNames.pickle, FilesNames.parquet):
@@ -137,6 +234,13 @@ class BaseExtractor(Extractor):
 
 
 def load_dataset_from_local(data_config: DataModelConfig) -> pd.DataFrame:
+    """Load dataset from local csv, pickle or parquet file.
+
+    :param data_config: Object of data config.
+    :type data_config: DataModelConfig
+    :return: Dataset.
+    :rtype: pandas.DataFrame
+    """
     logger.info("Load data from local file")
     data = None
     if not data_config.local_name_source:
@@ -171,6 +275,13 @@ def load_dataset_from_local(data_config: DataModelConfig) -> pd.DataFrame:
 
 
 def load_dataset_from_db(data_config: DataModelConfig) -> pd.DataFrame:
+    """Load dataset from database.
+
+    :param data_config: Object of data config.
+    :type data_config: DataModelConfig
+    :return: Dataset.
+    :rtype: pandas.DataFrame
+    """
     data = None
 
     if not data_config.table_name_source:
@@ -201,6 +312,13 @@ def load_dataset_from_db(data_config: DataModelConfig) -> pd.DataFrame:
 
 
 def database_to_pandas(sql_query: str) -> pd.DataFrame:
+    """Load data from database to pandas dataframe.
+
+    :param sql_query: SQL query.
+    :type sql_query: str
+    :return: Dataset.
+    :rtype: pandas.DataFrame
+    """
     data = None
 
     try:
@@ -217,3 +335,126 @@ def database_to_pandas(sql_query: str) -> pd.DataFrame:
         logger.error("Sql query error")
 
     return data
+
+
+def get_useful_columns(data_config: DataModelConfig, models_configs: List[ModelConfig]) -> Tuple[List[str], List[str], List[str]]:
+    logger.info(f"Getting useful columns ...")
+
+    features = list(set(
+        [f.name for mc in models_configs for f in mc.features]
+    ))
+
+    targets = list(set(
+        [mc.column_target for mc in models_configs]
+        + [mc.column_exposure for mc in models_configs if mc.column_exposure]
+    ))
+
+    extra_columns = list(set(
+        (data_config.extra_columns if data_config.extra_columns else [])
+        + (data_config.separation.period_column if data_config.separation.period_column else [])
+    ))
+
+    logger.info(
+        f"Useful columns | features: {len(features)}, targets: {len(targets)}, extra_columns: {len(extra_columns)}")
+
+    return features, targets, extra_columns
+
+
+class PolarsExtractor(Extractor):
+
+    def __init__(self, model_config_name: str):
+        logger.info(f"Initializing Polars Extractor for {model_config_name} ...")
+
+        super().__init__()
+        self._model_config_name = model_config_name
+        try:
+            with open(self._model_config_name, "r", encoding="utf-8") as f:
+                self._all_models_config = AllModelsConfig.model_validate_json(f.read())
+        except FileNotFoundError:
+            logger.error(f"File {self._model_config_name} not found.")
+            raise FileNotFoundError(f"File {self._model_config_name} not found.")
+        except ValidationError as e:
+            logger.error(f"Config validation error: {e}")
+            raise ConfigError(f"Config validation error: {e}")
+        self._data_config = self._all_models_config.data_config
+        self._models_configs = self._all_models_config.models_configs
+        self.dataset: pl.DataFrame | None = None
+        self.features, self.targets, self.extra_columns = get_useful_columns(self._data_config, self._models_configs)
+
+    def custom_transformations(self):
+        pass
+
+    def extract_dataset(self) -> pl.DataFrame:
+
+        source = self._data_config.source
+        logger.info(f"Loading dataset from {str(source.value)} ...")
+
+        if source in (FilesNames.csv, FilesNames.parquet):
+            dataset = load_dataset_from_local_pl(
+                data_config=self._data_config,
+                useful_columns=list(set(self.targets + self.extra_columns + self.features)),
+            )
+        else:
+            raise ConfigError(f"Invalid source: {source}.")
+
+        self.custom_transformations()
+
+        self.__check_object(dataset=dataset)
+
+        return dataset
+
+    def __check_object(self, dataset: pl.DataFrame):
+        pass
+
+
+def load_dataset_from_local_pl(data_config: DataModelConfig, useful_columns: List[str]) -> pl.DataFrame:
+    """
+    Load dataset from a local csv or parquet file to Polars DataFrame.
+    """
+
+    dataset = None
+    if not data_config.local_name_source:
+        logger.error("Invalid local name source.")
+        raise ConfigError("Invalid local name source.")
+    params = data_config.extra_params if data_config.extra_params else {}
+    logger.info(f"Load data from {data_config.local_name_source} to Polars DataFrame | params: {str(params)}.")
+
+    try:
+        if data_config.source == FilesNames.csv:
+            dataset = pl.scan_csv(data_config.local_name_source, **params)
+        elif data_config.source == FilesNames.parquet:
+            dataset = pl.scan_parquet(data_config.local_name_source, **params)
+    except FileNotFoundError:
+        logger.error(f"File {data_config.local_name_source} not found.")
+        raise FileNotFoundError(f"File {data_config.local_name_source} not found.")
+
+    if data_config.extra_conditions:
+        logger.info(f"Extra conditions | {data_config.extra_conditions}.")
+        query = " ".join([
+            "select",
+            ", ".join(useful_columns),
+            "from self",
+            f"where {data_config.extra_conditions.replace('&', 'and')}",
+        ])
+
+    else:
+        logger.info(f"No extra conditions.")
+        query = " ".join([
+            "select",
+            ", ".join(useful_columns),
+            "from self",
+        ])
+
+    dataset = (
+        dataset
+        .sql(query)
+        .collect()
+    )
+
+    if dataset is not None and not dataset.is_empty():
+        logger.debug(f"Dataset is loaded from {data_config.local_name_source} | shape: {dataset.shape}.")
+        return dataset
+
+    else:
+        logger.debug(f"No data loaded from {data_config.local_name_source}.")
+        raise f"No Data loaded from {data_config.local_name_source}."

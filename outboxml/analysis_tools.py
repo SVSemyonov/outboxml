@@ -40,7 +40,18 @@ def train_data(data_subset: ModelDataSubset) -> tuple:
     cat_features = data_subset.features_categorical
     y_train = data_subset.y_train / data_subset.exposure_train if data_subset.exposure_train is not None else data_subset.y_train
     y_test = data_subset.y_test / data_subset.exposure_test if data_subset.exposure_test is not None else data_subset.y_test
-    return X_train, X_test, y_train, y_test, cat_features
+    train_weight = data_subset.sample_weight_train
+    test_weight = data_subset.sample_weight_test
+    if data_subset.exposure_train is not None and train_weight is not None:
+        train_weight = data_subset.exposure_train * train_weight
+    elif data_subset.exposure_train is not None:
+        train_weight = data_subset.exposure_train
+
+    if data_subset.exposure_test is not None and test_weight is not None:
+        test_weight = data_subset.exposure_test * test_weight
+    elif data_subset.exposure_test is not None:
+        test_weight = data_subset.exposure_test
+    return X_train, X_test, y_train, y_test, cat_features, train_weight, test_weight
 
 def catboost_model(objective, params, cat_features=None):
     """Creates a CatBoost model based on the objective type.
@@ -193,7 +204,7 @@ class CVStability(Analysis):
             for cat_feature in cat_features:
                 if cat_feature in self.to_drop:
                     cat_features_for_calc.remove(cat_feature)
-            X_train, X_test, y_train, y_test, _ = train_data(self.data_subset)
+            X_train, X_test, y_train, y_test, _, train_weight, _ = train_data(self.data_subset)
             for feature in features_for_calc:
                 catboost_features = cat_features_for_calc.copy()
                 if len(features_for_calc) > 1:
@@ -213,7 +224,10 @@ class CVStability(Analysis):
 
                 try:
                     scoring = self.__choose_scoring_fun(model_name=self.data_subset.model_name)
-                    scores = cross_val_score(model, X, y_train, cv=3, scoring=scoring)
+                    fit_params = None
+                    if train_weight is not None:
+                        fit_params = {"sample_weight": train_weight.loc[X.index]}
+                    scores = cross_val_score(model, X, y_train.loc[X.index], cv=3, scoring=scoring, params=fit_params)
                     logger.info('CV dif for feature||' + str(np.max(scores) / np.min(scores)))
                     if (np.max(scores) / np.min(scores) - 1) > self.config.cv_diff_value:
                         logger.info('Dropping non-stable feature')
@@ -283,11 +297,13 @@ class CatboostShapAnalysis(Analysis):
                 :rtype: dict
                 """
         logger.debug('Feature selection||Fitting catboost')
-        X_train, X_test, y_train, y_test, cat_features = train_data(self.data_subset)
+        X_train, X_test, y_train, y_test, cat_features, train_weight, test_weight = train_data(self.data_subset)
         train_pool = Pool(X_train, y_train, feature_names=list(X_train.columns),
-                          cat_features=cat_features)
+                          cat_features=cat_features,
+                          weight=train_weight)
         test_pool = Pool(X_test, y_test, feature_names=list(X_train.columns),
-                         cat_features=cat_features)
+                         cat_features=cat_features,
+                         weight=test_weight)
         steps = X_train.shape[1]
         model = catboost_model(objective=self.objective, params=self.params)
         summary = model.select_features(

@@ -8,7 +8,7 @@ from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.ensemble import RandomForestRegressor
 import statsmodels.api as sm
 import statsmodels.formula.api as sf
-from typing import List, Dict, Optional, Union, Any
+from typing import List, Dict, Optional, Union, Any, Tuple
 from typing_extensions import Literal
 import pandas as pd
 from itertools import chain
@@ -22,17 +22,120 @@ from outboxml.data_subsets import ModelDataSubset
 
 
 class BaseWrapperModel(ABC):
-    """Абстрактный класс для библиотечных моделей внутри фреймворка"""
+    """
+    Abstract base class for all model wrappers inside the framework.
+
+    This class defines a common interface for all models
+    that are used within the system.
+    """
 
     @abstractmethod
     def fit(self, **params):
+        """
+        Fits the model using provided parameters.
+
+        :param params: Arbitrary keyword arguments for model fitting.
+        :type params: dict
+
+        :return: Trained model instance.
+        :rtype: Any
+        """
         pass
 
 
-class DefaultModels:
+def _catboost_pool_weight(
+        exposure_train: Optional[pd.Series] = None,
+        sample_weight_train: Optional[pd.Series] = None,
+) -> Optional[pd.Series]:
+    if exposure_train is not None and sample_weight_train is not None:
+        return exposure_train * sample_weight_train
+    if sample_weight_train is not None:
+        return sample_weight_train
+    if exposure_train is not None:
+        return exposure_train
+    return None
+
+
+def _catboost_eval_pool(
+        X_eval: Optional[pd.DataFrame],
+        y_eval_ctb: Optional[pd.Series],
+        features_numerical: List[str],
+        features_categorical: List[str],
+        exposure_eval: Optional[pd.Series] = None,
+        sample_weight_eval: Optional[pd.Series] = None,
+) -> Optional[Pool]:
+    """Build a CatBoost validation Pool for ``eval_set``, or return None if not usable."""
+    if X_eval is None or y_eval_ctb is None or X_eval.empty or len(y_eval_ctb) == 0:
+        return None
+    if len(X_eval) != len(y_eval_ctb):
+        logger.warning('CatBoost eval_set skipped||X_test and y_test length mismatch')
+        return None
+    feat_cols = list(chain(features_numerical, features_categorical))
+    missing = [c for c in feat_cols if c not in X_eval.columns]
+    if missing:
+        logger.warning('CatBoost eval_set skipped||missing columns in X_test: {}', missing)
+        return None
+    pool_weight = _catboost_pool_weight(
+        exposure_train=exposure_eval,
+        sample_weight_train=sample_weight_eval,
+    )
+    return Pool(
+        data=X_eval[feat_cols].copy(),
+        label=y_eval_ctb,
+        cat_features=features_categorical,
+        has_header=True,
+        weight=pool_weight,
+    )
+
+
+def _catboost_y_scaled_by_exposure(
+        y: pd.Series,
+        exposure: Optional[pd.Series],
+) -> pd.Series:
+    try:
+        return y / exposure
+    except Exception:
+        logger.warning('Error with y/exposure||Exposure = 1 is set')
+        return y
+
+
+def _catboost_eval_gated_params(
+        params_catboost: Optional[Dict[str, Optional[Union[int, float, str, bool]]]],
+        has_eval_data: bool,
+        log_ctx: str = 'CatBoost',
+) -> Tuple[Dict[str, Any], bool]:
+    """Copy CatBoost params for fitting; align ``eval_set`` with ``use_best_model``.
+
+    Hold-out ``eval_set`` is only used when ``use_best_model`` is true in
+    ``params_catboost`` and eval data exists. If ``use_best_model`` is true but
+    there is no eval data, ``use_best_model`` is forced to false so training
+    does not fail at fit time.
     """
-    Класс для вызова библиотечных моделей.
-    Вызывается из datasetsmanager при отсутствии пользовательских моделей на входе.
+    params_cb: Dict[str, Any] = dict(params_catboost) if params_catboost else {}
+    want_use_best = bool(params_cb.get('use_best_model', False))
+    use_eval_set = want_use_best and has_eval_data
+    if want_use_best and not has_eval_data:
+        params_cb['use_best_model'] = False
+        logger.warning(
+            '{}||use_best_model=True but no hold-out/eval data; disabling use_best_model',
+            log_ctx,
+        )
+    return params_cb, use_eval_set
+
+
+class DefaultModels:
+    """Factory class for loading default or baseline models.
+
+    This class is used when no custom user-defined models are provided
+    in the configuration. It can load wrapper-based models or baseline
+    models depending on the configuration.
+
+    :var group_name: Name of the model group.
+    :var dataset: Full dataset used for training.
+    :var data_subsets: Prepared datasets for each model.
+    :var models_configs: Configuration objects for models.
+    :var baseline_model: Identifier of baseline model.
+    :var models_names: Names of loaded models.
     """
 
     def __init__(self,
@@ -43,6 +146,27 @@ class DefaultModels:
                  baseline_model: int = 0,
                  work_type_fit: str = 'CPU'
                  ):
+        """
+        Initializes the default models loader.
+
+        :param group_name: Name of the model group.
+        :type group_name: str
+
+        :param dataset: Full dataset used for training.
+        :type dataset: pandas.DataFrame
+
+        :param data_subsets: Mapping of model names to prepared data subsets.
+        :type data_subsets: Dict[str, ModelDataSubset]
+
+        :param models_configs: List of model configurations.
+        :type models_configs: List[ModelConfig]
+
+        :param baseline_model: Identifier of baseline model to use.
+        :type baseline_model: int
+
+        :param work_type_fit: Hardware type used for training ("CPU" or "GPU").
+        :type work_type_fit: str
+        """
         self.group_name = group_name
         self.dataset = dataset
         self.data_subsets = data_subsets
@@ -52,6 +176,19 @@ class DefaultModels:
         self._work_type_fit = work_type_fit
 
     def load_default(self) -> dict:
+        """
+        Loads and initializes models according to configuration.
+
+        If baseline models are specified, baseline models are loaded.
+        Otherwise, wrapper-based models are initialized.
+
+        :return: Dictionary of trained models.
+        :rtype: dict
+
+        .. rubric:: Examples
+
+        >>> models = DefaultModels(...).load_default()
+        """
         for model in self.models_configs:  # self.data_config.data.targetcolumns:
             self.models_names.append(model.name)
         if self.baseline_model > 0:
@@ -93,15 +230,54 @@ class DefaultModels:
 
 
 class BaselineModels:
+    """Factory for creating simple baseline models.
+
+    Creates baseline models for comparison purposes. Supports RandomForestRegressor,
+    DummyRegressor (median), and mean-based models.
+
+    :param dataset: ModelDataSubset containing training data.
+    :type dataset: ModelDataSubset
+    :param model_name: Name of the model.
+    :type model_name: str
+    :param model_number: Baseline model identifier. 1 = RandomForestRegressor,
+        2 = DummyRegressor median, 3 = mean.
+    :type model_number: int
+
+    :var model_name: Name of the model.
+    :var dataset: ModelDataSubset containing training data.
+    :var model_number: Baseline model identifier.
+    """
     def __init__(self,
                  dataset,
                  model_name: str,
                  model_number: int):
+        """
+        Initializes baseline model selector.
+
+        :param dataset: Dataset wrapper containing train data.
+        :type dataset: ModelDataSubset
+
+        :param model_name: Name of the model.
+        :type model_name: str
+
+        :param model_number: Baseline model identifier.
+        :type model_number: int
+        """
         self.__dataset = dataset
         self.model_name = model_name
         self.__model_number = model_number
 
     def choose_model(self) -> BaseEstimator:
+        """
+        Selects and trains a baseline model.
+
+        :return: Trained baseline estimator.
+        :rtype: sklearn.base.BaseEstimator
+
+        .. rubric:: Examples
+
+        >>> model = BaselineModels(dataset, "model_1", 2).choose_model()
+        """
         if self.__model_number == 1:
             model = RandomForestClassifierModel(dataset=self.__dataset,
                                                 model_name=self.model_name,
@@ -129,16 +305,38 @@ class BaselineModels:
 
 
 class RandomForestClassifierModel(BaseWrapperModel):
-    """Random forest regressor """
+    """
+    Random Forest regression model wrapper.
+
+    Attributes
+    ----------
+    _model_name : str
+        Name of the model.
+    """
 
     def __init__(self,
                  dataset, model_name: str = 'general'):
+        """
+        Initializes Random Forest model.
+
+        :param dataset: Dataset wrapper with training data.
+        :type dataset: ModelDataSubset
+
+        :param model_name: Name of the model.
+        :type model_name: str
+        """
         self.__dataset = dataset
         self._model_name = model_name
         self._models_dict = {self._model_name: None
                              }
 
     def fit(self):
+        """
+        Trains the Random Forest model.
+
+        :return: Trained RandomForestRegressor.
+        :rtype: sklearn.ensemble.RandomForestRegressor
+        """
         train_data = self.__dataset.X_train.copy()
         y_train = self.__dataset.y_train.copy()
         le = LabelEncoder()
@@ -150,21 +348,64 @@ class RandomForestClassifierModel(BaseWrapperModel):
 
 
 class BaseLineModel(BaseWrapperModel):
-    """Dummy regressor baseline"""
+    """
+    Dummy regressor baseline model.
+
+    Attributes
+    ----------
+    _model_name : str
+        Name of the model.
+    """
 
     def __init__(self,
                  dataset, model_name: str = 'general',
                  strategy: str = 'median'):
+        """
+        Initializes dummy baseline model.
+
+        :param dataset: Dataset wrapper with training data.
+        :type dataset: ModelDataSubset
+
+        :param model_name: Name of the model.
+        :type model_name: str
+
+        :param strategy: Strategy used by DummyRegressor.
+        :type strategy: str
+        """
         self.__dataset = dataset
         self._model_name = model_name
         self.__strategy = strategy
 
     def fit(self)->BaseEstimator:
+        """
+        Fits the dummy regressor.
+
+        :return: Trained DummyRegressor.
+        :rtype: sklearn.dummy.DummyRegressor
+        """
         model = DummyRegressor(strategy=self.__strategy).fit(self.__dataset.X_train, self.__dataset.y_train)
         return model
 
 
 class GLMCatboostCombineModel(BaseWrapperModel):
+    """
+    Unified prediction wrapper for GLM, CatBoost, and XGBoost models.
+
+    Attributes
+    ----------
+    model_name : str
+        Name of the model.
+    wrapper : ModelsParams
+        Type of underlying model.
+    model : Any
+        Trained underlying model instance.
+    features_numerical : list[str] or None
+        Numerical feature names.
+    features_categorical : list[str] or None
+        Categorical feature names.
+    min_max_scaler : MinMaxScaler or None
+        Scaler used for numerical features.
+    """
     def __init__(
             self,
             model_name: str,
@@ -175,6 +416,27 @@ class GLMCatboostCombineModel(BaseWrapperModel):
             features_numerical: Optional[List[str]] = None,
             features_categorical: Optional[List[str]] = None,
     ):
+        """
+        Initializes combined model wrapper.
+
+        :param model_name: Name of the model.
+        :type model_name: str
+
+        :param wrapper: Model wrapper type.
+        :type wrapper: ModelsParams
+
+        :param min_max_scaler: Scaler used for numerical features.
+        :type min_max_scaler: sklearn.preprocessing.MinMaxScaler or None
+
+        :param model: Trained underlying model.
+        :type model: Any
+
+        :param features_numerical: List of numerical feature names.
+        :type features_numerical: list[str] or None
+
+        :param features_categorical: List of categorical feature names.
+        :type features_categorical: list[str] or None
+        """
         self.model_name = model_name
         self._wrapper = wrapper
         self.min_max_scaler = min_max_scaler
@@ -183,6 +445,19 @@ class GLMCatboostCombineModel(BaseWrapperModel):
         self.features_categorical = features_categorical
 
     def predict(self, X: pd.DataFrame) -> pd.Series:
+        """
+        Generates predictions for the given dataset.
+
+        :param X: Input features.
+        :type X: pandas.DataFrame
+
+        :return: Model predictions.
+        :rtype: pandas.Series
+
+        .. rubric:: Examples
+
+        >>> preds = model.predict(df)
+        """
         features_numerical = self.features_numerical if self.features_numerical else []
         features_categorical = self.features_categorical if self.features_categorical else []
 
@@ -221,6 +496,19 @@ class GLMCatboostCombineModel(BaseWrapperModel):
 
 
 class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
+    """
+    Hybrid model that trains CatBoost on top of GLM predictions.
+
+    This model uses a previously trained GLM as a baseline and
+    fits a CatBoost model to learn multiplicative corrections.
+
+    Attributes
+    ----------
+    model_config : ModelConfig
+        Configuration of the model.
+    work_type_fit : str
+        Hardware type used for training.
+    """
     def __init__(self,
 
                  model_config: ModelConfig,
@@ -228,6 +516,21 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
                  data_subset: ModelDataSubset,
                  work_type_fit: str='CPU',
                  ):
+        """
+        Initializes CatBoost-over-GLM model.
+
+        :param model_config: Configuration object for the model.
+        :type model_config: ModelConfig
+
+        :param sm_model: Trained GLM wrapper model.
+        :type sm_model: GLMCatboostCombineModel
+
+        :param data_subset: Dataset subset used for training.
+        :type data_subset: ModelDataSubset
+
+        :param work_type_fit: Hardware type used for training ("CPU" or "GPU").
+        :type work_type_fit: str
+        """
         self.model_config = model_config
         self.sm_model = sm_model
         self.data_subset = data_subset
@@ -240,6 +543,11 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
         self._features_numerical: Optional[List[str]] = data_subset.features_numerical
         self._features_categorical: Optional[List[str]] = data_subset.features_categorical
         self._exposure_train: Optional[pd.Series] = data_subset.exposure_train
+        self._sample_weight_train: Optional[pd.Series] = data_subset.sample_weight_train
+        self._X_test: Optional[pd.DataFrame] = data_subset.X_test
+        self._y_test: Optional[pd.Series] = data_subset.y_test
+        self._exposure_test: Optional[pd.Series] = data_subset.exposure_test
+        self._sample_weight_test: Optional[pd.Series] = data_subset.sample_weight_test
         self._params_catboost: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = model_config.params_catboost
         self._model_sm = self.sm_model.model
         self._model_ctb = None
@@ -247,11 +555,44 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
         self.work_type_fit = work_type_fit
 
     def fit(self, X=None, y=None, **params):
+        """
+        Fits CatBoost model using GLM predictions as a baseline.
+
+        :param X: Optional training features.
+        :type X: pandas.DataFrame or None
+
+        :param y: Optional target values.
+        :type y: pandas.Series or None
+
+        :param params: Additional CatBoost parameters.
+        :type params: dict
+
+        :return: None
+        :rtype: None
+
+        .. rubric:: Examples
+
+        >>> model.fit()
+        """
         if X is not None and y is not None:
             self._X_train = X
             self._y_train = y
             self._params_catboost = params
         y_train_pred = self.__predict_glm(X=self._X_train)
+        has_test_split = (
+            self._X_test is not None
+            and self._y_test is not None
+            and not self._X_test.empty
+            and len(self._y_test) > 0
+        )
+        use_best_model = bool((self._params_catboost or {}).get('use_best_model', False))
+        use_eval_subset = use_best_model and X is None and y is None and has_test_split
+        y_eval_pred_glm = None
+        X_eval, y_eval = None, None
+        if use_eval_subset:
+            X_eval = self._X_test
+            y_eval = self._y_test
+            y_eval_pred_glm = self.__predict_glm(X=X_eval)
         logger.info('Fitting catboost||Catboost over glm model')
         self._model_ctb = self.__fit_catboost(
             X_train=self._X_train,
@@ -260,16 +601,35 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
             features_categorical=self._features_categorical,
             params_catboost=self._params_catboost,
             exposure_train=self._exposure_train,
-            y_train_pred_glm=y_train_pred
-
+            sample_weight_train=self._sample_weight_train,
+            y_train_pred_glm=y_train_pred,
+            X_eval=X_eval,
+            y_eval=y_eval,
+            exposure_eval=self._exposure_test if use_eval_subset else None,
+            sample_weight_eval=self._sample_weight_test if use_eval_subset else None,
+            y_eval_pred_glm=y_eval_pred_glm,
         )
         self._X_train = None
         self._exposure_train = None
+        self._sample_weight_train = None
         self._y_train = None
         self.data_subset = None
         logger.debug('Wrapper model||Catboost over glm is fitted')
 
     def predict(self, X):
+        """
+        Generates predictions using GLM baseline multiplied by CatBoost correction.
+
+        :param X: Input features.
+        :type X: pandas.DataFrame
+
+        :return: Final model predictions.
+        :rtype: pandas.Series
+
+        .. rubric:: Examples
+
+        >>> preds = model.predict(df)
+        """
         glm_prediction = self.__predict_glm(X)
 
         prediction = glm_prediction * self._model_ctb.predict(
@@ -297,7 +657,13 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
                        features_categorical: Optional[List[str]] = None,
                        params_catboost: Optional[Dict[str, Optional[Union[int, float]]]] = None,
                        exposure_train: Optional[pd.Series] = None,
+                       sample_weight_train: Optional[pd.Series] = None,
                        y_train_pred_glm: Optional[pd.Series] = None,
+                       X_eval: Optional[pd.DataFrame] = None,
+                       y_eval: Optional[pd.Series] = None,
+                       exposure_eval: Optional[pd.Series] = None,
+                       sample_weight_eval: Optional[pd.Series] = None,
+                       y_eval_pred_glm: Optional[pd.Series] = None,
                        ):
         features_numerical = features_numerical if features_numerical else []
         features_categorical = features_categorical if features_categorical else []
@@ -310,10 +676,41 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
             y_train_ctb = (y_train / exposure_train) / y_train_pred_glm
         else:
             y_train_ctb = y_train / y_train_pred_glm
+        eval_rows_ok = (
+            X_eval is not None
+            and y_eval is not None
+            and y_eval_pred_glm is not None
+            and not X_eval.empty
+            and len(y_eval) > 0
+        )
+        eval_pool = None
+        if bool((params_catboost or {}).get('use_best_model')) and eval_rows_ok:
+            assert len(y_eval) == len(y_eval_pred_glm)
+            if exposure_eval is not None:
+                y_eval_ctb = (y_eval / exposure_eval) / y_eval_pred_glm
+            else:
+                y_eval_ctb = y_eval / y_eval_pred_glm
+            eval_pool = _catboost_eval_pool(
+                X_eval,
+                y_eval_ctb,
+                features_numerical,
+                features_categorical,
+                exposure_eval,
+                sample_weight_eval,
+            )
+        params_fit, _ = _catboost_eval_gated_params(
+            params_catboost,
+            eval_pool is not None,
+            log_ctx='CatBoost over GLM',
+        )
         model_ctb = catboost_wrapper(
             objective=catboost_objective,
             task_type=self.work_type_fit,
-            **params_catboost if params_catboost else {},
+            **params_fit,
+        )
+        pool_weight = _catboost_pool_weight(
+            exposure_train=exposure_train,
+            sample_weight_train=sample_weight_train,
         )
 
         ctb_train_pool = Pool(
@@ -321,15 +718,42 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
             label=y_train_ctb,
             cat_features=features_categorical,
             has_header=True,
-            weight=exposure_train if exposure_train is not None else None
+            weight=pool_weight
         )
-        model_ctb = model_ctb.fit(ctb_train_pool, silent=True)
+        fit_kwargs: Dict[str, Any] = {"silent": True}
+        if eval_pool is not None:
+            fit_kwargs["eval_set"] = eval_pool
+            logger.info('CatBoost over GLM||training with eval_set (hold-out, use_best_model)')
+        model_ctb = model_ctb.fit(ctb_train_pool, **fit_kwargs)
         return model_ctb
 
 
 class ModelsWrapper(BaseWrapperModel):
+    """
+    Factory class for fitting multiple models based on configuration.
 
+    Attributes
+    ----------
+    _data_subsets : Dict[str, ModelDataSubset]
+        Prepared datasets for each model.
+    _models_configs : List[ModelConfig]
+        Configuration objects for models.
+    _models_dict : dict
+        Dictionary of trained models.
+    """
     def __init__(self, data_subsets:Dict[str,ModelDataSubset], models_configs: List[ModelConfig], work_type_fit: str = 'CPU'):
+        """
+        Initializes models wrapper.
+
+        :param data_subsets: Mapping of model names to datasets.
+        :type data_subsets: Dict[str, ModelDataSubset]
+
+        :param models_configs: List of model configurations.
+        :type models_configs: List[ModelConfig]
+
+        :param work_type_fit: Hardware type used for training.
+        :type work_type_fit: str
+        """
         self._data_subsets = data_subsets
         self._models_configs = models_configs
         self._models_dict = {}
@@ -343,6 +767,12 @@ class ModelsWrapper(BaseWrapperModel):
                                                                  work_type_fit=self._work_type_fit)
 
     def models_dict(self, *params) -> Dict:
+        """
+        Fits all configured models and returns them.
+
+        :return: Dictionary of trained models.
+        :rtype: dict
+        """
         self.fit()
         return self._models_dict
 
@@ -373,8 +803,33 @@ class ModelsWrapper(BaseWrapperModel):
 
 
 class StatsmodelsModel(BaseWrapperModel):
+    """
+    Wrapper for fitting Generalized Linear Models (GLM) using statsmodels.
+
+    Attributes
+    ----------
+    model_name : str
+        Name of the model.
+    objective : ModelsParams
+        Objective function of the model.
+    wrapper : ModelsParams
+        Wrapper type.
+    features_numerical : list[str] or None
+        Numerical features.
+    features_categorical : list[str] or None
+        Categorical features.
+    """
 
     def __init__(self, data_subset: ModelDataSubset, model_config: ModelConfig):
+        """
+        Initializes statsmodels GLM wrapper.
+
+        :param data_subset: Dataset subset containing training data.
+        :type data_subset: ModelDataSubset
+
+        :param model_config: Model configuration.
+        :type model_config: ModelConfig
+        """
         self.model_name: str = data_subset.model_name
 
         self.objective: Literal[ModelsParams.poisson, ModelsParams.gamma] = model_config.objective
@@ -395,6 +850,16 @@ class StatsmodelsModel(BaseWrapperModel):
             self.__stats_models_params = self.glm_params
 
     def fit(self):
+        """
+        Fits a GLM model using statsmodels and returns a unified wrapper.
+
+        :return: Wrapped GLM model with unified predict interface.
+        :rtype: GLMCatboostCombineModel
+
+        .. rubric:: Examples
+
+        >>> glm_model = StatsmodelsModel(ds, config).fit()
+        """
         features_numerical = self.features_numerical if self.features_numerical else []
         features_categorical = self.features_categorical if self.features_categorical else []
 
@@ -478,8 +943,31 @@ class StatsmodelsModel(BaseWrapperModel):
 
 
 class CatboostModel(BaseWrapperModel):
+    """
+    Wrapper for training CatBoost models.
 
+    Attributes
+    ----------
+    model_name : str
+        Name of the model.
+    objective : ModelsParams
+        Objective function.
+    wrapper : ModelsParams
+        Wrapper type.
+    """
     def __init__(self, data_subset, model_config: ModelConfig, work_type_fit: str = 'CPU'):
+        """
+        Initializes CatBoost model wrapper.
+
+        :param data_subset: Dataset subset with training data.
+        :type data_subset: ModelDataSubset
+
+        :param model_config: Model configuration.
+        :type model_config: ModelConfig
+
+        :param work_type_fit: Hardware type used for training ("CPU" or "GPU").
+        :type work_type_fit: str
+        """
         self.model_name: str = data_subset.model_name
         self.objective: Literal[ModelsParams.poisson, ModelsParams.gamma, ModelsParams.binary] = model_config.objective
         logger.info('Model objective||' + str(self.objective))
@@ -489,10 +977,31 @@ class CatboostModel(BaseWrapperModel):
         self.features_numerical: Optional[List[str]] = data_subset.features_numerical
         self.features_categorical: Optional[List[str]] = data_subset.features_categorical
         self.exposure_train: Optional[pd.Series] = data_subset.exposure_train
+        self.sample_weight_train: Optional[pd.Series] = data_subset.sample_weight_train
+        self.X_test: Optional[pd.DataFrame] = data_subset.X_test
+        self.y_test: Optional[pd.Series] = data_subset.y_test
+        self.exposure_test: Optional[pd.Series] = data_subset.exposure_test
+        self.sample_weight_test: Optional[pd.Series] = data_subset.sample_weight_test
         self.params_catboost: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = model_config.params_catboost
         self._work_type_fit: str = work_type_fit
 
     def fit(self):
+        """
+        Fits CatBoost model and returns unified wrapper.
+
+        When ``params_catboost`` sets ``use_best_model`` to true and the subset has a
+        non-empty hold-out (``X_test``, ``y_test``), that split is passed as CatBoost
+        ``eval_set`` (same condition as CatBoost's ``use_best_model``). If
+        ``use_best_model`` is true but there is no hold-out, it is forced to false
+        so training does not fail.
+
+        :return: Wrapped CatBoost model.
+        :rtype: GLMCatboostCombineModel
+
+        .. rubric:: Examples
+
+        >>> model = CatboostModel(ds, config).fit()
+        """
         features_numerical = self.features_numerical if self.features_numerical else []
         features_categorical = self.features_categorical if self.features_categorical else []
 
@@ -536,20 +1045,53 @@ class CatboostModel(BaseWrapperModel):
             except:
                 logger.warning('Error with y_train/exposure||Exposure = 1 is set')
                 y_train_ctb = self.y_train
+        has_eval_rows = (
+            self.X_test is not None
+            and self.y_test is not None
+            and not self.X_test.empty
+            and len(self.y_test) > 0
+        )
+        eval_pool = None
+        if bool((self.params_catboost or {}).get('use_best_model')) and has_eval_rows:
+            if self.objective == ModelsParams.binary:
+                y_eval_ctb = self.y_test.copy()
+            else:
+                y_eval_ctb = _catboost_y_scaled_by_exposure(self.y_test, self.exposure_test)
+            eval_pool = _catboost_eval_pool(
+                self.X_test,
+                y_eval_ctb,
+                features_numerical,
+                features_categorical,
+                self.exposure_test,
+                self.sample_weight_test,
+            )
+        params_fit, _ = _catboost_eval_gated_params(
+            self.params_catboost,
+            eval_pool is not None,
+            log_ctx='CatBoost',
+        )
         model_ctb = catboost_wrapper(
             objective=catboost_objective,
             task_type=self._work_type_fit,
-            **self.params_catboost if self.params_catboost else {},
+            **params_fit,
         )
         X_train = self.X_train.copy()
+        pool_weight = _catboost_pool_weight(
+            exposure_train=self.exposure_train,
+            sample_weight_train=self.sample_weight_train,
+        )
         ctb_train_pool = Pool(
             data=X_train[chain(features_numerical, features_categorical)],
             label=y_train_ctb,
             cat_features=features_categorical,
             has_header=True,
-            weight=self.exposure_train if self.exposure_train is not None else None
+            weight=pool_weight
         )
-        model_ctb = model_ctb.fit(ctb_train_pool, silent=True)
+        fit_kwargs: Dict[str, Any] = {"silent": True}
+        if eval_pool is not None:
+            fit_kwargs["eval_set"] = eval_pool
+            logger.info('CatBoost||training with eval_set (hold-out, use_best_model)')
+        model_ctb = model_ctb.fit(ctb_train_pool, **fit_kwargs)
         return GLMCatboostCombineModel(model_name=self.model_name,
                                        wrapper=self.wrapper,
                                        min_max_scaler=None,
@@ -559,7 +1101,31 @@ class CatboostModel(BaseWrapperModel):
                                        )
 
 class XgboostModel(BaseWrapperModel):
+    """
+    Wrapper for training XGBoost models.
+
+    Attributes
+    ----------
+    model_name : str
+        Name of the model.
+    objective : ModelsParams
+        Objective function.
+    wrapper : ModelsParams
+        Wrapper type.
+    """
     def __init__(self, data_subset, model_config: ModelConfig, work_type_fit: str='CPU'):
+        """
+        Initializes XGBoost model wrapper.
+
+        :param data_subset: Dataset subset with training data.
+        :type data_subset: ModelDataSubset
+
+        :param model_config: Model configuration.
+        :type model_config: ModelConfig
+
+        :param work_type_fit: Device type ("cpu" or "cuda").
+        :type work_type_fit: str
+        """
         self.model_name: str = data_subset.model_name
         self.objective: Literal[ModelsParams.poisson, ModelsParams.gamma, ModelsParams.binary] = model_config.objective
         logger.info('Model objective||' + str(self.objective))
@@ -574,6 +1140,16 @@ class XgboostModel(BaseWrapperModel):
         self._work_type_fit = work_type_fit
 
     def fit(self):
+        """
+        Fits XGBoost model and returns unified wrapper.
+
+        :return: Wrapped XGBoost model.
+        :rtype: GLMCatboostCombineModel
+
+        .. rubric:: Examples
+
+        >>> model = XgboostModel(ds, config).fit()
+        """
         features = list(chain(self.features_numerical, self.features_categorical))
         if self.wrapper == ModelsParams.xgboost and self.objective == ModelsParams.poisson:
             xgboost_wrapper = XGBRegressor
@@ -622,10 +1198,32 @@ class XgboostModel(BaseWrapperModel):
 
 
 class StatsModelsEstimator(RegressorMixin, BaseEstimator):
+    """
+    scikit-learn compatible estimator for statsmodels GLM.
+
+    Attributes
+    ----------
+    model_config : ModelConfig
+        Model configuration.
+    datasubset : ModelDataSubset
+        Dataset subset.
+    """
     def __init__(self,
                  sm_model,
                  model_config: ModelConfig,
                  datasubset: ModelDataSubset, ):
+        """
+        Initializes sklearn-compatible statsmodels estimator.
+
+        :param sm_model: statsmodels GLM constructor.
+        :type sm_model: callable
+
+        :param model_config: Model configuration.
+        :type model_config: ModelConfig
+
+        :param datasubset: Dataset subset.
+        :type datasubset: ModelDataSubset
+        """
         self.sm_model = sm_model
         self.model_config = model_config
         self.datasubset = datasubset
@@ -633,6 +1231,15 @@ class StatsModelsEstimator(RegressorMixin, BaseEstimator):
         self._model = None
 
     def predict(self, X):
+        """
+        Generates predictions for input data.
+
+        :param X: Input features.
+        :type X: pandas.DataFrame
+
+        :return: Predictions.
+        :rtype: pandas.Series
+        """
         features_numerical = self.datasubset.features_numerical if self.datasubset.features_numerical else []
         features_categorical = self.datasubset.features_categorical if self.datasubset.features_categorical else []
 
@@ -642,6 +1249,21 @@ class StatsModelsEstimator(RegressorMixin, BaseEstimator):
         return prediction
 
     def fit(self, X, y, **params):
+        """
+        Fits GLM model using sklearn-style interface.
+
+        :param X: Training features.
+        :type X: pandas.DataFrame
+
+        :param y: Target values.
+        :type y: pandas.Series
+
+        :param params: Additional fitting parameters.
+        :type params: dict
+
+        :return: Trained model.
+        :rtype: statsmodels.genmod.generalized_linear_model.GLMResults
+        """
         X_train = X.copy()
         X = X_train
         if self.model_config.objective is not None:

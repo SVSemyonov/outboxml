@@ -27,7 +27,7 @@
       "features": [        
         {
           "name": "SEX",
-          "enoding": "to_int",
+          "encoding": "to_int",
           "default": "0",
           "replace": {
             "MALE": "1",
