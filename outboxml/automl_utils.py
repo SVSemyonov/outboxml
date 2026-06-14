@@ -54,21 +54,44 @@ def load_last_pickle_models_result(config=None, group_name_json:str=None):
 
 
 def calculate_previous_models(ds_manager: DataSetsManager,
-                              all_groups,
+                              all_groups=None,
+                              ensemble=None,
+                              config=None,
                               ) -> dict:
     """Calculates predictions and metrics for previously trained models.
 
         For each model in the provided groups, predictions are generated
         using the current dataset via the DataSetsManager.
 
+        Two input modes are supported:
+
+        * ``all_groups`` — a dictionary of plain model groups. Each model is
+          predicted directly on the current dataset.
+        * ``ensemble`` — a list of ``EnsembleResult`` (the simplified ensemble
+          format, including ``store_references=True``). Each ensemble part is
+          resolved, predicted partition-by-partition and stitched into a single
+          result via :meth:`DataSetsManager.ensemble_predict`. This is the mode
+          used to compare a candidate ensemble (with one model replaced) against
+          the previous one.
+
         :param ds_manager: Dataset and model manager.
         :type ds_manager: DataSetsManager
 
         :param all_groups: Dictionary of model groups and their results.
-        :type all_groups: dict
+        :type all_groups: dict, optional
+
+        :param ensemble: List of ``EnsembleResult`` objects describing the
+            ensemble to evaluate.
+        :type ensemble: list, optional
+
+        :param config: Configuration providing ``prod_models_path`` for resolving
+            ensemble model references. Defaults to the manager's config.
+        :type config: object, optional
 
         :return: Dictionary with prediction results keyed by model name.
         :rtype: dict
+
+        :raises ValueError: If neither ``all_groups`` nor ``ensemble`` is provided.
 
         .. rubric:: Examples
 
@@ -76,8 +99,19 @@ def calculate_previous_models(ds_manager: DataSetsManager,
         >>> results.keys()
         dict_keys(['xgboost', 'lightgbm'])
         """
+    if all_groups is None and ensemble is None:
+        raise ValueError("Provide either `all_groups` or `ensemble`")
+
     logger.debug('Calculating metrics for previous model')
     ds_result_to_compare = {}
+
+    if ensemble is not None:
+        for ensemble_result in ensemble:
+            ds_result_to_compare[ensemble_result.model_name] = ds_manager.ensemble_predict(
+                ensemble_result=ensemble_result,
+                config=config,
+            )
+        return ds_result_to_compare
 
     for key in all_groups.keys():
 

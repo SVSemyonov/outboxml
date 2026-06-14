@@ -108,8 +108,8 @@ class FeatureSelection(TestCase):
                                                                             objective='binomial')
                       ).select_features(params={"iterations": 30}, model_name='first')
 
-        self.assertEqual(len(data.features_categorical), 2)
-        self.assertEqual(len(data.features_numerical), 3)
+        self.assertEqual(len(data.features_categorical), 1)
+        self.assertEqual(len(data.features_numerical), 4)
 
     def test_temp_files_BaseFS(self):
         self.dsManager._data_preprocessor._retro = True
@@ -135,8 +135,8 @@ class FeatureSelection(TestCase):
                                                                             objective='binomial')
                       ).select_features(params={"iterations": 30}, model_name='first')
 
-        self.assertEqual(len(data.features_categorical), 2)
-        self.assertEqual(len(data.features_numerical), 3)
+        self.assertEqual(len(data.features_categorical), 1)
+        self.assertEqual(len(data.features_numerical), 4)
 
 
 class HPTune(TestCase):

@@ -2,12 +2,13 @@
 from copy import deepcopy
 from itertools import chain
 import pandas as pd
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
 
+from outboxml import config as env_config
 from outboxml.core.prepared_datasets import PrepareDataset
 from outboxml.data_subsets import DataPreprocessor
 from outboxml.datasets_manager import DSManagerResult
-from outboxml.ensemble import EnsembleResult
+from outboxml.ensemble import EnsembleResult, resolve_model_reference
 from outboxml.core.pydantic_models import ModelConfig, DataModelConfig, SeparationModelConfig
 from outboxml.core.data_prepare import prepare_dataset
 
@@ -19,6 +20,7 @@ async def ensemble_predict(
         log: bool = True,
         modify_dtypes: bool = True,
         raise_on_encoding_error: bool = True,
+        config: Optional[object] = None,
 ) -> Dict:
     """Predict ensemble models.
 
@@ -34,6 +36,10 @@ async def ensemble_predict(
     :type modify_dtypes: bool
     :param Flag for raising exception on encoding error.
     :type raise_on_encoding_error: bool
+    :param config: Configuration object used to resolve pickle paths when the
+        ensemble stores model references instead of model objects. Defaults to
+        the global env_config.
+    :type config: object, optional
     :return: Predictions, data, model info.
     :rtype: dict
     :raises TypeError: Invalid features_values type.
@@ -57,6 +63,9 @@ async def ensemble_predict(
     )
     """
 
+    if config is None:
+        config = env_config
+
     as_dict: bool = False
     if isinstance(features_values, dict):
         as_dict = True
@@ -79,6 +88,7 @@ async def ensemble_predict(
         if as_dict:
             # data = pd.DataFrame([features_values])
             for condition, group_name, model in models:
+                model = resolve_model_reference(model, model_name, config)
                 # FIXME
                 condition = condition.split(" ")
                 # if not data.query(condition).empty:
@@ -98,6 +108,7 @@ async def ensemble_predict(
         df_filtered = {}
 
         for condition, group_name, model in models:
+            model = resolve_model_reference(model, model_name, config)
             if not (data_filtered := data.query(condition)).empty:
                 result = one_model_predict(
                     group_name=group_name,

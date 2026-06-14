@@ -12,6 +12,40 @@ from outboxml.core.utils import ResultPickle
 
 from outboxml import config as env_config
 
+
+def resolve_model_reference(model: Any, model_name: str, config=None) -> dict:
+    """Resolve an ensemble model reference to a model result dict.
+
+    With ``store_references=True`` an ensemble stores the group name (a string)
+    instead of the model object. This loads the referenced group pickle from
+    ``config.prod_models_path`` and selects the model whose config name matches
+    ``model_name``. If ``model`` is already a model result (not a string), it is
+    returned unchanged.
+
+    :param model: Either a group name reference (str) or an already loaded model
+        result dict.
+    :type model: Any
+    :param model_name: Name of the model to select from the referenced group.
+    :type model_name: str
+    :param config: Configuration object providing ``prod_models_path``. Defaults
+        to the global env_config.
+    :type config: object, optional
+    :return: Model result dict for ``model_name``.
+    :rtype: dict
+    :raises StopIteration: If no model with ``model_name`` exists in the group.
+    """
+    if not isinstance(model, str):
+        return model
+    if config is None:
+        config = env_config
+    with open(os.path.join(config.prod_models_path, f"{model}.pickle"), "rb") as f:
+        loaded_group = pickle.load(f)
+    return next(
+        m for m in loaded_group
+        if m["model_config"]["name"] == model_name
+    )
+
+
 class EnsembleResult:
     """Class for storing one part of the models' ensemble.
 
@@ -110,7 +144,8 @@ class Ensemble:
         self._is_maked: bool = False
         self._result_pickle: Optional[List] = None
 
-    def make_ensemble(self, ensemble_name: str, models_names: List[str], groups: List[Tuple[str, str]]) -> None:
+    def make_ensemble(self, ensemble_name: str, models_names: List[str], groups: List[Tuple[str, str]],
+                      store_references: bool = False) -> None:
         """Make an ensemble of models' groups.
 
         Creates an ensemble by loading model groups and associating them
@@ -125,6 +160,10 @@ class Ensemble:
             Group_name is a name of models' group that should be applied
             for the given condition.
         :type groups: List[Tuple[str, str]]
+        :param store_references: If True, the ensemble stores group name strings
+            as references to pickle files instead of loading model objects into
+            memory. Models are then loaded lazily during prediction. Defaults to False.
+        :type store_references: bool
         :return: None
         :rtype: None
 
@@ -168,7 +207,8 @@ class Ensemble:
         if not isinstance(groups, list) or len(groups) == 0:
             raise EnsembleError("invalid groups")
 
-        self._all_groups = {}
+        if self._all_groups is None:
+            self._all_groups = {}
         unique_group_names = set()
         for group in groups:
             if not isinstance(group, tuple) or len(group) != 2:
@@ -191,16 +231,20 @@ class Ensemble:
 
         self._result_pickle = []
         for name in self._models_names:
+            if store_references:
+                models_list = [
+                    (condition, group_name, group_name)
+                    for condition, group_name in groups
+                ]
+            else:
+                models_list = [
+                    (condition, group_name, model)
+                    for condition, group_name in groups
+                    for model in self._all_groups[group_name]
+                    if ModelConfig.model_validate(model["model_config"]).name == name
+                ]
             self._result_pickle.append(
-                EnsembleResult(
-                    model_name=name,
-                    models=[
-                        (condition, group_name, model)
-                        for condition, group_name in groups
-                        for model in self._all_groups[group_name]
-                        if ModelConfig.model_validate(model["model_config"]).name == name
-                    ]
-                )
+                EnsembleResult(model_name=name, models=models_list)
             )
 
         self._is_maked = True
