@@ -2,6 +2,7 @@ import os
 import json
 import pickle
 import shutil
+from copy import deepcopy
 from typing import Callable
 
 import mlflow
@@ -14,7 +15,10 @@ from outboxml.core.config_builders import AutoMLConfigBuilder, AllModelsConfigBu
     ModelConfigBuilder
 from outboxml.core.enums import ModelsParams, EncodingNames, FeatureEngineering
 from outboxml.core.utils import ResultPickle
-from outboxml.datasets_manager import DataSetsManager
+from outboxml.datasets_manager import DataSetsManager, DSManagerResult
+from outboxml.data_subsets import ModelDataSubset
+from outboxml.ensemble import resolve_model_reference
+from outboxml.metrics.processor import ModelMetrics
 
 
 def load_last_pickle_models_result(config=None, group_name_json:str=None):
@@ -53,6 +57,91 @@ def load_last_pickle_models_result(config=None, group_name_json:str=None):
     return all_groups
 
 
+def _predict_ensemble_on_dataset(ds_manager: DataSetsManager, ensemble_result, config=None) -> DSManagerResult:
+    """Optional pre-handler for EnsembleResult on a DataSetsManager dataset.
+
+    Resolves conditions, filters the dataset partition-by-partition, calls the
+    standard :meth:`DataSetsManager.model_predict` for each partition, then
+    stitches the results back together (row-wise, sorted by index) into a single
+    :class:`~outboxml.datasets_manager.DSManagerResult` with recomputed metrics.
+
+    :param ds_manager: Dataset and model manager whose dataset is used.
+    :type ds_manager: DataSetsManager
+    :param ensemble_result: One :class:`~outboxml.ensemble.EnsembleResult` for a
+        single model, containing ``(condition, group_name, model)`` tuples.
+    :param config: Configuration providing ``prod_models_path`` for resolving
+        string model references. Defaults to the manager's external config.
+    :raises ValueError: If no rows match any condition, or conditions overlap.
+    :return: Stitched result ready for comparison with a regular model result.
+    :rtype: DSManagerResult
+    """
+    model_name = ensemble_result.model_name
+    logger.debug('Ensemble predict (handler)||' + model_name)
+    if config is None:
+        config = ds_manager._external_config
+
+    parts = []
+    for condition, group_name, model in ensemble_result.models:
+        model_result = resolve_model_reference(model, model_name, config)
+        data_filtered = ds_manager.dataset.query(condition)
+        if data_filtered.empty:
+            logger.debug('Ensemble part matched no rows||' + str(condition))
+            continue
+        parts.append(ds_manager.model_predict(data=data_filtered,
+                                               model_name=model_name,
+                                               model_result=model_result))
+
+    if not parts:
+        raise ValueError(f"Ensemble model `{model_name}`: no rows matched any condition")
+
+    def _concat(getter):
+        series = [value for p in parts if (value := getter(p)) is not None]
+        if not series:
+            return None
+        return pd.concat(series).sort_index()
+
+    data_subset = ModelDataSubset(
+        model_name=model_name,
+        X_train=_concat(lambda p: p.data_subset.X_train),
+        y_train=_concat(lambda p: p.data_subset.y_train),
+        X_test=_concat(lambda p: p.data_subset.X_test),
+        y_test=_concat(lambda p: p.data_subset.y_test),
+        features_numerical=parts[0].data_subset.features_numerical,
+        features_categorical=parts[0].data_subset.features_categorical,
+        exposure_train=_concat(lambda p: p.data_subset.exposure_train),
+        exposure_test=_concat(lambda p: p.data_subset.exposure_test),
+        sample_weight_train=_concat(lambda p: p.data_subset.sample_weight_train),
+        sample_weight_test=_concat(lambda p: p.data_subset.sample_weight_test),
+    )
+
+    predictions = {
+        'train': _concat(lambda p: p.predictions['train']),
+        'test': _concat(lambda p: p.predictions['test']),
+    }
+
+    full_index = pd.concat([predictions['train'], predictions['test']]).index
+    if full_index.duplicated().any():
+        raise ValueError(f"Ensemble model `{model_name}`: overlapping conditions produce duplicate rows")
+
+    model_config = deepcopy(parts[0].model_config)
+    metrics = ModelMetrics(
+        model_config=model_config,
+        data_subset=data_subset,
+        data_config=None,
+    ).result_dict(predictions=predictions)
+
+    logger.debug('Ensemble predict (handler) finished||' + model_name)
+    return DSManagerResult(
+        model_name=model_name,
+        config=parts[0].config,
+        model=parts[0].model,
+        data_subset=data_subset,
+        model_config=model_config,
+        predictions=predictions,
+        metrics=metrics,
+    )
+
+
 def calculate_previous_models(ds_manager: DataSetsManager,
                               all_groups=None,
                               ensemble=None,
@@ -70,7 +159,7 @@ def calculate_previous_models(ds_manager: DataSetsManager,
         * ``ensemble`` — a list of ``EnsembleResult`` (the simplified ensemble
           format, including ``store_references=True``). Each ensemble part is
           resolved, predicted partition-by-partition and stitched into a single
-          result via :meth:`DataSetsManager.ensemble_predict`. This is the mode
+          result via :func:`_predict_ensemble_on_dataset`. This is the mode
           used to compare a candidate ensemble (with one model replaced) against
           the previous one.
 
@@ -107,7 +196,8 @@ def calculate_previous_models(ds_manager: DataSetsManager,
 
     if ensemble is not None:
         for ensemble_result in ensemble:
-            ds_result_to_compare[ensemble_result.model_name] = ds_manager.ensemble_predict(
+            ds_result_to_compare[ensemble_result.model_name] = _predict_ensemble_on_dataset(
+                ds_manager=ds_manager,
                 ensemble_result=ensemble_result,
                 config=config,
             )
