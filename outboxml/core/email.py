@@ -1,3 +1,4 @@
+import base64
 import os
 from datetime import datetime
 
@@ -1484,3 +1485,241 @@ class HTMLReport:
             self._add_section(text='Model visualizations:')
             for key, fig in figures.items():
                 self._add_plot(fig, key)
+
+
+class EMailMultiAutoMLResult(EMail):
+    """Email summary across several trained AutoMLManager runs.
+
+    Aggregates the results of multiple AutoMLManager instances (e.g. three
+    models trained in a notebook) into a single email/HTML report. For every
+    manager it renders a section with: the deployment decision, the metrics
+    comparison table, the prediction-comparison cohort plots, and — if it was
+    computed — the business metric.
+
+    The class does **not** recompute anything: it reads the already populated
+    ``manager.automl_results`` (filled by ``AutoMLManager.update_models()`` ->
+    ``compare_with_previous()``). Raw ``AutoMLResult`` objects may also be
+    passed directly.
+
+    A self-contained ``email.html`` is always saved to ``config.results_path``
+    (with images embedded as base64 so it is viewable without sending). The
+    SMTP delivery is controlled by the ``send_mail`` flag.
+
+    :param config: Configuration object with email settings and ``results_path``.
+    :type config: object
+    :param managers: List of trained AutoMLManager objects or AutoMLResult objects.
+    :type managers: list
+
+    .. rubric:: Examples
+
+    .. code-block:: python
+
+        from outboxml.core.email import EMailMultiAutoMLResult
+
+        m1 = AutoMLManager(...); m1.update_models()
+        m2 = AutoMLManager(...); m2.update_models()
+        m3 = AutoMLManager(...); m3.update_models()
+
+        EMailMultiAutoMLResult(config, managers=[m1, m2, m3]).success_mail(
+            group_name="Сравнение трёх моделей",
+            send_mail=False,  # сначала посмотреть email.html, потом включить отправку
+        )
+    """
+
+    def __init__(self, config, managers: list):
+        """Initialize EMailMultiAutoMLResult instance.
+
+        :param config: Configuration object (same as EMail).
+        :type config: object
+        :param managers: List of trained AutoMLManager objects (or AutoMLResult
+            objects). For each item the ``automl_results`` attribute is used when
+            present, otherwise the item is treated as an AutoMLResult itself.
+        :type managers: list
+        """
+        super().__init__(config)
+        if not isinstance(managers, (list, tuple)):
+            managers = [managers]
+        self._results = [
+            getattr(manager, "automl_results", manager) for manager in managers
+        ]
+        # (cid, png_bytes) pairs collected while building the body, used to
+        # embed images as base64 in the standalone HTML file.
+        self._embedded_images = []
+
+    def success_mail(self, group_name: str = "AutoML Report", send_mail: bool = True):
+        """Build the summary email and save it as HTML; optionally send it.
+
+        Creates a single email containing one section per AutoML run. The email
+        is always saved as a self-contained ``email.html`` in ``results_path``;
+        it is sent over SMTP only when ``send_mail`` is True.
+
+        :param group_name: Email subject / report title. Defaults to 'AutoML Report'.
+        :type group_name: str
+        :param send_mail: Whether to actually send the email over SMTP. When False
+            only the HTML file is produced. Defaults to True.
+        :type send_mail: bool
+        :return: None
+        :rtype: None
+        """
+        self.header(group_name=group_name)
+        self.mail.add_text(
+            "Сводный отчёт по обученным моделям",
+            n_line_breaks=2,
+        )
+
+        for result in self._results:
+            self._model_section(result)
+
+        self._run_time_table()
+
+        self._save_self_contained_html()
+        if send_mail:
+            self.mail.send_mail(self.email_receivers)
+
+    def _model_section(self, result):
+        """Render a single AutoML run as a section of the email.
+
+        :param result: AutoMLResult object for one manager.
+        :type result: AutoMLResult
+        :return: None
+        :rtype: None
+        """
+        self.mail.add_text(
+            f"━━━ {getattr(result, 'group_name', 'model')} ━━━",
+            properties=['bold'],
+            n_line_breaks=1,
+        )
+        self._decision_info(getattr(result, 'deployment', False))
+        self._metrics_description(getattr(result, 'compare_metrics_df', None))
+        self._plots(getattr(result, 'figures', None),
+                    group_name=getattr(result, 'group_name', 'model'))
+        self._business_metric(getattr(result, 'compare_business_metric', None))
+        self.mail.add_line_breaks(2)
+
+    def _decision_info(self, decision):
+        """Add the deployment decision line for a run.
+
+        :param decision: Boolean deployment decision.
+        :type decision: bool
+        :return: None
+        :rtype: None
+        """
+        if decision:
+            self.mail.add_text("Модель выведена в фон.", n_line_breaks=1)
+        else:
+            self.mail.add_text(
+                "Модель не обеспечила заданный критерий качества.",
+                n_line_breaks=1,
+            )
+
+    def _metrics_description(self, compare_metrics_df):
+        """Add the metrics comparison table for a run.
+
+        :param compare_metrics_df: DataFrame with the metrics comparison. Skipped
+            when None or empty.
+        :type compare_metrics_df: pandas.DataFrame or None
+        :return: None
+        :rtype: None
+        """
+        if compare_metrics_df is None or len(compare_metrics_df) == 0:
+            self.mail.add_text("Нет метрик для отображения.", n_line_breaks=1)
+            return
+        self.mail.add_text("Характеристики моделей:", n_line_breaks=1)
+        self.mail.add_pandas_table(
+            compare_metrics_df.reset_index(),
+            params=dict(text_align='right', font_family='sans-serif', width="180px"),
+        )
+
+    def _plots(self, figures, group_name: str = 'model'):
+        """Add prediction-comparison plots for a run.
+
+        Expects ``figures`` to be a dict ``{model_name: plotly figure}`` as
+        produced by ``AutoMLManager._compare_plots``. Each figure is saved as a
+        PNG in ``results_path`` and embedded into the email. The PNG file name is
+        prefixed with ``group_name`` so figures from different runs do not collide
+        on disk.
+
+        :param figures: Dictionary of Plotly figures. Skipped when empty or not a dict.
+        :type figures: dict or None
+        :param group_name: Name of the run, used to build unique PNG file names.
+        :type group_name: str
+        :return: None
+        :rtype: None
+        """
+        if not figures or not isinstance(figures, dict):
+            return
+        self.mail.add_text("Сравнение предикта:", n_line_breaks=1)
+        for key, figure in figures.items():
+            png_path = os.path.join(self.config.results_path,
+                                    f"{group_name}_{key} figure.png")
+            figure.write_image(png_path)
+            with open(png_path, "rb") as f:
+                png_bytes = f.read()
+            # cid that Mail will assign to this image (n_photos is 0-based count).
+            cid = 'image{}'.format(self.mail.n_photos + 1)
+            self._embedded_images.append((cid, png_bytes))
+            self.mail.add_image(png_bytes, size_pixel=(750, 500), n_line_breaks=1)
+
+    def _business_metric(self, business_metric):
+        """Add the business metric block for a run, if it was computed.
+
+        :param business_metric: Dictionary as returned by
+            ``BaseCompareBusinessMetric.calculate_metric`` with ``first_model``,
+            ``second_model`` and ``difference`` keys. Skipped when missing or
+            when it is the empty DataFrame placeholder.
+        :type business_metric: dict or None
+        :return: None
+        :rtype: None
+        """
+        if not business_metric or isinstance(business_metric, pd.DataFrame):
+            return
+        first_model = business_metric.get('first_model') or {}
+        second_model = business_metric.get('second_model') or {}
+        rows = {
+            "Новая модель": first_model.get('metric'),
+            "Предыдущая модель": second_model.get('metric'),
+            "Разница": business_metric.get('difference'),
+            "Порог (новая модель)": first_model.get('threshold'),
+        }
+        # Drop rows that have no value (e.g. no previous model to compare with).
+        rows = {key: value for key, value in rows.items() if value is not None}
+        if not rows:
+            return
+        self.mail.add_text("Бизнес-метрика:", n_line_breaks=1)
+        business_df = pd.DataFrame(pd.Series(rows), columns=["Значение"]).reset_index()
+        business_df.columns = ["Показатель", "Значение"]
+        self.mail.add_pandas_table(
+            business_df,
+            params=dict(text_align='right', font_family='sans-serif', width="220px"),
+        )
+
+    def _run_time_table(self):
+        """Add a summary table with the finish time of each run."""
+        rows = {}
+        for result in self._results:
+            run_time = getattr(result, 'run_time', {}) or {}
+            rows[getattr(result, 'group_name', 'model')] = run_time.get('export results')
+        if not rows:
+            return
+        self.create_time_table(pd.DataFrame(pd.Series(rows)))
+
+    def _save_self_contained_html(self):
+        """Save the email body as a standalone HTML file with embedded images.
+
+        The Mail body references images via ``cid:`` tags which only resolve in a
+        mail client. Here those references are replaced with base64 data URIs so
+        the saved ``email.html`` renders correctly when opened directly.
+
+        :return: None
+        :rtype: None
+        """
+        html_content = self.mail.body
+        for cid, png_bytes in self._embedded_images:
+            data_uri = "data:image/png;base64," + base64.b64encode(png_bytes).decode("ascii")
+            html_content = html_content.replace("cid:" + cid, data_uri)
+        html_content = html_content + "</body></html>"
+
+        output_path = os.path.join(self.config.results_path, 'email.html')
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        logger.info('Multi AutoML email saved as html||' + output_path)

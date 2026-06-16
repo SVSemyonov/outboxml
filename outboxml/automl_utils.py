@@ -57,7 +57,7 @@ def load_last_pickle_models_result(config=None, group_name_json:str=None):
     return all_groups
 
 
-def _predict_ensemble_on_dataset(ds_manager: DataSetsManager, ensemble_result, config=None) -> DSManagerResult:
+def predict_ensemble_on_dataset(ds_manager: DataSetsManager, ensemble_result, config=None) -> DSManagerResult:
     """Optional pre-handler for EnsembleResult on a DataSetsManager dataset.
 
     Resolves conditions, filters the dataset partition-by-partition, calls the
@@ -196,7 +196,7 @@ def calculate_previous_models(ds_manager: DataSetsManager,
 
     if ensemble is not None:
         for ensemble_result in ensemble:
-            ds_result_to_compare[ensemble_result.model_name] = _predict_ensemble_on_dataset(
+            ds_result_to_compare[ensemble_result.model_name] = predict_ensemble_on_dataset(
                 ds_manager=ds_manager,
                 ensemble_result=ensemble_result,
                 config=config,
