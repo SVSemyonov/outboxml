@@ -1567,8 +1567,11 @@ class EMailMultiAutoMLResult(EMail):
             n_line_breaks=2,
         )
 
+        self._summary_table()
+        self._metrics_table()
+
         for result in self._results:
-            self._model_section(result)
+            self._plots_section(result)
 
         self._run_time_table()
 
@@ -1576,59 +1579,97 @@ class EMailMultiAutoMLResult(EMail):
         if send_mail:
             self.mail.send_mail(self.email_receivers)
 
-    def _model_section(self, result):
-        """Render a single AutoML run as a section of the email.
+    def _summary_table(self):
+        """Add a consolidated overview / business-metric table across all runs.
+
+        One row per run with the headline facts: group name, deployment decision
+        and — when the business metric was computed — its new/previous values,
+        difference and threshold. This single table replaces the per-run
+        deployment lines and the per-run business metric tables.
+
+        :return: None
+        :rtype: None
+        """
+        business_cols = [
+            "Бизнес-метрика: новая",
+            "Бизнес-метрика: предыдущая",
+            "Разница",
+            "Порог",
+        ]
+        rows = []
+        for result in self._results:
+            business_metric = getattr(result, 'compare_business_metric', None)
+            new_value = previous_value = difference = threshold = None
+            if business_metric and not isinstance(business_metric, pd.DataFrame):
+                new_value = (business_metric.get('first_model') or {}).get('metric')
+                previous_value = (business_metric.get('second_model') or {}).get('metric')
+                difference = business_metric.get('difference')
+                threshold = (business_metric.get('first_model') or {}).get('threshold')
+            rows.append({
+                "Группа": getattr(result, 'group_name', 'model'),
+                "Решение": "В фон" if getattr(result, 'deployment', False) else "Отклонена",
+                "Бизнес-метрика: новая": new_value,
+                "Бизнес-метрика: предыдущая": previous_value,
+                "Разница": difference,
+                "Порог": threshold,
+            })
+        if not rows:
+            return
+        summary_df = pd.DataFrame(rows)
+        # Drop business metric columns entirely if no run computed them.
+        if summary_df[business_cols].isna().all().all():
+            summary_df = summary_df.drop(columns=business_cols)
+        self.mail.add_text("Сводная таблица по моделям:", properties=['bold'], n_line_breaks=1)
+        self.mail.add_pandas_table(
+            summary_df,
+            params=dict(text_align='right', font_family='sans-serif', width="160px"),
+        )
+        self.mail.add_line_breaks(2)
+
+    def _metrics_table(self):
+        """Add one consolidated metrics table across all AutoML runs.
+
+        Concatenates the per-run ``compare_metrics_df`` (each already carries an
+        ``Имя модели`` column) into a single table instead of one table per run.
+
+        :return: None
+        :rtype: None
+        """
+        frames = []
+        for result in self._results:
+            compare_metrics_df = getattr(result, 'compare_metrics_df', None)
+            if compare_metrics_df is None or len(compare_metrics_df) == 0:
+                continue
+            frames.append(compare_metrics_df)
+        if not frames:
+            return
+        combined_df = pd.concat(frames).reset_index()
+        self.mail.add_text("Характеристики моделей:", properties=['bold'], n_line_breaks=1)
+        self.mail.add_pandas_table(
+            combined_df,
+            params=dict(text_align='right', font_family='sans-serif', width="150px"),
+        )
+        self.mail.add_line_breaks(2)
+
+    def _plots_section(self, result):
+        """Render the prediction-comparison plots for a single run.
+
+        Only the plots remain per-run (metrics and business metric are now shown
+        in the consolidated tables). The section header is added only when there
+        are figures to show.
 
         :param result: AutoMLResult object for one manager.
         :type result: AutoMLResult
         :return: None
         :rtype: None
         """
-        self.mail.add_text(
-            f"━━━ {getattr(result, 'group_name', 'model')} ━━━",
-            properties=['bold'],
-            n_line_breaks=1,
-        )
-        self._decision_info(getattr(result, 'deployment', False))
-        self._metrics_description(getattr(result, 'compare_metrics_df', None))
-        self._plots(getattr(result, 'figures', None),
-                    group_name=getattr(result, 'group_name', 'model'))
-        self._business_metric(getattr(result, 'compare_business_metric', None))
-        self.mail.add_line_breaks(2)
-
-    def _decision_info(self, decision):
-        """Add the deployment decision line for a run.
-
-        :param decision: Boolean deployment decision.
-        :type decision: bool
-        :return: None
-        :rtype: None
-        """
-        if decision:
-            self.mail.add_text("Модель выведена в фон.", n_line_breaks=1)
-        else:
-            self.mail.add_text(
-                "Модель не обеспечила заданный критерий качества.",
-                n_line_breaks=1,
-            )
-
-    def _metrics_description(self, compare_metrics_df):
-        """Add the metrics comparison table for a run.
-
-        :param compare_metrics_df: DataFrame with the metrics comparison. Skipped
-            when None or empty.
-        :type compare_metrics_df: pandas.DataFrame or None
-        :return: None
-        :rtype: None
-        """
-        if compare_metrics_df is None or len(compare_metrics_df) == 0:
-            self.mail.add_text("Нет метрик для отображения.", n_line_breaks=1)
+        figures = getattr(result, 'figures', None)
+        if not figures or not isinstance(figures, dict):
             return
-        self.mail.add_text("Характеристики моделей:", n_line_breaks=1)
-        self.mail.add_pandas_table(
-            compare_metrics_df.reset_index(),
-            params=dict(text_align='right', font_family='sans-serif', width="180px"),
-        )
+        group_name = getattr(result, 'group_name', 'model')
+        self.mail.add_text(f"━━━ {group_name} ━━━", properties=['bold'], n_line_breaks=1)
+        self._plots(figures, group_name=group_name)
+        self.mail.add_line_breaks(2)
 
     def _plots(self, figures, group_name: str = 'model'):
         """Add prediction-comparison plots for a run.
@@ -1659,39 +1700,6 @@ class EMailMultiAutoMLResult(EMail):
             cid = 'image{}'.format(self.mail.n_photos + 1)
             self._embedded_images.append((cid, png_bytes))
             self.mail.add_image(png_bytes, size_pixel=(750, 500), n_line_breaks=1)
-
-    def _business_metric(self, business_metric):
-        """Add the business metric block for a run, if it was computed.
-
-        :param business_metric: Dictionary as returned by
-            ``BaseCompareBusinessMetric.calculate_metric`` with ``first_model``,
-            ``second_model`` and ``difference`` keys. Skipped when missing or
-            when it is the empty DataFrame placeholder.
-        :type business_metric: dict or None
-        :return: None
-        :rtype: None
-        """
-        if not business_metric or isinstance(business_metric, pd.DataFrame):
-            return
-        first_model = business_metric.get('first_model') or {}
-        second_model = business_metric.get('second_model') or {}
-        rows = {
-            "Новая модель": first_model.get('metric'),
-            "Предыдущая модель": second_model.get('metric'),
-            "Разница": business_metric.get('difference'),
-            "Порог (новая модель)": first_model.get('threshold'),
-        }
-        # Drop rows that have no value (e.g. no previous model to compare with).
-        rows = {key: value for key, value in rows.items() if value is not None}
-        if not rows:
-            return
-        self.mail.add_text("Бизнес-метрика:", n_line_breaks=1)
-        business_df = pd.DataFrame(pd.Series(rows), columns=["Значение"]).reset_index()
-        business_df.columns = ["Показатель", "Значение"]
-        self.mail.add_pandas_table(
-            business_df,
-            params=dict(text_align='right', font_family='sans-serif', width="220px"),
-        )
 
     def _run_time_table(self):
         """Add a summary table with the finish time of each run."""
