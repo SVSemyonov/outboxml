@@ -558,8 +558,13 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
     def __sklearn_clone__(self):
         # sklearn.clone rebuilds nested estimators from __init__ params and drops
         # their fitted state, which would wipe the pre-trained GLM (self._model_sm).
-        # Deep-copy instead so the baseline GLM survives cloning inside cross_val_score.
-        return copy.deepcopy(self)
+        # A full deepcopy survives cloning but duplicates the datasets and GLM on
+        # every CV fold, blowing up memory during hyperparameter tuning. The GLM and
+        # datasets are read-only during CV, so a shallow copy is enough: share those
+        # references and just reset the fitted CatBoost so each fold trains its own.
+        cloned = copy.copy(self)
+        cloned._model_ctb = None
+        return cloned
 
     def fit(self, X=None, y=None, **params):
         """

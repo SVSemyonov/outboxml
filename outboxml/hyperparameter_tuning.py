@@ -1,5 +1,4 @@
 """Module for hyperparameter tuning using optuna algorithm."""
-from copy import deepcopy
 from typing import Callable, Union
 import pandas as pd
 from catboost import CatBoostRegressor, CatBoostClassifier
@@ -418,8 +417,10 @@ class HPTuning:
 
     def _prepare_catboost_over_glm(self, model_name, hp_tuning_data, parameters):
 
+        # GLM is already fitted and used read-only during CV, so share it across all
+        # trials instead of deep-copying it (and its full dataset) on every trial.
         model = CatboostOverGLMModel(data_subset=hp_tuning_data, model_config=self.result_configs[model_name],
-                                     sm_model=deepcopy(self._glm_model))
+                                     sm_model=self._glm_model)
 
         return model, parameters
 
