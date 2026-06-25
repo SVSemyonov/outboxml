@@ -198,6 +198,27 @@ class HPTune(TestCase):
             parameters_for_optuna_func=parameters_for_optuna)
         self.assertIsInstance(params, dict)
 
+    def test_hp_tune_catboost_over_glm(self):
+        self.ds_manager._prepare_datasets['first']._model_config.wrapper = 'catboost_over_glm'
+
+        def parameters_for_optuna(trial):
+            return {
+                'iterations': trial.suggest_int('iterations', 10, 12, step=1),
+                'depth': trial.suggest_int('depth', 1, 15, step=2),
+                'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1, log=True),
+                'l2_leaf_reg': trial.suggest_float("l2_leaf_reg", 1e-5, 100.0, log=True),
+                'subsample': trial.suggest_float("subsample", 0.05, 1.0),
+                'colsample_bylevel': trial.suggest_float("colsample_bylevel", 0.05, 1.0),
+                'min_data_in_leaf': trial.suggest_int("min_data_in_leaf", 1, 101, step=10),
+            }
+
+        params = HPTuning(data_preprocessor=self.ds_manager._data_preprocessor,
+                          folds_num_for_cv=2, ).best_params(model_name='first',
+                                                            trials=5,
+                                                            direction='maximize',
+                                                            parameters_for_optuna_func=parameters_for_optuna)
+        self.assertIsInstance(params, dict)
+
     def test_hp_tune_xgboost(self):
         self.ds_manager._prepare_datasets['first']._model_config.objective = 'poisson'
         self.ds_manager._prepare_datasets['first']._model_config.wrapper = 'xgboost'

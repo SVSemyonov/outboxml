@@ -1,3 +1,4 @@
+import copy
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -553,6 +554,12 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
         self._model_ctb = None
         self._min_max_scaler = self.sm_model.min_max_scaler
         self.work_type_fit = work_type_fit
+
+    def __sklearn_clone__(self):
+        # sklearn.clone rebuilds nested estimators from __init__ params and drops
+        # their fitted state, which would wipe the pre-trained GLM (self._model_sm).
+        # Deep-copy instead so the baseline GLM survives cloning inside cross_val_score.
+        return copy.deepcopy(self)
 
     def fit(self, X=None, y=None, **params):
         """

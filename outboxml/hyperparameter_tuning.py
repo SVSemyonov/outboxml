@@ -1,4 +1,5 @@
 """Module for hyperparameter tuning using optuna algorithm."""
+from copy import deepcopy
 from typing import Callable, Union
 import pandas as pd
 from catboost import CatBoostRegressor, CatBoostClassifier
@@ -11,7 +12,7 @@ import statsmodels.formula.api as sf
 from outboxml.core.enums import ModelsParams
 from outboxml.data_subsets import DataPreprocessor
 from outboxml.datasets_manager import DataSetsManager, ModelDataSubset
-from outboxml.models import StatsModelsEstimator
+from outboxml.models import StatsModelsEstimator, CatboostOverGLMModel
 
 class OptunaModel:
     """Legacy class. Not used."""
@@ -320,6 +321,8 @@ class HPTuning:
 
         elif model.__name__ == 'CatBoostRegressor' or model.__name__ == 'CatBoostClassifier':
             return self._prepare_catboost(model_name, hp_tuning_data, parameters)
+        elif model.__name__ == 'CatboostOverGLMModel':
+            return self._prepare_catboost_over_glm(model_name, hp_tuning_data, parameters)
 
         elif  model.__name__ == 'from_formula':
             return self._prepare_glm(model_name, hp_tuning_data, parameters)
@@ -392,6 +395,14 @@ class HPTuning:
 
         elif wrapper == ModelsParams.glm:
             model = sf.glm
+        elif wrapper == ModelsParams.catboost_over_glm:
+
+            logger.info('Fitting glm')
+            self._glm_model = StatsModelsEstimator(sm_model=sf.glm, model_config=self.result_configs[model_name],
+                                                   datasubset=hp_tuning_data)
+            self._glm_model.fit(X=hp_tuning_data.X_train, y=hp_tuning_data.y_train,)
+
+            model = CatboostOverGLMModel
 
         else:
             logger.error('No model in library for HP Tuning||Use external model')
@@ -405,4 +416,10 @@ class HPTuning:
 
         return model, parameters
 
+    def _prepare_catboost_over_glm(self, model_name, hp_tuning_data, parameters):
+
+        model = CatboostOverGLMModel(data_subset=hp_tuning_data, model_config=self.result_configs[model_name],
+                                     sm_model=deepcopy(self._glm_model))
+
+        return model, parameters
 
