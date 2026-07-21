@@ -26,7 +26,7 @@ from outboxml.extractors import Extractor, BaseExtractor, SimpleExtractor
 from outboxml.metrics.base_metrics import BaseMetric, BaseMetrics
 from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes, PrepareDatasetPl
 from outboxml.metrics.processor import ModelMetrics
-from outboxml.models import DefaultModels
+from outboxml.models import DefaultModels, GLMCatboostCombineModel, CatboostOverGLMModel, XgboostModel, CatboostModel
 from outboxml import config
 
 
@@ -81,7 +81,7 @@ class DSManagerResult:
         :param model_name: Name of the model.
         :type model_name: str
         :param model: Trained model object.
-        :type model: Any
+        :type model: Anygit push origin <имя_ветки> --force
         :param data_subset: Object containing train/test data subsets.
         :type data_subset: ModelDataSubset
         :param model_config: Configuration object for the model.
@@ -155,6 +155,48 @@ class DSManagerResult:
 
         return model_results
 
+    def dict_for_export(self, ):
+        """Конверте DSManagerResult в пикл"""
+        # xgboost
+        wrapper = self.model_config.wrapper
+        logger.info('Export result to python dict')
+        xgb_model = None
+        if isinstance(self.model, GLMCatboostCombineModel):
+            model = self.model.model
+            min_max_scaler = self.model.min_max_scaler
+            glm_model = None
+            catboost_model = None
+        elif isinstance(self.model, CatboostOverGLMModel):
+            model = None
+            glm_model = self.model.sm_model.model
+            catboost_model = self.model.model_ctb
+            min_max_scaler = self.model.min_max_scaler
+        elif isinstance(self.model, XgboostModel):
+            model = None
+            min_max_scaler = None
+            glm_model = None
+            catboost_model = None
+            xgb_model = self.model.model_xgb
+        else:
+            model = self.model
+            min_max_scaler = None
+            glm_model = None
+            catboost_model = None
+
+        model_results = {
+            "model_config": self.model_config.model_dump(),
+            "wrapper": wrapper,
+            "model": model,
+            "glm_model": glm_model,
+            "catbosot_model": catboost_model,
+            "xgm_model": xgb_model,
+            "min_max_scaler": min_max_scaler,
+            "features_numerical": self.data_subset.features_numerical,
+            "features_categorical": self.data_subset.features_categorical,
+        }
+
+        return model_results
+
     @classmethod
     def from_pickle_model_result(cls, model_result: dict, all_model_config: AllModelsConfig, ):
         """Convert pickle dictionary to DSManagerResult object.
@@ -183,6 +225,45 @@ class DSManagerResult:
         features_categorical = model_result['features_categorical']
         return cls(model_name=model_name,
                    config=all_model_config,
+                   data_subset=ModelDataSubset(model_name=model_name,
+                                               features_numerical=features_numerical,
+                                               features_categorical=features_categorical,
+                                               ),
+                   model=model,
+                   model_config=model_config)
+
+    @classmethod
+    def from_dict(cls, model_result: dict):
+        """Конвертер пикла в DSManagerResult. Используется библиотечный вид модели (wrapper)"""
+        model_config = model_result['model_config']
+        model_name = model_result['model_config']['name']
+        model_config = ModelConfig.model_validate(model_config)
+        wrapper = model_result['wrapper']
+        features_numerical = model_result['features_numerical']
+        features_categorical = model_result['features_categorical']
+        if wrapper == ModelsParams.catboost_over_glm:
+            model = CatboostOverGLMModel(model_config=model_config,
+                                         sm_model=GLMCatboostCombineModel(model_name=model_name,
+                                                                          wrapper='glm',
+                                                                          min_max_scaler=model_result[
+                                                                              'min_max_scaler'],
+                                                                          model=model_result['glm_model'],
+                                                                          features_numerical=features_numerical,
+                                                                          features_categorical=features_categorical,
+                                                                          ),
+                                         data_subset=None, )
+            model.model_ctb = model_result['catboost_model']
+        else:
+            model = GLMCatboostCombineModel(model_name=model_name,
+                                            wrapper=wrapper,
+                                            min_max_scaler=model_result['min_max_scaler'],
+                                            model=model_result['model'],
+                                            features_numerical=features_numerical,
+                                            features_categorical=features_categorical,
+                                            )
+
+        return cls(model_name=model_name,
+                   config=None,
                    data_subset=ModelDataSubset(model_name=model_name,
                                                features_numerical=features_numerical,
                                                features_categorical=features_categorical,
