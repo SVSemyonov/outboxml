@@ -253,7 +253,7 @@ class DSManagerResult:
                                                                           ),
                                          data_subset=ModelDataSubset(model_name=model_name),
                                          )
-            model.model_ctb = model_result['catboost_model']
+            model._model_ctb = model_result['catboost_model']
         else:
             model = GLMCatboostCombineModel(model_name=model_name,
                                             wrapper=wrapper,

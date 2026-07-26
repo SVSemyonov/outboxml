@@ -534,7 +534,7 @@ class CatboostOverGLMModel(BaseWrapperModel, RegressorMixin, BaseEstimator):
         self.model_config = model_config
         self.sm_model = sm_model
         self.data_subset = data_subset
-        self._model_name: str = self.model_config.model_name
+        self._model_name: str = self.model_config.name
         self._objective: Literal[
             ModelsParams.poisson, ModelsParams.gamma, ModelsParams.binary] = self.model_config.objective
         self._wrapper: Literal[ModelsParams.catboost] = self.model_config.wrapper
