@@ -223,7 +223,7 @@ class DSManagerResult:
             "wrapper": wrapper,
             "model": model,
             "glm_model": glm_model,
-            "catbosot_model": catboost_model,
+            "catboost_model": catboost_model,
             "xgm_model": xgb_model,
             "min_max_scaler": min_max_scaler,
             "features_numerical": self.data_subset.features_numerical,
