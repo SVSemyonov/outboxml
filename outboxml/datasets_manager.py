@@ -697,6 +697,7 @@ class DataSetsManager:
                       data: pd.DataFrame,
                       model_name: str,
                       model_result=None,
+                      use_exposure: bool = False,
                       full_output: bool = True,
                       ) -> DSManagerResult:
         """Construct DSManagerResult for external model or data prediction.
@@ -734,7 +735,8 @@ class DataSetsManager:
                                                                             all_model_config=self._all_models_config)
 
         model_config = deepcopy(model_result.model_config)
-        model_config.column_exposure = None
+        if not use_exposure:
+            model_config.column_exposure = None
         model_config.column_weight = None
         model = model_result.model
         features_numerical = model_result.data_subset.features_numerical

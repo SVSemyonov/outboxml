@@ -2,14 +2,15 @@ from pydantic import BaseModel, model_validator
 from typing import List, Dict, Any, Optional, Union
 from typing_extensions import Literal
 
+import config
 from outboxml.core.enums import FilesNames, SeparationParams, FeatureEngineering
 from outboxml.core.errors import ConfigError
 
 
 class SeparationModelConfig(BaseModel):
-    kind: Literal[SeparationParams.rand, SeparationParams.period, SeparationParams.null]
+    kind: Literal[SeparationParams.rand, SeparationParams.period, SeparationParams.null] = SeparationParams.rand
     random_state: Optional[int] = None
-    test_train_proportion: Optional[float] = None
+    test_train_proportion: Optional[float] = 0.2
     train_period: Optional[List] = None
     test_period: Optional[List] = None
     period_column: Optional[List[str]] = None
@@ -227,11 +228,11 @@ class HPTuneConfig(BaseModel):
 
 
 class ModelInferenceConfig(BaseModel):
-    prod_models_folder: str
+    prod_models_folder: str = config.prod_models_folder
     metric_growth_value: Dict[str, float]
     calculate_threshold: int = 0
     threshold: list = [0.8, 0.8]
-    prod_path: Optional[str] = None
+    prod_path: Optional[str] = config.prod_path
 
 
 
@@ -241,9 +242,9 @@ class AutoMLConfig(BaseModel):
     feature_selection: FeatureSelectionConfig
     hp_tune: HPTuneConfig
     inference_criteria: ModelInferenceConfig
-    mlflow_experiment: str
-    grafana_table_name: str
-    dashboard_name: str
+    mlflow_experiment:  Optional[str] = config.mlflow_experiment
+    grafana_table_name: Optional[str] = None
+    dashboard_name:  Optional[str] = None
     trigger: Optional[Dict[str, str]] = None
 
 class MonitoringFactoryConfig(BaseModel):
@@ -257,8 +258,8 @@ class MonitoringConfig(BaseModel):
     group_name: str
     prod_models_path: str
     pickle_name: str
-    grafana_table_name: str
-    dashboard_name: str
+    grafana_table_name: Optional[str] = None
+    dashboard_name: Optional[str] = None
     monitoring_factory: List[MonitoringFactoryConfig] = [MonitoringFactoryConfig()]
     extrapolation_period: int = 12
     target_column: str
