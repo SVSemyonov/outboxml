@@ -163,11 +163,18 @@ class MLFlowWrapper:
         self.group_name = group_name
         self.mlflow_tracking_uri = mlflow_tracking_uri
         os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"
-        mlflow.set_tracking_uri(self.mlflow_tracking_uri)
-        mlflow.set_experiment(self.experiment_name)
         self.results_path = results_path
         if tags is not None:
             self.tags = tags
+
+    def _setup(self):
+        """Point MLFlow client to the tracking server and experiment.
+
+        Called right before each run, not in ``__init__``, so creating the wrapper
+        does not require a reachable MLFlow server.
+        """
+        mlflow.set_tracking_uri(self.mlflow_tracking_uri)
+        mlflow.set_experiment(self.experiment_name)
 
     def start_run(self, ):
         """Start a new MLFlow run.
@@ -184,6 +191,7 @@ class MLFlowWrapper:
             wrapper = MLFlowWrapper(group_name="MyModel")
             wrapper.start_run()
         """
+        self._setup()
         mlflow.start_run(run_name=self.group_name)
 
     def end_run(self):
@@ -238,6 +246,7 @@ class MLFlowWrapper:
             # Results logged to MLFlow with nested runs for each model
         """
         logger.debug('Exporting results to MLFlow')
+        self._setup()
         with mlflow.start_run(run_name=self.group_name + str(automl_results.run_time['start']), ):
             log = os.path.join(self.results_path, "log.log")
             report = os.path.join(self.results_path, "automl_report.html")
@@ -361,7 +370,7 @@ class MLFlowKeycloakWrapper(MLFlowWrapper):
                  client_secret: str = None,
                  verify_ssl: bool = False,
                  token_refresh_margin: int = 30):
-        """Initialize MLFlowKeycloakWrapper and perform the initial KeyCloak login."""
+        """Initialize MLFlowKeycloakWrapper. KeyCloak login happens on the first run."""
         self.keycloak_url = keycloak_url.rstrip('/') if keycloak_url else None
         self.realm = realm
         self.client_id = client_id
@@ -376,9 +385,8 @@ class MLFlowKeycloakWrapper(MLFlowWrapper):
         if not self.verify_ssl:
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-        if self.keycloak_url and self.realm and self.client_id:
-            self._authenticate()
-        else:
+        self._use_keycloak = bool(self.keycloak_url and self.realm and self.client_id)
+        if not self._use_keycloak:
             logger.warning('MLFlow Keycloak||keycloak_url/realm/client_id not set, '
                             'falling back to unauthenticated MLFlow connection')
 
@@ -437,7 +445,7 @@ class MLFlowKeycloakWrapper(MLFlowWrapper):
         os.environ["MLFLOW_TRACKING_TOKEN"] = token_data['access_token']
 
     def _ensure_valid_token(self):
-        if not self.keycloak_url:
+        if not self._use_keycloak:
             return
         if time.time() >= self._token_expires_at - self.token_refresh_margin:
             self._refresh()
