@@ -5,6 +5,7 @@ from unittest import TestCase
 from unittest import main
 
 import numpy as np
+import pytest
 from catboost import CatBoostRegressor
 from sklearn.base import BaseEstimator
 from statsmodels.genmod.generalized_linear_model import GLMResultsWrapper
@@ -63,6 +64,7 @@ class TestTitanicDS(TestCase):
         self.assertIsNotNone(self.dsManager.dataset)
         self.assertEqual(self.dsManager.dataset.shape, (891, 7))
 
+    @pytest.mark.integration
     def test_db_extractor(self):
         self.assertIsInstance(BaseExtractor(data_config=DataModelConfig(source='database',
                                                                         table_name_source='public."TitanicExample"',

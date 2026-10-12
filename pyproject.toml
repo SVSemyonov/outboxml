@@ -59,6 +59,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "pytest-cov",
     "black",
     "ruff",
     "jupyter"
@@ -71,6 +72,17 @@ include-package-data = true
 where = ["."]
 # Allow-list: any other top-level package in the working tree must not end up in the distribution
 include = ["outboxml", "outboxml.*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-m 'not integration'"
+markers = [
+    "integration: requires external services from outboxml/app/docker-compose.yml (MLflow, Postgres); run with -m integration",
+]
+
+[tool.coverage.run]
+source = ["outboxml"]
 
 [tool.ruff]
 line-length = 88

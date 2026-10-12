@@ -6,6 +6,7 @@ from unittest import TestCase
 
 import numpy as np
 import pandas as pd
+import pytest
 from sklearn.metrics import mean_absolute_error
 
 from outboxml.automl_manager import RetroFS, AutoMLManager
@@ -144,6 +145,7 @@ class HPTune(TestCase):
     def setUp(self):
         self.ds_manager = DataSetsManager(config_name=str(config_name))
 
+    @pytest.mark.integration
     def test_hp_tune_from_config(self):
         self.ds_manager._prepare_datasets['first']._model_config.objective = 'poisson'
         self.ds_manager._prepare_datasets['first']._model_config.wrapper = 'catboost'
@@ -268,6 +270,7 @@ class AutoMLTest(TestCase):
         value = result['first_model']['metric'] - result['second_model']['metric']
         self.assertAlmostEqual(value, 0.002, 2)
 
+    @pytest.mark.integration
     def test_titanic_example(self):
         def parameters_for_optuna(trial):
             return {
@@ -387,6 +390,7 @@ class TestRelease(TestCase):
     def setUp(self):
         pass
 
+    @pytest.mark.integration
     def test_MlflowRelease(self):
         MLFLowRelease(config=config).load_model_to_source_from_mlflow()
 
