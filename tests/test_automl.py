@@ -43,7 +43,6 @@ auto_ml_config = test_configs_path / 'automl-titanic.json'
 
 path_to_target = test_data_path / 'target_extrapolation_test.gzip'
 
-pickle_name = 'example_titanic_2026_04_23_15_55_03'
 
 class TitanicMetric(BaseMetric):
     def __init__(self):
@@ -240,6 +239,7 @@ class HPTune(TestCase):
         self.assertIsInstance(params, dict)
 
 
+@pytest.mark.usefixtures('prod_pickle_cls')
 class AutoMLTest(TestCase):
 
     def setUp(self):
@@ -344,6 +344,7 @@ class BusinessMetricsExample(BaseMetric):
     def calculate_metric(self, result1: dict, result2: dict) -> dict:
         return {'Test metric': 1}
 
+@pytest.mark.usefixtures('prod_pickle_cls')
 class TestPredict(TestCase):
     def setUp(self):
         pass
@@ -352,7 +353,7 @@ class TestPredict(TestCase):
 
         result = asyncio.run(
             main_predict(config=config, group_name=None, features_values=LogsExtractor().extract_dataset()[:100],
-                         second_group_name=pickle_name,
+                         second_group_name=self.prod_pickle_name,
                          second_features_values=LogsExtractor().extract_dataset()[700:]))
         self.assertIsInstance(result, dict)
         self.assertIsInstance(result['main_response'], dict)
