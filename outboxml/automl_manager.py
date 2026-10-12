@@ -2,6 +2,7 @@ import json
 import os
 import pickle
 import shutil
+import time
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +11,8 @@ from typing import Optional, Dict, Any
 import optuna
 import pandas as pd
 import mlflow
+import requests
+import urllib3
 from dotenv.main import rewrite
 from loguru import logger
 from pydantic import ValidationError
@@ -286,6 +289,168 @@ class MLFlowWrapper:
                     except:
                         logger.info('No parameters to log')
 
+
+class MLFlowKeycloakWrapper(MLFlowWrapper):
+    """MLFlowWrapper variant for MLFlow servers deployed behind KeyCloak.
+
+    A KeyCloak-protected MLFlow normally answers unauthenticated requests with
+    an HTTP redirect to a KeyCloak login page (browser enters login/password,
+    KeyCloak redirects back to MLFlow with a session). The mlflow SDK has no
+    browser and no way to follow that flow, so plain :class:`MLFlowWrapper`
+    just receives the login page HTML instead of the MLFlow REST API response.
+
+    This wrapper authenticates against KeyCloak directly using the "Direct
+    Access Grants" (Resource Owner Password Credentials) flow, which returns
+    an OAuth2 access token without any redirect. The token is exposed via the
+    ``MLFLOW_TRACKING_TOKEN`` environment variable, which the mlflow SDK
+    automatically attaches to every REST call as an ``Authorization: Bearer``
+    header, so no further mlflow-side changes are needed. The token is
+    refreshed transparently before it expires.
+
+    :param keycloak_url: Base URL of the KeyCloak server, e.g. "https://keycloak.company.local".
+    :type keycloak_url: str
+    :param realm: KeyCloak realm name.
+    :type realm: str
+    :param client_id: KeyCloak client id configured for MLFlow (must allow direct access grants).
+    :type client_id: str
+    :param username: Username for authentication. Defaults to ``config.mlflow_user``.
+    :type username: str
+    :param password: Password for authentication. Defaults to ``config.mlflow_password``.
+    :type password: str
+    :param client_secret: Client secret, required only for confidential clients. Defaults to None.
+    :type client_secret: str, optional
+    :param verify_ssl: Whether to verify SSL certificates for both KeyCloak and MLFlow.
+        Defaults to False, since these internal deployments commonly run with
+        self-signed certificates.
+    :type verify_ssl: bool
+    :param token_refresh_margin: Seconds before token expiry to proactively refresh it.
+        Defaults to 30.
+    :type token_refresh_margin: int
+
+    .. rubric:: Examples
+
+    .. code-block:: python
+
+        wrapper = MLFlowKeycloakWrapper(
+            experiment_name="Titanic_Experiment",
+            group_name="Titanic_Model_v1",
+            results_path="/path/to/results",
+            mlflow_tracking_uri="https://mlflow.company.local",
+            keycloak_url="https://keycloak.company.local",
+            realm="company",
+            client_id="mlflow",
+            username="user",
+            password="pass",
+        )
+        wrapper.start_run()
+        wrapper.log_results(automl_result)
+    """
+
+    def __init__(self,
+                 experiment_name: str = 'FrameworkTest',
+                 group_name: str = 'example',
+                 project: str = 'test_project',
+                 tags: dict = None,
+                 results_path='results',
+                 mlflow_tracking_uri="http://localhost:5000",
+                 keycloak_url: str = None,
+                 realm: str = None,
+                 client_id: str = None,
+                 username: str = None,
+                 password: str = None,
+                 client_secret: str = None,
+                 verify_ssl: bool = False,
+                 token_refresh_margin: int = 30):
+        """Initialize MLFlowKeycloakWrapper and perform the initial KeyCloak login."""
+        self.keycloak_url = keycloak_url.rstrip('/') if keycloak_url else None
+        self.realm = realm
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.username = username if username is not None else config.mlflow_user
+        self.password = password if password is not None else config.mlflow_password
+        self.verify_ssl = verify_ssl
+        self.token_refresh_margin = token_refresh_margin
+        self._refresh_token_value = None
+        self._token_expires_at = 0.0
+
+        if not self.verify_ssl:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+        if self.keycloak_url and self.realm and self.client_id:
+            self._authenticate()
+        else:
+            logger.warning('MLFlow Keycloak||keycloak_url/realm/client_id not set, '
+                            'falling back to unauthenticated MLFlow connection')
+
+        super().__init__(experiment_name=experiment_name,
+                          group_name=group_name,
+                          project=project,
+                          tags=tags,
+                          results_path=results_path,
+                          mlflow_tracking_uri=mlflow_tracking_uri)
+
+    def _token_endpoint(self) -> str:
+        return f"{self.keycloak_url}/realms/{self.realm}/protocol/openid-connect/token"
+
+    def _authenticate(self):
+        """Log in to KeyCloak via the direct access grant (resource owner password) flow.
+
+        This bypasses the interactive browser redirect that KeyCloak performs
+        for normal MLFlow UI logins, which the mlflow SDK cannot follow.
+        """
+        payload = {
+            'grant_type': 'password',
+            'client_id': self.client_id,
+            'username': self.username,
+            'password': self.password,
+        }
+        if self.client_secret:
+            payload['client_secret'] = self.client_secret
+
+        response = requests.post(self._token_endpoint(), data=payload, verify=self.verify_ssl)
+        response.raise_for_status()
+        self._set_token(response.json())
+
+    def _refresh(self):
+        """Refresh the access token, re-authenticating from scratch if needed."""
+        if not self._refresh_token_value:
+            self._authenticate()
+            return
+        payload = {
+            'grant_type': 'refresh_token',
+            'client_id': self.client_id,
+            'refresh_token': self._refresh_token_value,
+        }
+        if self.client_secret:
+            payload['client_secret'] = self.client_secret
+        try:
+            response = requests.post(self._token_endpoint(), data=payload, verify=self.verify_ssl)
+            response.raise_for_status()
+            self._set_token(response.json())
+        except Exception as e:
+            logger.warning(f'MLFlow Keycloak||Token refresh failed, re-authenticating: {e}')
+            self._authenticate()
+
+    def _set_token(self, token_data: dict):
+        self._refresh_token_value = token_data.get('refresh_token')
+        self._token_expires_at = time.time() + token_data.get('expires_in', 60)
+        os.environ["MLFLOW_TRACKING_TOKEN"] = token_data['access_token']
+
+    def _ensure_valid_token(self):
+        if not self.keycloak_url:
+            return
+        if time.time() >= self._token_expires_at - self.token_refresh_margin:
+            self._refresh()
+
+    def start_run(self):
+        """Refresh the KeyCloak token if needed, then start a new MLFlow run."""
+        self._ensure_valid_token()
+        super().start_run()
+
+    def log_results(self, automl_results: AutoMLResult, *tags):
+        """Refresh the KeyCloak token if needed, then log AutoML results to MLFlow."""
+        self._ensure_valid_token()
+        super().log_results(automl_results, *tags)
 
 
 class RetroFS(RetroDataset):

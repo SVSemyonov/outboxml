@@ -19,3 +19,4 @@ venv/
 /catboost_info
 /results
 .coverage
+agent_runs/

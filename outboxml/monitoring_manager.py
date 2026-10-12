@@ -250,9 +250,13 @@ class MonitoringManager:
         :return: Dataset name.
         :rtype: str
         """
-        if self._monitoring_config.data_source in ['csv', 'parquet']:
-            dataset_name = os.path.basename(os.path.splitext(self._ds_manager.data_config.local_name_source)[0])
-        else:
-            dataset_name = self._monitoring_config.data_config.table_name_source
+        try:
+            if self._monitoring_config.data_source in ['csv', 'parquet']:
+                dataset_name = os.path.basename(os.path.splitext(self._ds_manager.data_config.local_name_source)[0])
+            else:
+                dataset_name = self._ds_manager.data_config.table_name_source
+        except Exception as exc:
+            logger.error("Could not determine dataset name: %s", exc)
+            dataset_name = 'unknown_dataset'
 
         return dataset_name

@@ -17,6 +17,8 @@ prod_path = Path(__file__).resolve().parent.parent/ prod_models_folder
 
 mlflow_tracking_uri = env_reader.str("mlflow_tracking_uri", "http://mlflow:5000")
 mlflow_experiment = env_reader.str("mlflow_experiment", "FrameworkTest")
+mlflow_user = env_reader.str("mlflow_user", "")
+mlflow_password = env_reader.str("mlflow_password", "")
 
 
 connection_params = env_reader.str("connection", f"postgresql+psycopg2://mlflow:mlflowpassword@postgre:5432/mlflow")
