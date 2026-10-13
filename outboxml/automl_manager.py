@@ -1147,7 +1147,7 @@ class AutoMLManager(DataSetsManager):
             self._auto_ml_config = AutoMLConfig.model_validate_json(auto_ml_config)
         except ValidationError as e:
             logger.error("Config validation error" + str(e))
-            raise ValidationError(e)
+            raise  # re-raise the original ValidationError
         self._init_dsmanager()
         self._is_initialized = True
         self.group_name = f"{self._auto_ml_config.group_name}_{self._auto_ml_config.project}"
