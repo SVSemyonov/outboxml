@@ -431,7 +431,7 @@ class EMailDSResult(EMail):
 
         for key in self._ds_manager_result.keys():
             model_config = self._ds_manager_result[key].config
-            ds = DataSetsManager(config_name=model_config)
+            ds = DataSetsManager(config_name=model_config.model_dump(mode='json'))
             ds._all_models_config = model_config
             res_export = ResultExport(ds_manager=ds)
             res_export.result = self._ds_manager_result[key]
@@ -623,7 +623,7 @@ class EMailDSCompareResult(EMailDSResult):
 
         for key in self._ds_manager_result.keys():
             model_config = self._ds_manager_result[key].config
-            ds = DataSetsManager(config_name=model_config)
+            ds = DataSetsManager(config_name=model_config.model_dump(mode='json'))
             ds._all_models_config = model_config
             res_export = ResultExport(ds_manager=ds)
             res_export.result = self._ds_manager_result
