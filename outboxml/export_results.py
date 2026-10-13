@@ -85,11 +85,12 @@ class ResultExport:
         self.__results_path = self.config.results_path
         self.__results_path.mkdir(exist_ok=True)
         self._ds_manager_to_compare = ds_manager_to_compare
+        self.result_to_compare = None
 
         try:
             self.result = self._ds_manager.get_result()
             if not isinstance(self.result, dict):
-                raise ('Wrong format of results')
+                raise TypeError('Wrong format of results')
         #   logger.debug(str(self.project_name) + '||Results from DS_manager read')
         except TypeError:
             logger.error('No result found')
@@ -97,7 +98,7 @@ class ResultExport:
             self.result_to_compare = self._ds_manager_to_compare.get_result()
             self.project_name_to_compare = self._ds_manager_to_compare.config.group_name
             if not isinstance(self.result_to_compare, dict):
-                raise ('Wrong format of results')
+                raise TypeError('Wrong format of results')
             logger.debug(str(self.project_name_to_compare) + '||Results from DS_manager read')
 
     def __prepare_results(self, result: DSManagerResult):
@@ -220,7 +221,7 @@ class ResultExport:
 
         """
         if ds_manager_result is None and self.result_to_compare is None:
-            raise ('No results to compare!')
+            raise ValueError('No results to compare!')
         if ds_manager_result:
             result2 = ds_manager_result
         else:
@@ -284,7 +285,7 @@ class ResultExport:
 
         """
         if ds_manager_result is None and self.result_to_compare is None:
-            raise ('No results to compare!')
+            raise ValueError('No results to compare!')
         if ds_manager_result:
             result2 = ds_manager_result
         else:
