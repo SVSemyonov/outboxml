@@ -68,7 +68,6 @@ def test_review_error_mail(automl):
     assert automl.status["EMail Review"] is True
 
 
-@pytest.mark.xfail(strict=True, reason="review reads status['Loading pickle to git'], a key that does not exist")
 def test_review_success_mail(automl):
     email = MagicMock()
 
@@ -116,3 +115,23 @@ def test_keycloak_refreshes_expired_token_and_reauthenticates_on_failure(monkeyp
     with patch("outboxml.automl_manager.requests.post", side_effect=[failing, keycloak_response("t2")]) as post:
         wrapper._ensure_valid_token()
     assert [call.kwargs["data"]["grant_type"] for call in post.call_args_list] == ["refresh_token", "password"]
+
+
+def test_review_success_mail_with_release_notification(automl):
+    email = MagicMock()
+    automl.status["Loading pickle to git"] = True
+
+    with patch("outboxml.automl_manager.EMail") as release_email:
+        automl.review(email=email, send_mail=True)
+
+    release_email.return_value.success_release_mail.assert_called_once()
+
+
+def test_successful_update_sends_only_success_mail(automl):
+    with patch("outboxml.automl_manager.AutoMLReviewEMail") as email_cls:
+        automl.update_models(send_mail=True)
+
+    email_cls.return_value.success_mail.assert_called_once_with(automl.automl_results)
+    email_cls.return_value.error_mail.assert_not_called()
+    assert automl.status["EMail Review"] is True
+    assert automl.status["Loading results to MLFLow"] is True
