@@ -293,7 +293,7 @@ class ResultExport:
         if features is None:
             features, bins = self.__read_config_target_slices(model_name)
         if not features and plot_type != 2:
-            raise 'No features to compare models!'
+            raise ValueError('No features to compare models!')
         df1 = self.df_for_graphs(result=self.result[model_name], features=features, use_exposure=use_exposure,
                                  only_test=only_test)
         df2 = self.df_for_graphs(result=result2, features=features, use_exposure=use_exposure, only_test=only_test)
@@ -609,7 +609,8 @@ class GrafanaExport:
         """
         self.df = df
         if self.df.empty:
-            raise logger.error('Empty dataframe to load')
+            logger.error('Empty dataframe to load')
+            raise ValueError('Empty dataframe to load')
         self.table_name = table_name
         self.schema = schema
         self.__connection = None
