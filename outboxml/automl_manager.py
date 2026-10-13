@@ -1082,7 +1082,8 @@ class AutoMLManager(DataSetsManager):
                 email.common_error_mail(group_name=self.group_name, error=str(error))
             else:
                 email.success_mail(self.automl_results)
-                if self.status['Loading pickle to git']:
+                # the release step is optional and not part of the default status
+                if self.status.get('Loading pickle to git', False):
                     EMail(self._external_config).success_release_mail(self.automl_results.result_pickle_name,
                                                                       new_features=self.automl_results.new_features)
             self.status['EMail Review'] = True
