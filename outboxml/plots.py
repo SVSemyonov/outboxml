@@ -189,7 +189,7 @@ class MLPlot:
             logger.info('Cohort plot ' + self._model1_name)
             figure = self.cohort_plot(cut_min_value, cut_max_value, samples, cohort_base)
         else:
-            raise 'Unknown plot type!'
+            raise ValueError(f'Unknown plot type: {plot_type}')
         return figure
 
     def cohort_plot(self, cut_min_value: float, cut_max_value: float, samples=100.0, cohort_base: str = 'model'):
@@ -683,7 +683,8 @@ class CompareModelsPlot:
                                                 cut_max_value=cut_max_value,
                                                 samples=samples, )
         else:
-            raise logger.error('Unknown plot type')
+            logger.error('Unknown plot type')
+            raise ValueError(f'Unknown plot type: {plot_type}')
         return figure
 
     def _factors_plots(self):
