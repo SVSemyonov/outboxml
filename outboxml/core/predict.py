@@ -256,6 +256,11 @@ def one_model_predict(
 
     else:
         raise TypeError("Wrong input model_result")
+    # prepare_dataset modifies the data in place; keep the caller's data intact
+    if isinstance(features_values, pd.DataFrame):
+        features_values = features_values.copy()
+    elif isinstance(features_values, dict):
+        features_values = dict(features_values)
     prepared_dataset = prepare_dataset(
         group_name=group_name,
         data=features_values,
