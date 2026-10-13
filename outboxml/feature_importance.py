@@ -23,6 +23,7 @@ class FeatureImportance:
         self.model_name = model_name
         self.model = model
         self.data_subset = data_subset
+        self.importance_data = []
         self.importance_data: Optional[List[Dict]] = None
 
     def _get_explainer_items(self) -> Tuple[Any, List[str]]:
@@ -49,6 +50,9 @@ class FeatureImportance:
         logger.debug(f"Calculating feature importance for model: {self.model_name}...")
 
         model_to_explain, features = self._get_explainer_items()
+        if model_to_explain is None:  # SHAP is not supported for this model class
+            self.importance_data = []
+            return []
 
         if use_test and not self.data_subset.X_test.empty:
             data = self.data_subset.X_test[features]
