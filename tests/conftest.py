@@ -20,7 +20,8 @@ def isolated_config(tmp_path_factory):
     """Redirect outboxml.config outputs away from the repository and external services.
 
     Results and production models go to a session temp dir,
-    MLflow uses a local file store instead of a tracking server.
+    MLflow uses a local file store instead of a tracking server,
+    database access goes to a SQLite file instead of Postgres.
     """
     root = tmp_path_factory.mktemp("outboxml")
     results_path = root / "results"
@@ -34,6 +35,7 @@ def isolated_config(tmp_path_factory):
         mp.setattr(config, "prod_path", root)
         mp.setattr(config, "prod_models_path", prod_models_path)
         mp.setattr(config, "mlflow_tracking_uri", mlflow_store.as_uri())
+        mp.setattr(config, "connection_params", f"sqlite:///{(root / 'outboxml.sqlite').as_posix()}")
         yield config
 
 

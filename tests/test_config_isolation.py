@@ -13,3 +13,7 @@ def test_prod_models_path_outside_repository():
 
 def test_mlflow_uses_local_file_store():
     assert config.mlflow_tracking_uri.startswith("file:")
+
+
+def test_database_is_local_sqlite():
+    assert config.connection_params.startswith("sqlite:///")
