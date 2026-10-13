@@ -212,6 +212,21 @@ class PrepareDatasetResult:
         self.encoding_map = encoding_map
 
 
+def interval_labels(bins: List) -> List[str]:
+    """String labels of the intervals produced by ``pd.cut(..., bins=bins, precision=5)``."""
+    return [str(c) for c in pd.cut(pd.Series([], dtype="float"), bins=bins, precision=5).cat.categories]
+
+
+def cut_to_labels(feature_data: pd.Series, bins: List) -> pd.Series:
+    """Bin values with ``pd.cut(..., precision=5)`` and use the interval labels as string categories.
+
+    String categories are what models accept (CatBoost rejects Interval objects) and what
+    a single value is encoded to at prediction time, see ``feature_encoding``.
+    """
+    binned = pd.cut(feature_data, bins=bins, precision=5)
+    return binned.cat.rename_categories(interval_labels(bins))
+
+
 def map_num(v: Union[int, float], mapping: Dict[pd.IntervalIndex, str]) -> Optional[str]:
     """
     Apply mapping to value.
@@ -301,7 +316,7 @@ def feature_encoding_series(
             logger.info(f"{feature.name} || Encoding || WoE numerical to categorical")
         if feature.bins is not None:
             feature_data = feature_data.astype("float")
-            feature_data = pd.cut(feature_data, bins=feature.bins, precision=5)
+            feature_data = cut_to_labels(feature_data, feature.bins)
         else:
             try:
                 feature_data = feature_data.astype("float")
@@ -312,7 +327,7 @@ def feature_encoding_series(
                     name=feature.name,
                     train_ind=train_ind,
                 ).encode_data(mapping=mapping, bins=bins, optbinning_params=feature.optbinning_params)
-                feature_data = pd.cut(feature_data, bins=bins, precision=5)
+                feature_data = cut_to_labels(feature_data, bins)
             except Exception as e:
                 logger.error(f"{feature.name} || Encoding error || Cannot convert to WoE || {str(e)}")
                 if raise_on_error:
@@ -388,12 +403,9 @@ def feature_encoding(
         try:
             if not isinstance(feature_value, (float, int)):
                 feature_value = float(feature_value)
-            mapping = {
-                k: v for k, v in zip(
-                    pd.IntervalIndex.from_arrays(feature.bins[:-1], feature.bins[1:]),
-                    list(pd.IntervalIndex.from_arrays(feature.bins[:-1], feature.bins[1:]).astype(str))
-                )
-            }
+            # match by the exact bins, encode to the labels used in training (cut_to_labels)
+            mapping = dict(zip(pd.IntervalIndex.from_arrays(feature.bins[:-1], feature.bins[1:]),
+                               interval_labels(feature.bins)))
             feature_value = map_num(feature_value, mapping)
         except Exception as e:
             raise ValueError(f"{feature.name} || Cannot convert to WoE")

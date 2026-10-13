@@ -76,17 +76,18 @@ def test_woe_numerical_to_numerical_series_matches_single_values(titanic):
     np.testing.assert_allclose(singles, encoded.head(20).astype(float).tolist())
 
 
-def test_woe_numerical_to_categorical_uses_intervals(titanic):
+def test_woe_numerical_to_categorical_uses_interval_labels(titanic):
     feature = numerical(EncodingNames.woe_num)
 
     encoded, mapping, bins = encode(titanic, feature)
 
     assert bins is not None
-    assert encoded.head(20).map(lambda v: isinstance(v, pd.Interval)).all()
+    # string categories: models (CatBoost) reject Interval objects
+    assert isinstance(encoded.dtype, pd.CategoricalDtype)
+    assert all(isinstance(label, str) for label in encoded.cat.categories)
+    assert encoded.iloc[0] == "(-inf, 7.73125]"
 
 
-@pytest.mark.xfail(strict=True, reason="series uses pd.cut(precision=5) labels, single values use full-precision "
-                                       "bin edges: '(-inf, 7.73125]' vs '(-inf, 7.731250047683716]'")
 def test_woe_numerical_to_categorical_single_value_matches_series(titanic):
     feature = numerical(EncodingNames.woe_num)
     encoded, mapping, bins = encode(titanic, feature)
@@ -120,3 +121,30 @@ def test_unknown_encoding_raises():
         feature_encoding_series(pd.Series([1.0]), feature, log=False, raise_on_error=True)
     with pytest.raises(NotImplementedError):
         feature_encoding(1.0, feature)
+
+
+def test_one_row_prediction_matches_batch_prediction_with_woe_num_to_cat(titanic):
+    from outboxml.core.predict import one_model_predict
+    from outboxml.datasets_manager import DataSetsManager
+    from outboxml.extractors import SimpleExtractor
+
+    config = {
+        "group_name": "woe", "project": "woe", "version": "1",
+        "data_config": {"source": "csv", "local_name_source": "unused.csv",
+                        "separation": {"kind": "random", "random_state": 1, "test_train_proportion": 0.2},
+                        "data": {"targetslices": []}},
+        "models_configs": [{"name": "model", "wrapper": "catboost", "objective": "binary", "column_target": "SURVIVED",
+                            "features": [{"name": "FARE", "default": 0, "replace": {"_TYPE_": "_NUM_"},
+                                          "encoding": "WoE_num_to_cat"},
+                                         {"name": "AGE", "default": "_MEDIAN_", "replace": {"_TYPE_": "_NUM_"}}]}],
+    }
+    ds_manager = DataSetsManager(config_name=config, extractor=SimpleExtractor(data=titanic.copy()))
+    ds_manager.fit_models()
+    model = ds_manager.get_result()["model"].dict_for_prod_export()
+    rows = titanic[["FARE", "AGE"]].dropna().head(5)
+
+    batch = one_model_predict("woe", model, rows.copy(), log=False)["result"]["model"]
+    singles = [one_model_predict("woe", model, row.to_dict(), log=False)["result"]["model"][0]
+               for _, row in rows.iterrows()]
+
+    np.testing.assert_allclose(singles, [batch[i] for i in rows.index])
