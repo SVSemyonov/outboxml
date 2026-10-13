@@ -2,6 +2,8 @@ import pickle
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 import pytest
 
 from outboxml import config
@@ -78,3 +80,39 @@ def test_configs_path() -> Path:
 @pytest.fixture(scope="session")
 def test_data_path() -> Path:
     return TEST_DATA_PATH
+
+
+@pytest.fixture(scope="session")
+def titanic_synthetic() -> pd.DataFrame:
+    """Titanic with synthetic EXPOSURE, ROW_WEIGHT, positive FARE_TARGET and count CLAIMS columns."""
+    data = pd.read_csv(TEST_DATA_PATH / "titanic.csv")
+    rng = np.random.default_rng(1)
+    data["EXPOSURE"] = rng.uniform(0.5, 1.5, size=len(data))
+    data["FARE_TARGET"] = data["FARE"] + 1.0  # strictly positive target for gamma
+    data["CLAIMS"] = rng.poisson(1.0, size=len(data))  # count target for poisson
+    data["ROW_WEIGHT"] = rng.uniform(0.5, 1.5, size=len(data))
+    return data
+
+
+def models_config(wrapper: str, objective: str, target: str, exposure: str = None, **model_params) -> dict:
+    """All models config with one model `model` on SEX, AGE, PCLASS of titanic_synthetic."""
+    model = {
+        "name": "model",
+        "wrapper": wrapper,
+        "objective": objective,
+        "column_target": target,
+        "column_exposure": exposure,
+        "features": [
+            {"name": "SEX", "default": "male", "replace": {"MALE": "male", "FEMALE": "female"}},
+            {"name": "AGE", "default": "_MEDIAN_", "replace": {"_TYPE_": "_NUM_"}},
+            {"name": "PCLASS", "default": 3, "replace": {"_TYPE_": "_NUM_"}},
+        ],
+        **model_params,
+    }
+    return {
+        "group_name": "matrix", "project": "matrix", "version": "1",
+        "data_config": {"source": "csv", "local_name_source": "unused.csv",
+                        "separation": {"kind": "random", "random_state": 1, "test_train_proportion": 0.2},
+                        "data": {"targetslices": []}},
+        "models_configs": [model],
+    }
