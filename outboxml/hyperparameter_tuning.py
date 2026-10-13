@@ -377,17 +377,19 @@ class HPTuning:
         logger.info('Loading model and objective from config||'+model_config.wrapper)
 
         wrapper = model_config.wrapper
+        # the same objective as _prepare_catboost/_prepare_xgb use for the loss
+        objective = model_config.objective if model_config.objective is not None else self.objective
         model = None
-        if wrapper == ModelsParams.catboost and self.objective != ModelsParams.binary:
+        if wrapper == ModelsParams.catboost and objective != ModelsParams.binary:
             model = CatBoostRegressor
 
-        elif wrapper == ModelsParams.catboost and self.objective == ModelsParams.binary:
+        elif wrapper == ModelsParams.catboost and objective == ModelsParams.binary:
             model = CatBoostClassifier
 
-        elif wrapper == ModelsParams.xgboost and self.objective != ModelsParams.binary:
+        elif wrapper == ModelsParams.xgboost and objective != ModelsParams.binary:
             model = XGBRegressor(verbosity=0, enable_categorical=True)
 
-        elif wrapper == ModelsParams.xgboost and self.objective == ModelsParams.binary:
+        elif wrapper == ModelsParams.xgboost and objective == ModelsParams.binary:
             model = XGBClassifier(verbosity=0, enable_categorical=True)
 
         elif wrapper == ModelsParams.glm:

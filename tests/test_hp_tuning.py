@@ -46,8 +46,6 @@ def test_best_params_for_wrapper_and_objective(titanic_synthetic, config, space,
                                                 "learning_rate": 0.1})))
 
 
-@pytest.mark.xfail(strict=True, reason="model class is chosen by HPTuning(objective=...) (default 'RMSE'), the loss "
-                                       "by the model config objective: CatBoostRegressor with Logloss")
 def test_best_params_uses_model_config_objective(titanic_synthetic):
     hp_tuning = tuning(titanic_synthetic, pass_objective=False, wrapper="catboost", objective="binary",
                        target="SURVIVED")
