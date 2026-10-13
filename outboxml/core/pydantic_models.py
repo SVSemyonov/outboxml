@@ -263,6 +263,7 @@ class MonitoringConfig(BaseModel):
     data_source: str
     prod_models_path: Optional[str] = None
     pickle_name: Optional[str] = None
+    report_db_schema: Optional[str] = "public"
 
 class UpdateRequest(BaseModel):
     auto_ml_config: AutoMLConfig
