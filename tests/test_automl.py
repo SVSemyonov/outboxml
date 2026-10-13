@@ -1,8 +1,11 @@
 import asyncio
 import json
+import shutil
+import tempfile
 from copy import deepcopy
 from pathlib import Path
 from unittest import TestCase
+from unittest.mock import patch
 
 import mlflow
 import numpy as np
@@ -113,9 +116,14 @@ class FeatureSelection(TestCase):
         self.assertCountEqual(data.features_categorical, ['PCLASS'])
         self.assertCountEqual(data.features_numerical, ['SEX', 'SIBSP', 'AGE', 'EMBARKED'])
 
-    @pytest.mark.xfail(strict=True, reason='use_temp_data never prepares candidate features: '
-                                         'feature_types() is not called before _preprocessor_for_using_temp_files')
     def test_temp_files_BaseFS(self):
+        # use_temp_data loads subsets saved in results_path: start from an empty one
+        results_path = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, results_path, ignore_errors=True)
+        patcher = patch.object(config, "results_path", results_path)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.dsManager = DataSetsManager(config_name=str(config_name))
         self.dsManager._data_preprocessor._retro = True
         base_fs = BaseFS( new_features_list=self.feature_for_research,
                       parameters=FeatureSelectionConfig(
