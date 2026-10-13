@@ -1046,7 +1046,9 @@ class AutoMLManager(DataSetsManager):
                         self.automl_results.business_metric[key] = self.automl_results.compare_metrics_df[key].min()
 
                 except KeyError:
-                    logger.error('Business metric error to complete decision for deployment')
+                    # a criterion that cannot be checked must block deployment, not be skipped
+                    logger.error(f'Business metric error to complete decision for deployment||{key}')
+                    res.append(False)
 
         if all(res): self.automl_results.deployment = True
         self.status['Deployment decision'] = True
