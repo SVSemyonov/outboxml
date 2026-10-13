@@ -62,9 +62,8 @@ class EMail:
     def save_mail_as_html(self, ):
         """Save the current email message as an HTML file.
         
-        Extracts HTML content from the email message and saves it to disk.
-        Falls back to plain text if HTML is not available. The file is saved
-        as 'email.html' in the results_path directory.
+        Saves the HTML body built so far (without the signature added on sending).
+        The file is saved as 'email.html' in the results_path directory.
         
         :return: None
         :rtype: None
@@ -82,30 +81,10 @@ class EMail:
             email.save_mail_as_html()
             # Creates: <results_path>/email.html
         """
-        # Get HTML content (prefer HTML over plain text)
-        html_content = None
+        # The body is attached to the MIME message only in Mail.send_mail, so save the HTML body itself
         logger.info('Saving mail as html in results path')
-        for part in self.mail.msg.walk():
-            if part.get_content_type() == 'text/html':
-                html_content = part.get_payload(decode=True).decode(errors='replace')
-                break
-        logger.info('Saving mail as html in results path')
-        # Fallback to plain text if no HTML available
-        if html_content is None:
-            for part in self.mail.msg.walk():
-                if part.get_content_type() == 'text/plain':
-                    plain_content = part.get_payload(decode=True).decode(errors='replace')
-                    html_content = f"<pre>{plain_content}</pre>"
-                    break
-        logger.info('Saving mail as html in results path')
-        # If still no content found
-        if html_content is None:
-            html_content = "<p>No readable content found in email</p>"
-
-        # Save to file
         with open(os.path.join(self.config.results_path, 'email.html'), 'w', encoding='utf-8') as f:
-            logger.info('Saving mail as html in results path')
-            f.write(html_content)
+            f.write(self.mail.body)
 
     def header(self, group_name: str = 'Test Email'):
         """Add a header section to the email with subject and greeting.
@@ -368,7 +347,7 @@ class EMail:
                     self.mail.add_text(f"В модель {key} добавлены новые фичи: " + str(new_features[key]),
                         n_line_breaks=1,
                     )
-        self.mail.send_mail(self.email_receivers)
+        self.send()
 
 
 class EMailDSResult(EMail):
