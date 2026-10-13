@@ -38,7 +38,7 @@ dependencies = [
     "kaleido==0.2.1",
     "mlflow==3.6.0",
     "pandas==2.3.3",
-    "polars==1.35.0",
+    "polars==1.35.2",
     "numpy==2.3.5",
     "environs>=11.0.0",
     "pretty_html_table==0.9.16",
