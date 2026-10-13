@@ -57,9 +57,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-cov",
+    "httpx",
+]
 dev = [
     "pytest",
     "pytest-cov",
+    "httpx",
     "black",
     "ruff",
     "jupyter"
