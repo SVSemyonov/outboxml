@@ -1,7 +1,10 @@
+import json
 from pathlib import Path
 from unittest import TestCase
 import pandas as pd
+import pytest
 
+from outboxml import config
 from outboxml.monitoring_manager import MonitoringManager
 from outboxml.monitoring_result import MonitoringResult, DataContext
 from outboxml.core.monitoring_factory import DataReviewerRegistry, DataReviewerComponent
@@ -44,12 +47,17 @@ class BusinessMetricsExample(BaseMetric):
     def calculate_metric(self, result1: dict, result2: dict) -> dict:
         return {'Test metric': 1}
 
+@pytest.mark.usefixtures('prod_pickle_cls')
 class TestMonitoringManger(TestCase):
     def setUp(self):
         pass
 
     def test_monitoring(self):
-        review_result = MonitoringManager(monitoring_config=str(monitoring_config),
+        with open(monitoring_config, encoding='utf-8') as f:
+            monitoring_config_dict = json.load(f)
+        monitoring_config_dict['prod_models_path'] = str(config.prod_models_path)
+        monitoring_config_dict['pickle_name'] = self.prod_pickle_name
+        review_result = MonitoringManager(monitoring_config=monitoring_config_dict,
                                    models_config=str(config_name),
                                    business_metric=BusinessMetricsExample(),
                                    logs_extractor=LogsExtractor()
