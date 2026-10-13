@@ -21,3 +21,15 @@ def test_polars_subset_with_target_in_extra_columns():
     assert polars_subset.X_train.shape == pandas_subset.X_train.shape
     assert polars_subset.X_test.shape == pandas_subset.X_test.shape
     assert sorted(polars_subset.features_numerical) == sorted(pandas_subset.features_numerical)
+
+
+def test_polars_fit_models_with_target_slices():
+    manager = polars_manager()
+    subset = manager.get_subset("first")
+
+    results = manager.fit_models()
+
+    assert subset.X is not None
+    assert len(subset.X) == len(subset.X_train) + len(subset.X_test)
+    slices = manager.data_config.data.targetslices
+    assert slices and len(results["first"]["train"]) == slices[0]["slices"] + 1

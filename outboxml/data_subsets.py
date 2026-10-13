@@ -297,7 +297,7 @@ class ModelDataSubset:
             y_test=y_test,
             features_numerical=features_numerical,
             features_categorical=features_categorical,
-            X=None,
+            X=pd.concat([X_train, X_test]).sort_index(),
             exposure_train=exposure_train,
             exposure_test=exposure_test,
             sample_weight_train=sample_weight_train,
