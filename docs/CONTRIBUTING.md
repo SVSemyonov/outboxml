@@ -78,6 +78,20 @@ https://github.com/SVSemyonov/outboxml/compare
 
 ---
 
+## CI and Releases
+
+- Every pull request into `develop` runs the **Tests** workflow (`.github/workflows/tests.yml`):
+  the full test suite on Python 3.11 and 3.13 with a minimum coverage of **80%**.
+- Releases are made by merging `develop` into the `release` branch
+  (`.github/workflows/release.yml`):
+  1. Bump `version` in `pyproject.toml`. It must be newer than the latest version on PyPI.
+  2. Add a `## [X.Y.Z] - YYYY-MM-DD` section to `docs/CHANGELOG.md`.
+     It becomes the GitHub Release description.
+  3. Open a pull request from `develop` into `release`: version, changelog, tests and the build are checked.
+  4. After the merge the package is built, published to PyPI and tagged `vX.Y.Z` with a GitHub Release.
+
+---
+
 
 ##  Questions?
 
