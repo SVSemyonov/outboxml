@@ -1246,13 +1246,15 @@ def prepare_dataset(
         data = pd.DataFrame([data])
 
     elif as_polars:
-        data = data.select(
+        # a column may be listed twice (e.g. the target also in extra_columns); polars rejects duplicates
+        columns = list(dict.fromkeys(
             [ColumnsNames.is_train_obml, model_config.column_target]
             + ([model_config.column_exposure] if model_config.column_exposure is not None else [])
             + ([model_config.column_weight] if model_config.column_weight is not None else [])
             + (extra_columns_list if extra_columns_list is not None else [])
             + features_all
-        )
+        ))
+        data = data.select(columns)
         data_dtypes_prepared = data.schema
         features_categorical = [feature_name for feature_name in features_all if not data_dtypes_prepared[feature_name].is_numeric()]
         features_numerical = [feature_name for feature_name in features_all if data_dtypes_prepared[feature_name].is_numeric()]
