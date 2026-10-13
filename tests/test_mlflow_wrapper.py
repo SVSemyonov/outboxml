@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import mlflow
 import pytest
 
-from outboxml.automl_manager import MLFlowKeycloakWrapper, MLFlowWrapper
+from outboxml.automl_manager import AutoMLResult, MLFlowKeycloakWrapper, MLFlowWrapper
 
 UNREACHABLE_URI = "http://127.0.0.1:1"
 
@@ -63,3 +63,25 @@ def test_keycloak_without_settings_skips_login(restore_mlflow):
         wrapper = MLFlowKeycloakWrapper(mlflow_tracking_uri=UNREACHABLE_URI)
         wrapper._ensure_valid_token()
     post.assert_not_called()
+
+
+def logged_automl_results(results_path, group_name, deployment=True):
+    """Minimal AutoMLResult with the files MLFlowWrapper.log_results uploads."""
+    result = AutoMLResult(group_name=group_name)
+    result.result_pickle_name = f"{group_name}_2026_01_01_00_00_00.pickle"
+    result.deployment = deployment
+    result.compare_business_metric = None
+    for name in ("log.log", "automl_report.html", result.result_pickle_name):
+        (results_path / name).write_text(name)
+    return result
+
+
+def test_log_results_run_name_has_group_and_timestamp(restore_mlflow, tmp_path):
+    store_uri = (tmp_path / "mlruns").as_uri()
+    results = logged_automl_results(tmp_path, "example_titanic")
+    MLFlowWrapper(experiment_name="naming", group_name="example_titanic", results_path=str(tmp_path),
+                  mlflow_tracking_uri=store_uri).log_results(results)
+
+    run_names = mlflow.search_runs(experiment_names=["naming"])["tags.mlflow.runName"].tolist()
+    expected = f"example_titanic_{results.run_time['start'].strftime('%Y_%m_%d_%H_%M_%S')}"
+    assert run_names == [expected]

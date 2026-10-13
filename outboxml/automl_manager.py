@@ -247,7 +247,9 @@ class MLFlowWrapper:
         """
         logger.debug('Exporting results to MLFlow')
         self._setup()
-        with mlflow.start_run(run_name=self.group_name + str(automl_results.run_time['start']), ):
+        # `{group_name}_{%Y_%m_%d_%H_%M_%S}` matches result pickle names and MLFLowRelease run search
+        run_name = f"{self.group_name}_{automl_results.run_time['start'].strftime('%Y_%m_%d_%H_%M_%S')}"
+        with mlflow.start_run(run_name=run_name):
             log = os.path.join(self.results_path, "log.log")
             report = os.path.join(self.results_path, "automl_report.html")
             pickle_model = os.path.join(self.results_path, automl_results.result_pickle_name)
