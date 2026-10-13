@@ -7,7 +7,7 @@ from loguru import logger
 from tqdm import tqdm
 
 from outboxml.analysis_tools import CorrelationMatrix, CatboostShapAnalysis,CVStability
-from outboxml.core.config_builders import feature_params, feature_type
+from outboxml.core.config_builders import FeatureBuilder, feature_params, feature_type
 from outboxml.core.data_prepare import PrepareDatasetResult
 from outboxml.core.enums import FeaturesTypes, FeatureEngineering, FeatureTypesForSelection
 from outboxml.core.prepared_datasets import BasePrepareDataset
@@ -373,6 +373,7 @@ class BaseFS(FeatureSelection):
         self._data_preprocessor._use_saved_files = False
 
         logger.debug('New data prepare')
+        self.features_for_model = self.feature_types(self._data_preprocessor.dataset)
         self._data_preprocessor._pickle_subset.version = init_version
         self._data_preprocessor._version = init_version
         self._data_preprocessor._model_config_pickle.version = init_version
@@ -405,12 +406,8 @@ class BaseFS(FeatureSelection):
         new_model_config.features = []
 
         for feature in self.features_for_model:
-            if feature in self.types_dict['NUMERIC']:
-                type = 'numerical'
-            else:
-                type = 'categorical'
-            feature_params[feature] = self._prepare_feature(serie=full_data[feature], type=type)
-            new_model_config.features.append(FeatureModelConfig(name=feature, **feature_params[feature]))
+            feature_params[feature] = self._prepare_feature(serie=full_data[feature])
+            new_model_config.features.append(FeatureBuilder(**feature_params[feature]).build())
         new_prepare_datasets = deepcopy(self._data_preprocessor._prepare_datasets)
         new_prepare_datasets[model_name].load_model_config(new_model_config)
         new_data_config = deepcopy(self._data_preprocessor._data_config)
