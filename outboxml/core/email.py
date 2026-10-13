@@ -274,6 +274,11 @@ class EMail:
                 )
             # Sends email with subject: "Titanic_Model_v1. Автообновление моделей. Статус: ошибка."
         """
+        self._error_body(group_name, error)
+        self.send()
+
+    def _error_body(self, group_name: str, error):
+        """Add the error subject and text to the mail without sending it."""
         self.mail.add_email_subject(
             f"{group_name}. Автообновление моделей. Статус: ошибка.",
         )
@@ -290,8 +295,6 @@ class EMail:
             str(error),
             n_line_breaks=1,
         )
-
-        self.send()
 
     def success_release_mail(self, group_name: str, new_features: dict=None):
         """Send a notification email when models are successfully released to GitLab.
@@ -807,7 +810,7 @@ class AutoMLReviewEMail(EMail):
             )
             # Sends email with error message and task status table
         """
-        self.common_error_mail(group_name, error)
+        self._error_body(group_name, error)
         self.mail.add_text(
             'Статус задач:',
             n_line_breaks=2,

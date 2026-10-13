@@ -5,7 +5,7 @@ from unittest.mock import patch
 import plotly.graph_objects as go
 import pytest
 
-from outboxml.core.email import EMail, EMailDSCompareResult, EMailDSResult
+from outboxml.core.email import AutoMLReviewEMail, EMail, EMailDSCompareResult, EMailDSResult, EMailMonitoring
 from outboxml.datasets_manager import DataSetsManager
 
 RECEIVERS = ["ds-team@example.com"]
@@ -74,3 +74,19 @@ def test_ds_compare_result_mail(mail_config, smtp, ds_result):
 
     assert "Характеристики моделей" in saved_html(mail_config)
     smtp.sendmail.assert_called_once()
+
+
+def test_automl_error_mail_is_one_mail_with_error_and_status(mail_config, smtp):
+    AutoMLReviewEMail(config=mail_config).error_mail(group_name="example", error=RuntimeError("fit failed"),
+                                                     status={"Fitting": False})
+
+    smtp.sendmail.assert_called_once()
+    html = saved_html(mail_config)
+    assert "fit failed" in html and "Fitting" in html
+
+
+def test_monitoring_error_mail_is_sent(mail_config, smtp):
+    EMailMonitoring(config=mail_config).error_mail(group_name="example", error=KeyError("PSI"))
+
+    smtp.sendmail.assert_called_once()
+    assert "PSI" in saved_html(mail_config)
