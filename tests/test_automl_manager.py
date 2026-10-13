@@ -44,8 +44,6 @@ def test_deployment_requires_all_criteria(automl):
     assert deployed is False
 
 
-@pytest.mark.xfail(strict=True, reason="a criterion metric missing from compare_metrics_df is skipped on KeyError "
-                                       "and all([]) is True, so a misspelled metric name deploys the model")
 def test_deployment_with_unknown_metric_is_rejected(automl):
     assert decide(automl, {"misspelled_metric": 0.5}, compare_metrics_df=pd.DataFrame({"accuracy": [0.9]})) is False
 
