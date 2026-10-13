@@ -254,8 +254,12 @@ class MLFlowWrapper:
             report = os.path.join(self.results_path, "automl_report.html")
             pickle_model = os.path.join(self.results_path, automl_results.result_pickle_name)
 
-            mlflow.log_artifact(log)
-            mlflow.log_artifact(report)
+            # the HTML report exists only when the review is not sent by mail
+            for optional_artifact in (log, report):
+                if os.path.exists(optional_artifact):
+                    mlflow.log_artifact(optional_artifact)
+                else:
+                    logger.warning(f'MLflow export||No artifact {optional_artifact}')
             mlflow.log_artifact(pickle_model)
             mlflow.set_tag(key='Deployment_decision', value=automl_results.deployment)
             #mlflow.set_tags()
@@ -293,7 +297,10 @@ class MLFlowWrapper:
                     mlflow.log_artifact(features_num)  # модель
                     mlflow.log_artifact(features_cat)
                     mlflow.log_artifact(model)
-                    mlflow.log_artifact(model_plot)
+                    if os.path.exists(model_plot):  # created by the HTML report only
+                        mlflow.log_artifact(model_plot)
+                    else:
+                        logger.warning(f'MLflow export||No artifact {model_plot}')
                     mlflow.log_artifact(model_config)
                     try:
                         mlflow.log_params(dict(automl_results.new_hp[model_name]))

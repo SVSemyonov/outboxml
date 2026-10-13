@@ -125,3 +125,13 @@ def test_review_success_mail_with_release_notification(automl):
         automl.review(email=email, send_mail=True)
 
     release_email.return_value.success_release_mail.assert_called_once()
+
+
+def test_successful_update_sends_only_success_mail(automl):
+    with patch("outboxml.automl_manager.AutoMLReviewEMail") as email_cls:
+        automl.update_models(send_mail=True)
+
+    email_cls.return_value.success_mail.assert_called_once_with(automl.automl_results)
+    email_cls.return_value.error_mail.assert_not_called()
+    assert automl.status["EMail Review"] is True
+    assert automl.status["Loading results to MLFLow"] is True
