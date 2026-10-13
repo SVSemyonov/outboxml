@@ -3,7 +3,7 @@ from unittest import TestCase
 import pandas as pd
 from unittest import main
 
-import config
+from outboxml import config
 from outboxml.core.email import EMail, EMailDSResult
 from outboxml.export_results import ResultExport
 

@@ -1,3 +1,7 @@
+import pickle
+import tempfile
+from pathlib import Path
+from types import SimpleNamespace
 from unittest import TestCase, main
 
 from outboxml.ensemble import Ensemble, EnsembleResult
@@ -7,8 +11,7 @@ from outboxml.core.errors import EnsembleError
 class TestEnsemble(TestCase):
 
     def setUp(self):
-        self.ensemble = Ensemble()
-        self.ensemble._all_groups = {
+        groups = {
             "x": [
                 {
                     "model_config": {
@@ -46,7 +49,19 @@ class TestEnsemble(TestCase):
                 },
             ],
         }
-        self.ensemble._is_maked = False
+        # make_ensemble loads groups from prod_models_path
+        prod_models_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(prod_models_dir.cleanup)
+        prod_models_path = Path(prod_models_dir.name)
+        for group_name, group in groups.items():
+            with open(prod_models_path / f"{group_name}.pickle", "wb") as f:
+                pickle.dump(group, f)
+        self.ensemble = Ensemble(config=SimpleNamespace(prod_models_path=prod_models_path,
+                                                        results_path=prod_models_path))
+
+    def test_make_ensemble_error_group_not_found(self):
+        with self.assertRaises(EnsembleError):
+            self.ensemble.make_ensemble(ensemble_name="1", models_names=["K", "M"], groups=[("a>b", "x"), ("c<d", "z")])
 
     def test_make_ensemble_error_ensemble_name_1(self):
         with self.assertRaises(EnsembleError):

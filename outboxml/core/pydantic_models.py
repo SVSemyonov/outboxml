@@ -255,16 +255,15 @@ class MonitoringFactoryConfig(BaseModel):
 
 class MonitoringConfig(BaseModel):
     group_name: str
-    prod_models_path: str
-    pickle_name: str
     grafana_table_name: str
     dashboard_name: str
     monitoring_factory: List[MonitoringFactoryConfig] = [MonitoringFactoryConfig()]
     extrapolation_period: int = 12
     target_column: str
     data_source: str
-
-
+    prod_models_path: Optional[str] = None
+    pickle_name: Optional[str] = None
+    report_db_schema: Optional[str] = "public"
 
 class UpdateRequest(BaseModel):
     auto_ml_config: AutoMLConfig

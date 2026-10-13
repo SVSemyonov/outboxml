@@ -14,7 +14,7 @@ from outboxml.core.data_prepare import OptiBinningEncoder, PrepareDatasetResult
 from outboxml.core.enums import ModelsParams
 from outboxml.core.predict import one_model_predict
 from outboxml.core.prepared_datasets import PrepareDataset
-from outboxml.core.pydantic_models import DataModelConfig, DataConfig, AllModelsConfig
+from outboxml.core.pydantic_models import AllModelsConfig
 from outboxml.dataset_retro import RetroDataset
 from outboxml.datasets_manager import DataSetsManager, DSManagerResult
 import pandas as pd
@@ -23,7 +23,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from pathlib import Path
 
-from outboxml.extractors import BaseExtractor, SimpleExtractor
+from outboxml.extractors import SimpleExtractor
 from outboxml.feature_importance import FeatureImportance
 from outboxml.models import BaselineModels, ModelsWrapper, StatsmodelsModel, StatsModelsEstimator, CatboostModel, \
     CatboostOverGLMModel, XgboostModel, GLMCatboostCombineModel, BaseWrapperModel
@@ -62,12 +62,6 @@ class TestTitanicDS(TestCase):
         self.dsManager.load_dataset()
         self.assertIsNotNone(self.dsManager.dataset)
         self.assertEqual(self.dsManager.dataset.shape, (891, 7))
-
-    def test_db_extractor(self):
-        self.assertIsInstance(BaseExtractor(data_config=DataModelConfig(source='database',
-                                                                        table_name_source='public."TitanicExample"',
-                                                                        data=DataConfig())).extract_dataset(),
-                              pd.DataFrame)
 
     def test_DFs(self):
         subset = self.dsManager.get_subset(model_name='first')

@@ -38,7 +38,7 @@ dependencies = [
     "kaleido==0.2.1",
     "mlflow==3.6.0",
     "pandas==2.3.3",
-    "polars==1.35.0",
+    "polars==1.35.2",
     "numpy==2.3.5",
     "environs>=11.0.0",
     "pretty_html_table==0.9.16",
@@ -57,8 +57,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-cov",
+    "httpx",
+]
 dev = [
     "pytest",
+    "pytest-cov",
+    "httpx",
     "black",
     "ruff",
     "jupyter"
@@ -71,6 +78,17 @@ include-package-data = true
 where = ["."]
 # Allow-list: any other top-level package in the working tree must not end up in the distribution
 include = ["outboxml", "outboxml.*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-m 'not integration'"
+markers = [
+    "integration: requires external services from outboxml/app/docker-compose.yml (MLflow, Postgres); run with -m integration",
+]
+
+[tool.coverage.run]
+source = ["outboxml"]
 
 [tool.ruff]
 line-length = 88

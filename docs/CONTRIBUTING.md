@@ -58,12 +58,37 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ---
 
+## Running Tests
+
+Install dev dependencies and run the test suite from the repository root:
+
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
+The default run needs no external services. Tests marked `integration` require the
+Docker stack from `outboxml/app/docker-compose.yml` (MLflow, Postgres) and are skipped
+by default:
+
+```bash
+pytest -m integration
+```
+
+Coverage report:
+
+```bash
+pytest --cov --cov-report=term-missing
+```
+
+---
+
 ## Pull Request Checklist
 
 Before submitting your PR:
 
 - [ ] PR title uses Conventional Commits
-- [ ] All existing and new tests pass (`python -m unittest discover`)
+- [ ] All existing and new tests pass (`pytest`)
 - [ ] The branch is up to date with `main`
 - [ ] Changes are documented (if needed)
 
@@ -81,7 +106,7 @@ https://github.com/SVSemyonov/outboxml/compare
 ## CI and Releases
 
 - Every pull request into `develop` runs the **Tests** workflow (`.github/workflows/tests.yml`):
-  the full test suite on Python 3.11 and 3.13 with a minimum coverage of **80%**.
+  the full test suite on Python 3.11 and 3.13 with a minimum coverage of **85%**.
 - Releases are made by merging `develop` into the `release` branch
   (`.github/workflows/release.yml`):
   1. Bump `version` in `pyproject.toml`. It must be newer than the latest version on PyPI.
