@@ -8,3 +8,7 @@ class ModelNotFoundError(Exception):
 
 class EnsembleError(Exception):
     pass
+
+
+class DataLoadError(Exception):
+    pass
