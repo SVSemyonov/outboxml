@@ -4,6 +4,7 @@ from copy import deepcopy
 from pathlib import Path
 from unittest import TestCase
 
+import mlflow
 import numpy as np
 import pandas as pd
 import pytest
@@ -27,7 +28,6 @@ from outboxml.extractors import Extractor
 from outboxml.feature_selection import BaseFS, FeatureSelectionInterface
 from outboxml.hyperparameter_tuning import HPTuning
 from outboxml.main_predict import main_predict
-from outboxml.main_release import MLFLowRelease
 from outboxml.metrics.business_metrics import BaseCompareBusinessMetric
 from outboxml.metrics.base_metrics import BaseMetric
 from outboxml.monitoring_manager import MonitoringManager, MonitoringResult
@@ -144,7 +144,6 @@ class HPTune(TestCase):
     def setUp(self):
         self.ds_manager = DataSetsManager(config_name=str(config_name))
 
-    @pytest.mark.integration
     def test_hp_tune_from_config(self):
         self.ds_manager._prepare_datasets['first']._model_config.objective = 'poisson'
         self.ds_manager._prepare_datasets['first']._model_config.wrapper = 'catboost'
@@ -270,7 +269,6 @@ class AutoMLTest(TestCase):
         value = result['first_model']['metric'] - result['second_model']['metric']
         self.assertAlmostEqual(value, 0.002, 2)
 
-    @pytest.mark.integration
     def test_titanic_example(self):
         def parameters_for_optuna(trial):
             return {
@@ -304,6 +302,12 @@ class AutoMLTest(TestCase):
                                                                   'EMail Review': False})
 
         self.assertLessEqual(auto_ml.automl_results.compare_business_metric['difference'], 0)
+
+        self.assertTrue(mlflow.get_tracking_uri().startswith('file:'))
+        runs = mlflow.search_runs(experiment_names=[auto_ml.mlflow.experiment_name])
+        group_runs = runs[runs['tags.mlflow.runName'].str.startswith(auto_ml.group_name)]
+        self.assertEqual(len(group_runs), 1)
+        self.assertIn(group_runs['tags.Deployment_decision'].iloc[0], ('True', 'False'))
 
     def test_previous_model(self):
         group = load_last_pickle_models_result(config=config)
@@ -386,15 +390,6 @@ class TestPredict(TestCase):
         self.assertEqual(all_models_config.models_configs[0].column_weight,'ROW_WEIGHT', )
         self.assertEqual(all_models_config.models_configs[0].features[0].default, '_MEDIAN_', )
         self.assertEqual(all_models_config.models_configs[0].features[2].default, '_NAN_', )
-
-class TestRelease(TestCase):
-    def setUp(self):
-        pass
-
-    @pytest.mark.integration
-    def test_MlflowRelease(self):
-        MLFLowRelease(config=config).load_model_to_source_from_mlflow()
-
 
 if __name__ == '__main__':
     main()
