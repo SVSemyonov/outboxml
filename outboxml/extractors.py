@@ -14,7 +14,7 @@ import subprocess
 from typing import Optional, List, Tuple
 
 from outboxml import config
-from outboxml.core.errors import ConfigError
+from outboxml.core.errors import ConfigError, DataLoadError
 from outboxml.core.pydantic_models import DataModelConfig, AllModelsConfig, ModelConfig
 from outboxml.core.utils import FilesNames
 
@@ -200,9 +200,9 @@ def load_dataset_from_local(data_config: DataModelConfig) -> pd.DataFrame:
             logger.info('Reading extra conditions||' + str(data_config.extra_conditions))
             data = data.query(data_config.extra_conditions)
 
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
         logger.error(f"File {data_config.local_name_source} not found")
-        raise f"File {data_config.local_name_source} not found"
+        raise FileNotFoundError(f"File {data_config.local_name_source} not found") from exc
 
     if data is not None and not data.empty:
         logger.debug(f"Data loaded successfully from {data_config.local_name_source}")
@@ -210,7 +210,7 @@ def load_dataset_from_local(data_config: DataModelConfig) -> pd.DataFrame:
 
     else:
         logger.debug(f"No data loaded from {data_config.local_name_source}")
-        raise f"No Data loaded from {data_config.local_name_source}"
+        raise DataLoadError(f"No Data loaded from {data_config.local_name_source}")
 
 
 def load_dataset_from_db(data_config: DataModelConfig) -> pd.DataFrame:
@@ -247,7 +247,7 @@ def load_dataset_from_db(data_config: DataModelConfig) -> pd.DataFrame:
 
     else:
         logger.debug(f"No data loaded from {data_config.table_name_source}")
-        raise f"No Data loaded from {data_config.table_name_source}"
+        raise DataLoadError(f"No Data loaded from {data_config.table_name_source}")
 
 
 def database_to_pandas(sql_query: str) -> pd.DataFrame:
@@ -264,14 +264,15 @@ def database_to_pandas(sql_query: str) -> pd.DataFrame:
         engine = config.connection_params
         connect = create_engine(engine)
 
-    except:
+    except Exception as exc:
         logger.error("Cannot connect to database")
-        raise "Cannot connect to database"
+        raise DataLoadError("Cannot connect to database") from exc
 
     try:
         data = pd.read_sql(sql_query, connect)
-    except:
+    except Exception as exc:
         logger.error("Sql query error")
+        raise DataLoadError(f"Sql query error: {exc}") from exc
 
     return data
 
@@ -396,4 +397,4 @@ def load_dataset_from_local_pl(data_config: DataModelConfig, useful_columns: Lis
 
     else:
         logger.debug(f"No data loaded from {data_config.local_name_source}.")
-        raise f"No Data loaded from {data_config.local_name_source}."
+        raise DataLoadError(f"No Data loaded from {data_config.local_name_source}.")

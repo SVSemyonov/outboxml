@@ -14,6 +14,7 @@ from loguru import logger
 from outboxml import config
 from outboxml.core.data_prepare import prepare_dataset
 from outboxml.core.enums import ColumnsNames
+from outboxml.core.errors import ConfigError
 from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes, TrainTestIndexesPl, PrepareDatasetPl
 from outboxml.core.pydantic_models import DataConfig, DataModelConfig, SeparationModelConfig, ModelConfig
 from outboxml.extractors import Extractor
@@ -492,6 +493,8 @@ class DataPreprocessor:
                  use_saved_files: bool = False,
                  retro: bool = False):
 
+        if prepare_engine not in ('pandas', 'polars'):
+            raise ConfigError(f"Unknown engine for data preparation: {prepare_engine}")
         self._prepare_engine = prepare_engine
         self._version = version
         self._prepare_datasets = prepare_dataset_interface_dict
@@ -718,7 +721,7 @@ class DataPreprocessor:
             self.index_train, self.index_test = data_subset.X_train.index, data_subset.X_test.index
 
         else:
-            raise f'Unknow engine for data preparation'
+            raise ConfigError(f"Unknown engine for data preparation: {self._prepare_engine}")
 
         if to_pickle:
             self._pickle_subset.save_subset_to_pickle(model_name, data_subset, True)
