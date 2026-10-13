@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 env:
-  COVERAGE_MIN: 80
+  COVERAGE_MIN: 85
 
 jobs:
   pytest:
