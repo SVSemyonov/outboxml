@@ -18,7 +18,6 @@ from outboxml.core.monitoring_factory import MonitoringFactory
 from outboxml.monitoring_result import MonitoringResult, DataContext, MonitoringContext
 
 
-
 class MonitoringManager:
     """Orchestrator class for executing model monitoring pipeline.
 
@@ -89,6 +88,7 @@ class MonitoringManager:
         """
         self._monitoring_config = monitoring_config
         self._models_config = models_config
+        self._all_models_config = self.__init_all_models_config(self._models_config)
         self._target_extractor = target_extractor
         if external_config is not None:
             self._external_config = external_config
@@ -104,7 +104,8 @@ class MonitoringManager:
         self.__grafana_connection = grafana_connection
 
         self._business_metric = business_metric
-        self._ds_manager = DataSetsManager(config_name=self._models_config, extractor=data_extractor, external_config=external_config)
+        self._ds_manager = DataSetsManager(config_name=self._models_config, extractor=data_extractor,
+                                           external_config=external_config)
         self._result_export = ResultExport(ds_manager=self._ds_manager, config=self._external_config)
         self._logs_extractor = logs_extractor
         self.__init_monitoring()
@@ -149,7 +150,7 @@ class MonitoringManager:
             monitoring_result=self.result,
             monitoring_config=self._monitoring_config,
             models_config=self._prod_models_configs,
-            all_models_config=self.__init_all_models_config(self._models_config)
+            all_models_config=self._all_models_config
         )
         service_reviews, service_reports = self.monitoring_service.review_all(context=context)
         self.result.reviews = service_reviews
@@ -167,7 +168,6 @@ class MonitoringManager:
             self.email.error_mail(group_name=self.result.group_name, error=exc)
         finally:
             return self.result
-
 
     def __init_monitoring(self):
         if isinstance(self._monitoring_config, dict):
@@ -190,20 +190,22 @@ class MonitoringManager:
             raise ValidationError(e)
 
     def __init_prod_models_configs(self):
-        with open(f'{self._monitoring_config.prod_models_path}/{self._monitoring_config.pickle_name}.pickle',
-                  'rb') as f:
-            prod_model = pickle.load(f)
-        prod_models_config = []
-        for model in prod_model:
-            if isinstance(prod_model, EnsembleResult):
-                for val in model.models:
-                    prod_models_config.append(ModelConfig.model_validate(val[2]['model_config']))
-            elif isinstance(prod_model, list):
-                prod_models_config.append(ModelConfig.model_validate(model['model_config']))
-            else:
-                logger.error("Invalid prod_models config type")
-
-        self._prod_models_configs = prod_models_config
+        if self._monitoring_config.pickle_name:
+            with open(f'{self._monitoring_config.prod_models_path}/{self._monitoring_config.pickle_name}.pickle',
+                      'rb') as f:
+                prod_model = pickle.load(f)
+            prod_models_config = []
+            for model in prod_model:
+                if isinstance(prod_model, EnsembleResult):
+                    for val in model.models:
+                        prod_models_config.append(ModelConfig.model_validate(val[2]['model_config']))
+                elif isinstance(prod_model, list):
+                    prod_models_config.append(ModelConfig.model_validate(model['model_config']))
+                else:
+                    logger.error("Invalid prod_models config type")
+            self._prod_models_configs = prod_models_config
+        else:
+            self._prod_models_configs = self._all_models_config.models_configs
 
     def __init_all_models_config(self, models_config):
         if isinstance(models_config, dict):
@@ -237,11 +239,10 @@ class MonitoringManager:
         """
         try:
             GrafanaExport(df=report, connection=self.__grafana_connection,
-                          table_name=table_name).load_data_to_db()
+                          table_name=table_name, schema="Data_set").load_data_to_db()
         except Exception as exc:
             logger.error(exc)
             logger.info('No results in grafana')
-
 
     def _define_dataset_name(self):
         """
@@ -255,8 +256,7 @@ class MonitoringManager:
                 dataset_name = os.path.basename(os.path.splitext(self._ds_manager.data_config.local_name_source)[0])
             else:
                 dataset_name = self._ds_manager.data_config.table_name_source
-        except Exception as exc:
-            logger.error("Could not determine dataset name: %s", exc)
-            dataset_name = 'unknown_dataset'
-
+        except:
+            logger.error("Unknown dataset name")
+            dataset_name = "unknown_dataset"
         return dataset_name
