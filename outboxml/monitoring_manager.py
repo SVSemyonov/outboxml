@@ -237,9 +237,10 @@ class MonitoringManager:
         :param table_name: Target database table name.
         :type table_name: str
         """
+        schema = self._monitoring_config.report_db_schema
         try:
             GrafanaExport(df=report, connection=self.__grafana_connection,
-                          table_name=table_name, schema="Data_set").load_data_to_db()
+                          table_name=table_name, schema=schema).load_data_to_db()
         except Exception as exc:
             logger.error(exc)
             logger.info('No results in grafana')
