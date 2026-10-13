@@ -56,6 +56,14 @@ def prod_pickle_name(isolated_config) -> str:
     return file_name.replace(".pickle", "")
 
 
+@pytest.fixture(scope="session")
+def fitted_ds_manager(isolated_config) -> DataSetsManager:
+    """Titanic DataSetsManager with fitted models, shared read-only across tests."""
+    ds_manager = DataSetsManager(config_name=str(TEST_CONFIGS_PATH / "config-example-titanic.json"))
+    ds_manager.fit_models()
+    return ds_manager
+
+
 @pytest.fixture(scope="class")
 def prod_pickle_cls(request, prod_pickle_name):
     """Expose the production pickle name to unittest.TestCase classes as ``self.prod_pickle_name``."""
