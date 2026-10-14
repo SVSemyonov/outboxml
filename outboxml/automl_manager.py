@@ -875,8 +875,9 @@ class AutoMLManager(DataSetsManager):
 
         for name, spec in config.items():
             if spec.type == "int":
-                sampled_params[name] = trial.suggest_int(
-                    name, int(spec.low), int(spec.high), step=spec.step, log=spec.log
+                sampled_params[name] = trial.suggest_int(  # step is optional in the config, optuna needs an int
+                    name, int(spec.low), int(spec.high), step=int(spec.step) if spec.step is not None else 1,
+                    log=spec.log
                 )
             elif spec.type == "float":
                 sampled_params[name] = trial.suggest_float(
