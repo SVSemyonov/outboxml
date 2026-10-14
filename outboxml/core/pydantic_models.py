@@ -1,4 +1,5 @@
-from pydantic import BaseModel, model_validator
+from pydantic import AliasChoices, BaseModel, Field, model_validator
+import warnings
 from typing import List, Dict, Any, Optional, Union
 from typing_extensions import Literal
 
@@ -6,10 +7,20 @@ from outboxml.core.enums import FilesNames, SeparationParams, FeatureEngineering
 from outboxml.core.errors import ConfigError
 
 
+def warn_deprecated_fields(data: Any, model_name: str, fields: List[str]) -> Any:
+    """Warn about config fields that are accepted for compatibility but not used anymore."""
+    if isinstance(data, dict):
+        for field in fields:
+            if data.get(field) is not None:
+                warnings.warn(f"{model_name}.{field} is deprecated and ignored, remove it from the config",
+                              DeprecationWarning, stacklevel=2)
+    return data
+
+
 class SeparationModelConfig(BaseModel):
-    kind: Literal[SeparationParams.rand, SeparationParams.period, SeparationParams.null]
-    random_state: Optional[int] = None
-    test_train_proportion: Optional[float] = None
+    kind: Literal[SeparationParams.rand, SeparationParams.period, SeparationParams.null] = SeparationParams.rand
+    random_state: Optional[int] = 42
+    test_train_proportion: Optional[float] = 0.2
     train_period: Optional[List] = None
     test_period: Optional[List] = None
     period_column: Optional[List[str]] = None
@@ -19,30 +30,40 @@ class SeparationModelConfig(BaseModel):
 class DataConfig(BaseModel):
 
     targetslices: Optional[List]  = []
-    queries: Optional[List[str]] = None
+    queries: Optional[List[str]] = None  # deprecated
+
+    @model_validator(mode="before")
+    @classmethod
+    def deprecated_fields(cls, data):
+        return warn_deprecated_fields(data, "DataConfig", ["queries"])
 
 
 class DataModelConfig(BaseModel):
     project: Optional[str] = None
     version: Optional[str] = None
-    processing: Optional[bool] = None
-    showGraphs: Optional[bool] = None
-    source: Optional[Literal[FilesNames.parquet, FilesNames.database, FilesNames.csv, FilesNames.pickle, FilesNames.hadoop]]
+    processing: Optional[bool] = None  # deprecated
+    showGraphs: Optional[bool] = None  # deprecated
+    source: Optional[Literal[FilesNames.parquet, FilesNames.database, FilesNames.csv, FilesNames.pickle, FilesNames.hadoop]] = None
     table_name_source: Optional[str] = None
     local_name_source: Optional[str] = None
     extra_conditions: Optional[str] = None
     extra_params: Optional[Dict] = None
-    separation: Optional[SeparationModelConfig] = None
+    separation: Optional[SeparationModelConfig] = Field(default_factory=SeparationModelConfig)
     extra_columns: Optional[List[str]] = None
     targetslices: Optional[List] = []
-    data: Optional[DataConfig]   # TODO: remove
+    data: Optional[DataConfig] = Field(default_factory=DataConfig)  # TODO: remove
+
+    @model_validator(mode="before")
+    @classmethod
+    def deprecated_fields(cls, data):
+        return warn_deprecated_fields(data, "DataModelConfig", ["processing", "showGraphs"])
 
 
 class RelativeFeatureModelConfig(BaseModel):
     name: str
     numerator: str
     denominator: str
-    default: int | float | Literal[FeatureEngineering.nan]
+    default: int | float | Literal[FeatureEngineering.nan] = FeatureEngineering.nan
 
     @model_validator(mode="after")
     def check_rel_default(self):
@@ -53,8 +74,8 @@ class RelativeFeatureModelConfig(BaseModel):
 
 class FeatureModelConfig(BaseModel):
     name: str
-    default: Union[int, float, str]
-    replace: Dict
+    default: Union[int, float, str] = None
+    replace: Dict = Field(default_factory=dict)
     clip: Optional[Dict] = None
     cut_number: Optional[str] = None
     fillna: Optional[Union[int, float, str]] = None  # For categorical features only
@@ -62,6 +83,16 @@ class FeatureModelConfig(BaseModel):
     optbinning_params: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None
     bins: Optional[List] = None
     mapping: Optional[Dict] = None
+
+    @model_validator(mode="after")
+    def set_default(self):
+        """Without `default`: the median for numerical features, NaN for categorical ones."""
+        if self.default is None:
+            if self.replace.get(FeatureEngineering.feature_type) == FeatureEngineering.numerical:
+                self.default = FeatureEngineering.median.value
+            else:
+                self.default = FeatureEngineering.nan.value
+        return self
 
     @model_validator(mode="after")
     def check_replace(self):
@@ -166,8 +197,8 @@ class ModelConfig(BaseModel):
 
 
 class AllModelsConfig(BaseModel):
-    project: str
-    version: str
+    project: str = "default"
+    version: str = "1"
     group_name: str
     data_config: DataModelConfig
     models_configs: List[ModelConfig]
@@ -192,7 +223,9 @@ class ServiceRequest(BaseModel):
 
 
 class FeatureSelectionConfig(BaseModel):
-    top_feautures_to_select: int = 10
+    # 'top_feautures_to_select' is the old misspelled name, still accepted
+    top_features_to_select: int = Field(default=10, validation_alias=AliasChoices("top_features_to_select",
+                                                                                 "top_feautures_to_select"))
     count_category: int = 100
     cutoff_1_category: float = 0.99
     cutoff_nan: float = 0.7
@@ -207,6 +240,11 @@ class FeatureSelectionConfig(BaseModel):
     features_to_ignore: List[str] = []
     params: dict = {}
     use_temp_data: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def deprecated_fields(cls, data):
+        return warn_deprecated_fields(data, "FeatureSelectionConfig", ["top_feautures_to_select"])
 
 
 class OptunaOptimizeConfig(BaseModel):
@@ -227,24 +265,35 @@ class HPTuneConfig(BaseModel):
 
 
 class ModelInferenceConfig(BaseModel):
-    prod_models_folder: str
-    metric_growth_value: Dict[str, float]
+    prod_models_folder: Optional[str] = None  # deprecated: the folder comes from the environment config
+    metric_growth_value: Dict[str, float] = Field(default_factory=dict)
     calculate_threshold: int = 0
     threshold: list = [0.8, 0.8]
-    prod_path: Optional[str] = None
+    prod_path: Optional[str] = None  # deprecated
 
+    @model_validator(mode="before")
+    @classmethod
+    def deprecated_fields(cls, data):
+        return warn_deprecated_fields(data, "ModelInferenceConfig", ["prod_models_folder", "prod_path"])
 
 
 class AutoMLConfig(BaseModel):
-    project: str
-    group_name: str
-    feature_selection: FeatureSelectionConfig
-    hp_tune: HPTuneConfig
-    inference_criteria: ModelInferenceConfig
-    mlflow_experiment: str
-    grafana_table_name: str
-    dashboard_name: str
+    # project and group_name default to the models config (AllModelsConfig)
+    project: Optional[str] = None
+    group_name: Optional[str] = None
+    feature_selection: FeatureSelectionConfig = Field(default_factory=FeatureSelectionConfig)
+    hp_tune: HPTuneConfig = Field(default_factory=HPTuneConfig)
+    inference_criteria: ModelInferenceConfig = Field(default_factory=ModelInferenceConfig)
+    # mlflow_experiment defaults to the environment config, grafana_table_name to the AutoML group name
+    mlflow_experiment: Optional[str] = None
+    grafana_table_name: Optional[str] = None
+    dashboard_name: Optional[str] = None  # deprecated
     trigger: Optional[Dict[str, str]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def deprecated_fields(cls, data):
+        return warn_deprecated_fields(data, "AutoMLConfig", ["dashboard_name"])
 
 class MonitoringFactoryConfig(BaseModel):
     type: str = "datadrift"
@@ -255,12 +304,24 @@ class MonitoringFactoryConfig(BaseModel):
 
 class MonitoringConfig(BaseModel):
     group_name: str
-    grafana_table_name: str
-    dashboard_name: str
+    grafana_table_name: Optional[str] = None
+    dashboard_name: Optional[str] = None  # deprecated
     monitoring_factory: List[MonitoringFactoryConfig] = [MonitoringFactoryConfig()]
-    extrapolation_period: int = 12
-    target_column: str
-    data_source: str
+    extrapolation_period: int = 12  # deprecated
+    target_column: Optional[str] = None  # deprecated
+    data_source: Optional[str] = None  # defaults to the source of the models config
+
+    @model_validator(mode="before")
+    @classmethod
+    def deprecated_fields(cls, data):
+        return warn_deprecated_fields(data, "MonitoringConfig",
+                                      ["dashboard_name", "extrapolation_period", "target_column"])
+
+    @model_validator(mode="after")
+    def set_grafana_table_name(self):
+        if self.grafana_table_name is None:
+            self.grafana_table_name = self.group_name
+        return self
     prod_models_path: Optional[str] = None
     pickle_name: Optional[str] = None
     report_db_schema: Optional[str] = "public"

@@ -253,7 +253,8 @@ class MonitoringManager:
         :rtype: str
         """
         try:
-            if self._monitoring_config.data_source in ['csv', 'parquet']:
+            data_source = self._monitoring_config.data_source or self._ds_manager.data_config.source
+            if data_source in ['csv', 'parquet']:
                 dataset_name = os.path.basename(os.path.splitext(self._ds_manager.data_config.local_name_source)[0])
             else:
                 dataset_name = self._ds_manager.data_config.table_name_source
