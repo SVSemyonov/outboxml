@@ -1150,13 +1150,25 @@ class AutoMLManager(DataSetsManager):
             raise ValidationError(e)
         self._init_dsmanager()
         self._is_initialized = True
+        self.__fill_auto_ml_defaults()
         self.group_name = f"{self._auto_ml_config.group_name}_{self._auto_ml_config.project}"
+        if self._auto_ml_config.grafana_table_name is None:
+            self._auto_ml_config.grafana_table_name = self.group_name
         self._feature_selection_config = self._auto_ml_config.feature_selection
         self._hp_tuning_config = self._auto_ml_config.hp_tune  # use best model = False
         if self._retro:
             self.features_list_to_exclude = self.__load_features_list()
 
         logger.debug('AutoML init completed')
+
+    def __fill_auto_ml_defaults(self):
+        """Take fields missing in the AutoML config from the models config and the environment config."""
+        if self._auto_ml_config.group_name is None:
+            self._auto_ml_config.group_name = self._all_models_config.group_name
+        if self._auto_ml_config.project is None:
+            self._auto_ml_config.project = self._all_models_config.project
+        if self._auto_ml_config.mlflow_experiment is None:
+            self._auto_ml_config.mlflow_experiment = self._external_config.mlflow_experiment
 
     def __load_features_list(self):
         """Load list of features to exclude from feature selection.

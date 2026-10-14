@@ -31,3 +31,36 @@ def test_explicit_values_are_kept():
 
 def test_relative_feature_default():
     assert RelativeFeatureModelConfig(name="R", numerator="A", denominator="B").default == "_NAN_"
+
+
+def test_minimal_automl_config(monkeypatch):
+    from conftest import TEST_CONFIGS_PATH
+    from outboxml import config
+    from outboxml.automl_manager import AutoMLManager
+
+    monkeypatch.setattr(config, "mlflow_experiment", "env_experiment")
+    automl = AutoMLManager(auto_ml_config={}, models_config=str(TEST_CONFIGS_PATH / "config-example-titanic.json"),
+                           retro=False, hp_tune=False)
+
+    assert automl.group_name == "example_titanic"
+    assert automl._auto_ml_config.mlflow_experiment == "env_experiment"
+    assert automl.mlflow.experiment_name == "env_experiment"
+    assert automl._auto_ml_config.grafana_table_name == "example_titanic"
+    assert automl._auto_ml_config.inference_criteria.metric_growth_value == {}
+    assert automl._auto_ml_config.hp_tune.trials == 100
+
+
+def test_minimal_monitoring_config():
+    import pandas as pd
+
+    from conftest import TEST_CONFIGS_PATH, TEST_DATA_PATH
+    from outboxml.extractors import SimpleExtractor
+    from outboxml.monitoring_manager import MonitoringManager
+
+    logs = pd.read_csv(TEST_DATA_PATH / "titanic.csv").head(300)
+    manager = MonitoringManager(monitoring_config={"group_name": "example"},
+                                models_config=str(TEST_CONFIGS_PATH / "config-example-titanic.json"),
+                                logs_extractor=SimpleExtractor(data=logs))
+
+    assert manager._monitoring_config.grafana_table_name == "example"
+    assert manager.result.dataset_name == "titanic"

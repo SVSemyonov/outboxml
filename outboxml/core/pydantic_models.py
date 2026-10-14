@@ -237,8 +237,8 @@ class HPTuneConfig(BaseModel):
 
 
 class ModelInferenceConfig(BaseModel):
-    prod_models_folder: str
-    metric_growth_value: Dict[str, float]
+    prod_models_folder: Optional[str] = None  # not used: the folder comes from the environment config
+    metric_growth_value: Dict[str, float] = Field(default_factory=dict)
     calculate_threshold: int = 0
     threshold: list = [0.8, 0.8]
     prod_path: Optional[str] = None
@@ -246,14 +246,16 @@ class ModelInferenceConfig(BaseModel):
 
 
 class AutoMLConfig(BaseModel):
-    project: str
-    group_name: str
-    feature_selection: FeatureSelectionConfig
-    hp_tune: HPTuneConfig
-    inference_criteria: ModelInferenceConfig
-    mlflow_experiment: str
-    grafana_table_name: str
-    dashboard_name: str
+    # project and group_name default to the models config (AllModelsConfig)
+    project: Optional[str] = None
+    group_name: Optional[str] = None
+    feature_selection: FeatureSelectionConfig = Field(default_factory=FeatureSelectionConfig)
+    hp_tune: HPTuneConfig = Field(default_factory=HPTuneConfig)
+    inference_criteria: ModelInferenceConfig = Field(default_factory=ModelInferenceConfig)
+    # mlflow_experiment defaults to the environment config, grafana_table_name to the AutoML group name
+    mlflow_experiment: Optional[str] = None
+    grafana_table_name: Optional[str] = None
+    dashboard_name: Optional[str] = None
     trigger: Optional[Dict[str, str]] = None
 
 class MonitoringFactoryConfig(BaseModel):
@@ -265,12 +267,18 @@ class MonitoringFactoryConfig(BaseModel):
 
 class MonitoringConfig(BaseModel):
     group_name: str
-    grafana_table_name: str
-    dashboard_name: str
+    grafana_table_name: Optional[str] = None
+    dashboard_name: Optional[str] = None
     monitoring_factory: List[MonitoringFactoryConfig] = [MonitoringFactoryConfig()]
     extrapolation_period: int = 12
-    target_column: str
-    data_source: str
+    target_column: Optional[str] = None
+    data_source: Optional[str] = None  # defaults to the source of the models config
+
+    @model_validator(mode="after")
+    def set_grafana_table_name(self):
+        if self.grafana_table_name is None:
+            self.grafana_table_name = self.group_name
+        return self
     prod_models_path: Optional[str] = None
     pickle_name: Optional[str] = None
     report_db_schema: Optional[str] = "public"
