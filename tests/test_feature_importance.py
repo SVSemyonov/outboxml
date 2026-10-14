@@ -38,10 +38,14 @@ def test_importance_on_train_without_directions(titanic_synthetic):
     assert isinstance(importance.plot(show=False), go.Figure)
 
 
-@pytest.mark.xfail(strict=True, reason="_get_explainer_items returns (None, None) for unsupported models, but "
-                                       "calculate_importance selects X_test[None] before checking it: KeyError")
 def test_importance_not_supported_for_catboost_over_glm(titanic_synthetic):
     importance = fitted(titanic_synthetic, wrapper="catboost_over_glm", objective="gamma", target="FARE_TARGET")
 
     assert importance.calculate_importance() == []
+    assert importance.plot(show=False) is None
+
+
+def test_plot_before_calculation_returns_none(titanic_synthetic):
+    importance = fitted(titanic_synthetic, wrapper="catboost", objective="gamma", target="FARE_TARGET")
+
     assert importance.plot(show=False) is None
