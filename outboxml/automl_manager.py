@@ -851,7 +851,8 @@ class AutoMLManager(DataSetsManager):
                         logger.warning(f'HP_Tune || No parameters for model "{model.name}"')
                 new_hp[model.name] = HPTuning(data_preprocessor=self._data_preprocessor,
                                               sampler=self._hp_tuning_config.sampling,
-                                              scoring_fun=self._hp_tuning_config.metric_score[model.name],
+                                              scoring_fun=self.__metric_for_model(self._hp_tuning_config.metric_score,
+                                                                                  model.name),
                                               folds_num_for_cv=self._hp_tuning_config.cv_folds_num,
                                               objective=model.objective,
                                               random_state=self.config.data_config.separation.random_state,
@@ -1157,6 +1158,11 @@ class AutoMLManager(DataSetsManager):
             self.features_list_to_exclude = self.__load_features_list()
 
         logger.debug('AutoML init completed')
+
+    @staticmethod
+    def __metric_for_model(metrics: dict, model_name: str) -> str:
+        """Metric of the model, else the 'default' entry, else neg_mean_absolute_error."""
+        return metrics.get(model_name, metrics.get('default', 'neg_mean_absolute_error'))
 
     def __load_features_list(self):
         """Load list of features to exclude from feature selection.
