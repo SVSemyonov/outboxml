@@ -860,7 +860,7 @@ class DataSetsManager:
             self._all_models_config = AllModelsConfig.model_validate_json(all_models_config)
         except ValidationError as e:
             logger.error("Config validation error")
-            raise ValidationError(e)
+            raise  # re-raise the original ValidationError
         self.data_config = self._all_models_config.data_config
         self._models_configs = self._all_models_config.models_configs
         self.version = self._all_models_config.version

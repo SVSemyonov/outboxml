@@ -77,5 +77,5 @@ def test_monitoring_config_from_missing_file_raises():
 def test_invalid_monitoring_config_raises(monitoring_config):
     del monitoring_config["group_name"]
 
-    with pytest.raises((ValidationError, TypeError)):
+    with pytest.raises(ValidationError):
         manager(monitoring_config)
