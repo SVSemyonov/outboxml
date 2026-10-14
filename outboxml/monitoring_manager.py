@@ -187,7 +187,7 @@ class MonitoringManager:
             self._monitoring_config = MonitoringConfig.model_validate_json(auto_ml_config)
         except ValidationError as e:
             logger.error("Config validation error")
-            raise ValidationError(e)
+            raise  # re-raise the original ValidationError
 
     def __init_prod_models_configs(self):
         if self._monitoring_config.pickle_name:
@@ -224,7 +224,7 @@ class MonitoringManager:
             all_models_config = AllModelsConfig.model_validate_json(config)
         except ValidationError as e:
             logger.error("Config validation error")
-            raise ValidationError(e)
+            raise  # re-raise the original ValidationError
         return all_models_config
 
     def _grafana_report(self, report: pd.DataFrame, table_name: str) -> None:

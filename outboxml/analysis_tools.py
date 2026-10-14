@@ -249,8 +249,9 @@ class CVStability(Analysis):
                 :return: Scoring function name.
                 :rtype: str
                 """
-        if self.config.metric_eval[model_name] in get_scorer_names():
-            return self.config.metric_eval[model_name]
+        metric = self.config.metric_eval.get(model_name, self.config.metric_eval.get('default'))
+        if metric in get_scorer_names():
+            return metric
         else:
             logger.error('Unknown metric for cv||Returning neg_mean_absolute_error')
             return 'neg_mean_absolute_error'

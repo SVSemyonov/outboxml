@@ -223,7 +223,7 @@ class DSManagerResult:
             "wrapper": wrapper,
             "model": model,
             "glm_model": glm_model,
-            "catbosot_model": catboost_model,
+            "catboost_model": catboost_model,
             "xgm_model": xgb_model,
             "min_max_scaler": min_max_scaler,
             "features_numerical": self.data_subset.features_numerical,
@@ -251,9 +251,12 @@ class DSManagerResult:
                                                                           features_numerical=features_numerical,
                                                                           features_categorical=features_categorical,
                                                                           ),
-                                         data_subset=ModelDataSubset(model_name=model_name),
+                                         data_subset=ModelDataSubset(model_name=model_name,
+                                                                     features_numerical=features_numerical,
+                                                                     features_categorical=features_categorical),
                                          )
-            model._model_ctb = model_result['catboost_model']
+            # 'catbosot_model': key misspelled by exports before the fix
+            model._model_ctb = model_result.get('catboost_model', model_result.get('catbosot_model'))
         else:
             model = GLMCatboostCombineModel(model_name=model_name,
                                             wrapper=wrapper,
@@ -857,7 +860,7 @@ class DataSetsManager:
             self._all_models_config = AllModelsConfig.model_validate_json(all_models_config)
         except ValidationError as e:
             logger.error("Config validation error")
-            raise ValidationError(e)
+            raise  # re-raise the original ValidationError
         self.data_config = self._all_models_config.data_config
         self._models_configs = self._all_models_config.models_configs
         self.version = self._all_models_config.version

@@ -38,17 +38,17 @@ async def health_route():
 
 @app.post("/api/update")
 async def update_route(update_request: UpdateRequest):
-    user_paramters = update_request.user_parameters
-    retro =  user_paramters.get('retro', False)
-    hp_tune = user_paramters.get('hp_tune', False)
-    use_temp_files = user_paramters.get('use_temp_files', False)
+    user_parameters = update_request.user_parameters or {}
+    retro = user_parameters.get('retro', False)
+    hp_tune = user_parameters.get('hp_tune', False)
+    use_temp_files = user_parameters.get('use_temp_files', False)
     #TODO other parameters
     try:
         auto_ml_config = update_request.auto_ml_config
         all_model_config = update_request.all_model_config
         auto_ml  = AutoMLManager(auto_ml_config=auto_ml_config.dict(),
                                  models_config=all_model_config.dict(),
-                                 retro=False,
+                                 retro=retro,
                                  hp_tune=hp_tune,
                                  use_temp_files=use_temp_files,
 

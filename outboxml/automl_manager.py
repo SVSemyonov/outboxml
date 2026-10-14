@@ -851,7 +851,8 @@ class AutoMLManager(DataSetsManager):
                         logger.warning(f'HP_Tune || No parameters for model "{model.name}"')
                 new_hp[model.name] = HPTuning(data_preprocessor=self._data_preprocessor,
                                               sampler=self._hp_tuning_config.sampling,
-                                              scoring_fun=self._hp_tuning_config.metric_score[model.name],
+                                              scoring_fun=self.__metric_for_model(self._hp_tuning_config.metric_score,
+                                                                                  model.name),
                                               folds_num_for_cv=self._hp_tuning_config.cv_folds_num,
                                               objective=model.objective,
                                               random_state=self.config.data_config.separation.random_state,
@@ -874,8 +875,9 @@ class AutoMLManager(DataSetsManager):
 
         for name, spec in config.items():
             if spec.type == "int":
-                sampled_params[name] = trial.suggest_int(
-                    name, int(spec.low), int(spec.high), step=spec.step, log=spec.log
+                sampled_params[name] = trial.suggest_int(  # step is optional in the config, optuna needs an int
+                    name, int(spec.low), int(spec.high), step=int(spec.step) if spec.step is not None else 1,
+                    log=spec.log
                 )
             elif spec.type == "float":
                 sampled_params[name] = trial.suggest_float(
@@ -1147,7 +1149,7 @@ class AutoMLManager(DataSetsManager):
             self._auto_ml_config = AutoMLConfig.model_validate_json(auto_ml_config)
         except ValidationError as e:
             logger.error("Config validation error" + str(e))
-            raise ValidationError(e)
+            raise  # re-raise the original ValidationError
         self._init_dsmanager()
         self._is_initialized = True
         self.__fill_auto_ml_defaults()
@@ -1169,6 +1171,10 @@ class AutoMLManager(DataSetsManager):
             self._auto_ml_config.project = self._all_models_config.project
         if self._auto_ml_config.mlflow_experiment is None:
             self._auto_ml_config.mlflow_experiment = self._external_config.mlflow_experiment
+    @staticmethod
+    def __metric_for_model(metrics: dict, model_name: str) -> str:
+        """Metric of the model, else the 'default' entry, else neg_mean_absolute_error."""
+        return metrics.get(model_name, metrics.get('default', 'neg_mean_absolute_error'))
 
     def __load_features_list(self):
         """Load list of features to exclude from feature selection.
