@@ -1,5 +1,11 @@
+import warnings
+
+import pytest
+
+from outboxml.core.config_builders import AutoMLConfigBuilder
 from outboxml.core.enums import SeparationParams
-from outboxml.core.pydantic_models import (AllModelsConfig, DataModelConfig, FeatureModelConfig,
+from outboxml.core.pydantic_models import (AllModelsConfig, AutoMLConfig, DataConfig, DataModelConfig,
+                                           FeatureModelConfig, ModelInferenceConfig, MonitoringConfig,
                                            RelativeFeatureModelConfig)
 
 
@@ -64,3 +70,25 @@ def test_minimal_monitoring_config():
 
     assert manager._monitoring_config.grafana_table_name == "example"
     assert manager.result.dataset_name == "titanic"
+
+
+@pytest.mark.parametrize("model, data, field", [
+    (DataModelConfig, {"source": "csv", "showGraphs": True}, "showGraphs"),
+    (DataModelConfig, {"source": "csv", "processing": True}, "processing"),
+    (DataConfig, {"queries": ["select 1"]}, "queries"),
+    (ModelInferenceConfig, {"prod_models_folder": "models"}, "prod_models_folder"),
+    (AutoMLConfig, {"dashboard_name": "dash"}, "dashboard_name"),
+    (MonitoringConfig, {"group_name": "g", "target_column": "SURVIVED"}, "target_column"),
+    (MonitoringConfig, {"group_name": "g", "extrapolation_period": 6}, "extrapolation_period"),
+])
+def test_deprecated_fields_are_accepted_with_warning(model, data, field):
+    with pytest.warns(DeprecationWarning, match=field):
+        model.model_validate(data)
+
+
+def test_current_fields_do_not_warn():
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        AutoMLConfig.model_validate({"group_name": "g", "hp_tune": {"trials": 5}})
+        MonitoringConfig.model_validate({"group_name": "g"})
+        AutoMLConfigBuilder().build()

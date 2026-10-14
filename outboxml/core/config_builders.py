@@ -108,12 +108,10 @@ class AutoMLConfigBuilder(ConfigBuilder):
         self.feature_selection = params.get('feature_selection', FeatureSelectionConfig())
         self.hp_tune = params.get('hp_tune', HPTuneConfig())
         self.inference_criteria = params.get('feature_selection',
-                                             ModelInferenceConfig(prod_models_folder='prod_models_folder',
-                                                                  metric_growth_value={'neg_mean_absolute_error': 0}
+                                             ModelInferenceConfig(metric_growth_value={'neg_mean_absolute_error': 0}
                                                                   ))
         self.mlflow_experiment = 'mlflow_experiment_name'
         self.grafana_table_name = 'self.grafana_table_name'
-        self.dashboard_name = 'dashboard_name'
         self.trigger: Optional[Dict[str, str]] = None
 
     def build(self):
@@ -124,7 +122,6 @@ class AutoMLConfigBuilder(ConfigBuilder):
                             inference_criteria=self.inference_criteria,
                             mlflow_experiment=self.mlflow_experiment,
                             grafana_table_name=self.grafana_table_name,
-                            dashboard_name=self.dashboard_name,
                             )
 
 
