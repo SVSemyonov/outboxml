@@ -89,7 +89,6 @@ def test_update_error_returns_400(app_client):
     assert "no data" in response.json()["error"]
 
 
-@pytest.mark.xfail(strict=True, reason="user_parameters is optional but update_route calls .get on it outside try")
 def test_update_without_user_parameters(app_client):
     with patch.object(main_app, "AutoMLManager") as manager_cls:
         manager_cls.return_value.status = {}
@@ -98,7 +97,6 @@ def test_update_without_user_parameters(app_client):
     assert response.status_code == 200
 
 
-@pytest.mark.xfail(strict=True, reason="update_route ignores user_parameters['retro'] and always passes retro=False")
 def test_update_passes_retro(app_client):
     with patch.object(main_app, "AutoMLManager") as manager_cls:
         manager_cls.return_value.status = {}
