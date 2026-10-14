@@ -1,4 +1,4 @@
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 from typing import List, Dict, Any, Optional, Union
 from typing_extensions import Literal
 
@@ -7,9 +7,9 @@ from outboxml.core.errors import ConfigError
 
 
 class SeparationModelConfig(BaseModel):
-    kind: Literal[SeparationParams.rand, SeparationParams.period, SeparationParams.null]
-    random_state: Optional[int] = None
-    test_train_proportion: Optional[float] = None
+    kind: Literal[SeparationParams.rand, SeparationParams.period, SeparationParams.null] = SeparationParams.rand
+    random_state: Optional[int] = 42
+    test_train_proportion: Optional[float] = 0.2
     train_period: Optional[List] = None
     test_period: Optional[List] = None
     period_column: Optional[List[str]] = None
@@ -27,22 +27,22 @@ class DataModelConfig(BaseModel):
     version: Optional[str] = None
     processing: Optional[bool] = None
     showGraphs: Optional[bool] = None
-    source: Optional[Literal[FilesNames.parquet, FilesNames.database, FilesNames.csv, FilesNames.pickle, FilesNames.hadoop]]
+    source: Optional[Literal[FilesNames.parquet, FilesNames.database, FilesNames.csv, FilesNames.pickle, FilesNames.hadoop]] = None
     table_name_source: Optional[str] = None
     local_name_source: Optional[str] = None
     extra_conditions: Optional[str] = None
     extra_params: Optional[Dict] = None
-    separation: Optional[SeparationModelConfig] = None
+    separation: Optional[SeparationModelConfig] = Field(default_factory=SeparationModelConfig)
     extra_columns: Optional[List[str]] = None
     targetslices: Optional[List] = []
-    data: Optional[DataConfig]   # TODO: remove
+    data: Optional[DataConfig] = Field(default_factory=DataConfig)  # TODO: remove
 
 
 class RelativeFeatureModelConfig(BaseModel):
     name: str
     numerator: str
     denominator: str
-    default: int | float | Literal[FeatureEngineering.nan]
+    default: int | float | Literal[FeatureEngineering.nan] = FeatureEngineering.nan
 
     @model_validator(mode="after")
     def check_rel_default(self):
@@ -53,8 +53,8 @@ class RelativeFeatureModelConfig(BaseModel):
 
 class FeatureModelConfig(BaseModel):
     name: str
-    default: Union[int, float, str]
-    replace: Dict
+    default: Union[int, float, str] = None
+    replace: Dict = Field(default_factory=dict)
     clip: Optional[Dict] = None
     cut_number: Optional[str] = None
     fillna: Optional[Union[int, float, str]] = None  # For categorical features only
@@ -62,6 +62,16 @@ class FeatureModelConfig(BaseModel):
     optbinning_params: Optional[Dict[str, Optional[Union[int, float, str, bool]]]] = None
     bins: Optional[List] = None
     mapping: Optional[Dict] = None
+
+    @model_validator(mode="after")
+    def set_default(self):
+        """Without `default`: the median for numerical features, NaN for categorical ones."""
+        if self.default is None:
+            if self.replace.get(FeatureEngineering.feature_type) == FeatureEngineering.numerical:
+                self.default = FeatureEngineering.median.value
+            else:
+                self.default = FeatureEngineering.nan.value
+        return self
 
     @model_validator(mode="after")
     def check_replace(self):
@@ -166,8 +176,8 @@ class ModelConfig(BaseModel):
 
 
 class AllModelsConfig(BaseModel):
-    project: str
-    version: str
+    project: str = "default"
+    version: str = "1"
     group_name: str
     data_config: DataModelConfig
     models_configs: List[ModelConfig]
