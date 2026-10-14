@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AliasChoices, BaseModel, Field, model_validator
 import warnings
 from typing import List, Dict, Any, Optional, Union
 from typing_extensions import Literal
@@ -223,7 +223,9 @@ class ServiceRequest(BaseModel):
 
 
 class FeatureSelectionConfig(BaseModel):
-    top_feautures_to_select: int = 10
+    # 'top_feautures_to_select' is the old misspelled name, still accepted
+    top_features_to_select: int = Field(default=10, validation_alias=AliasChoices("top_features_to_select",
+                                                                                 "top_feautures_to_select"))
     count_category: int = 100
     cutoff_1_category: float = 0.99
     cutoff_nan: float = 0.7
@@ -238,6 +240,11 @@ class FeatureSelectionConfig(BaseModel):
     features_to_ignore: List[str] = []
     params: dict = {}
     use_temp_data: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def deprecated_fields(cls, data):
+        return warn_deprecated_fields(data, "FeatureSelectionConfig", ["top_feautures_to_select"])
 
 
 class OptunaOptimizeConfig(BaseModel):

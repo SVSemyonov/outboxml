@@ -74,7 +74,7 @@ class FeatureSelection(TestCase):
         self.feature_for_research = ['PCLASS', 'NAME', 'TICKET', 'CABIN', 'EMBARKED']
         self._fs_config = FeatureSelectionConfig(
             metric_eval={"first": "accuracy", "second": "accuracy"},
-            top_feautures_to_select=4,
+            top_features_to_select=4,
             count_category=100,
             cutoff_1_category=0.9,
             cutoff_nan=0.7,
@@ -128,7 +128,7 @@ class FeatureSelection(TestCase):
         base_fs = BaseFS( new_features_list=self.feature_for_research,
                       parameters=FeatureSelectionConfig(
                                                 metric_eval={"first": "accuracy", "second": "accuracy"},
-                                                top_feautures_to_select=4,
+                                                top_features_to_select=4,
                                                 count_category=100,
                                                 cutoff_1_category=0.9,
                                                 cutoff_nan=0.7,

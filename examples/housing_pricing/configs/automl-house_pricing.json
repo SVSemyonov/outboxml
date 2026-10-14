@@ -3,7 +3,7 @@
   "project": "house_price",
   "version": "1",
   "feature_selection": {
-        "top_feautures_to_select": 5,
+        "top_features_to_select": 5,
         "count_category": 100,
         "cutoff_1_category":  0.95,
         "cutoff_nan": 0.7,

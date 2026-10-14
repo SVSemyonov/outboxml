@@ -3,7 +3,7 @@
   "project": "titanic",
   "version": "1",
   "feature_selection": {
-        "top_feautures_to_select": 10,
+        "top_features_to_select": 10,
         "count_category": 100,
         "cutoff_1_category":  0.99,
         "cutoff_nan": 0.7,

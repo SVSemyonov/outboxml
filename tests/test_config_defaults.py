@@ -92,3 +92,11 @@ def test_current_fields_do_not_warn():
         AutoMLConfig.model_validate({"group_name": "g", "hp_tune": {"trials": 5}})
         MonitoringConfig.model_validate({"group_name": "g"})
         AutoMLConfigBuilder().build()
+
+
+def test_top_features_to_select_accepts_old_misspelled_name():
+    from outboxml.core.pydantic_models import FeatureSelectionConfig
+
+    assert FeatureSelectionConfig(top_features_to_select=4).top_features_to_select == 4
+    with pytest.warns(DeprecationWarning, match="top_feautures_to_select"):
+        assert FeatureSelectionConfig.model_validate({"top_feautures_to_select": 7}).top_features_to_select == 7
