@@ -20,3 +20,21 @@ venv/
 /results
 .coverage
 agent_runs/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Training and notebook artifacts
+catboost_info/
+.ipynb_checkpoints/
+mlruns/
+/prod_models_from_mlflow/
+
+# Test coverage
+.coverage.*
+coverage.xml
+
+# Office lock files
+~$*
