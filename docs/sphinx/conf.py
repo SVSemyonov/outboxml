@@ -110,7 +110,8 @@ def setup(app):
 autodoc_mock_imports = [
     'mlflow', 'loguru', 'pandas', 'numpy', 'sklearn', 'plotly', 
     'optuna', 'catboost', 'xgboost', 'dotenv', 'pydantic',
-    'sqlalchemy', 'psycopg2', 'lightgbm', 'scikit-learn', 'environs'
+    'sqlalchemy', 'psycopg2', 'lightgbm', 'scikit-learn', 'environs',
+    'fastapi', 'uvicorn',  # fastapi needs the real pydantic, which is mocked above
 ]
 autodoc_inherit_docstrings = True
 autodoc_typehints = 'description'
