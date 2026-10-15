@@ -107,12 +107,13 @@ class AutoMLConfigBuilder(ConfigBuilder):
         self.group_name = params.get('group_name', 'example')
         self.feature_selection = params.get('feature_selection', FeatureSelectionConfig())
         self.hp_tune = params.get('hp_tune', HPTuneConfig())
-        self.inference_criteria = params.get('feature_selection',
+        self.inference_criteria = params.get('inference_criteria',
                                              ModelInferenceConfig(metric_growth_value={'neg_mean_absolute_error': 0}
                                                                   ))
-        self.mlflow_experiment = 'mlflow_experiment_name'
-        self.grafana_table_name = 'self.grafana_table_name'
-        self.trigger: Optional[Dict[str, str]] = None
+        # None: AutoMLManager takes the environment experiment and the AutoML group name
+        self.mlflow_experiment = params.get('mlflow_experiment')
+        self.grafana_table_name = params.get('grafana_table_name')
+        self.trigger: Optional[Dict[str, str]] = params.get('trigger')
 
     def build(self):
         return AutoMLConfig(project=self.project,
@@ -122,6 +123,7 @@ class AutoMLConfigBuilder(ConfigBuilder):
                             inference_criteria=self.inference_criteria,
                             mlflow_experiment=self.mlflow_experiment,
                             grafana_table_name=self.grafana_table_name,
+                            trigger=self.trigger,
                             )
 
 
