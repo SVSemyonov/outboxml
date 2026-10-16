@@ -381,8 +381,14 @@ class BaseFS(FeatureSelection):
         new_preproc = self._preprocessor_for_using_temp_files(model_name)
         new_features_subset = new_preproc.get_subset(model_name)
 
+        # a subset saved by an earlier run may already contain candidate features: use the fresh ones
+        stale_features = [c for c in new_features_subset.X_train.columns if c in subset.X_train.columns]
+        if stale_features:
+            logger.info('Replacing previously saved candidate features||' + str(stale_features))
+            ModelDataSubset.drop_columns(subset, stale_features)
+
         self._data_preprocessor._prepare_datasets[model_name].update_model_config(
-            features_to_drop=[],
+            features_to_drop=stale_features,
             features_to_append=new_preproc.model_config(model_name).features,
         )
 
