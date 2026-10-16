@@ -2,6 +2,7 @@
 from copy import deepcopy
 from itertools import chain
 import pandas as pd
+from pandas.errors import UndefinedVariableError
 from typing import Dict, List, Union
 
 from outboxml.core.prepared_datasets import PrepareDataset
@@ -10,6 +11,14 @@ from outboxml.datasets_manager import DSManagerResult
 from outboxml.ensemble import EnsembleResult
 from outboxml.core.pydantic_models import ModelConfig, DataModelConfig, SeparationModelConfig
 from outboxml.core.data_prepare import prepare_dataset
+
+
+def _row_matches(row: pd.DataFrame, condition: str) -> bool:
+    """Whether a one-row dataframe satisfies an ensemble condition; a missing feature does not match."""
+    try:
+        return not row.query(condition).empty
+    except UndefinedVariableError:
+        return False
 
 
 async def ensemble_predict(
@@ -77,12 +86,10 @@ async def ensemble_predict(
         models = ensemble.models  # List[tuple[condition: str, group_name: str,  model: ModelsResult]]
 
         if as_dict:
-            # data = pd.DataFrame([features_values])
+            row = pd.DataFrame([features_values])
             for condition, group_name, model in models:
-                # FIXME
-                condition = condition.split(" ")
-                # if not data.query(condition).empty:
-                if eval(f"""features_values.get("{condition[0]}") {condition[1]} {" ".join(condition[2:])}"""):
+                # conditions are pandas.query() strings, as for dataframes below
+                if _row_matches(row, condition):
                     return one_model_predict(
                         group_name=ensemble_name,
                         model_result=model,
