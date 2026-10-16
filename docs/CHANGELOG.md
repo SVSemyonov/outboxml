@@ -51,4 +51,4 @@ This project is based on [Semantic Versioning](https://semver.org/) and the [Kee
 
 ---
 
-Releases 0.8.1–0.11.0 were published to PyPI without changelog entries.
+Releases 0.8.1–0.12.0 were published to PyPI without changelog entries.
