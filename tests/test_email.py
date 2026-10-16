@@ -28,22 +28,23 @@ def smtp():
         yield smtp_cls.return_value.__enter__.return_value
 
 
-@pytest.fixture(autouse=True)
-def fake_write_image(monkeypatch):
-    """Rendering is plotly/kaleido's job; kaleido 0.2.1 can hang on Windows."""
-    def write_image(self, file, *args, **kwargs):
-        pathlib.Path(file).write_bytes(bytes.fromhex("89504e470d0a1a0a"))
-    monkeypatch.setattr(go.Figure, "write_image", write_image)
+def sent_parts(smtp_server, index: int = -1):
+    """MIME parts of a message passed to SMTP.sendmail (the last one by default)."""
+    sender, receivers, message = smtp_server.sendmail.call_args_list[index].args
+    assert receivers == RECEIVERS
+    return list(message_from_string(message).walk())
 
 
 def sent_html(smtp_server, index: int = -1) -> str:
-    """HTML body of a message passed to SMTP.sendmail (the last one by default)."""
-    sender, receivers, message = smtp_server.sendmail.call_args_list[index].args
-    assert receivers == RECEIVERS
-    for part in message_from_string(message).walk():
-        if part.get_content_type() == "text/html":
+    """HTML body of a sent message, attachments excluded."""
+    for part in sent_parts(smtp_server, index):
+        if part.get_content_type() == "text/html" and part.get_filename() is None:
             return part.get_payload(decode=True).decode()
-    raise AssertionError("no html part in the sent message")
+    raise AssertionError("no html body in the sent message")
+
+
+def sent_attachments(smtp_server, index: int = -1) -> list:
+    return [part.get_filename() for part in sent_parts(smtp_server, index) if part.get_filename()]
 
 
 def test_send_saves_html_and_sends_to_receivers(mail_config, smtp):
@@ -86,7 +87,9 @@ def test_automl_review_success_mail(mail_config, smtp, automl_result, deployment
 
     AutoMLReviewEMail(config=mail_config).success_mail(automl_result)
 
-    assert (mail_config.results_path / "first figure.png").exists()
+    assert (mail_config.results_path / "first figure.html").exists()
+    assert sent_attachments(smtp) == ["first figure.html"]
+    assert "first figure.html" in sent_html(smtp)
     assert "CABIN" in sent_html(smtp)
 
 
@@ -131,3 +134,13 @@ def test_html_error_report(mail_config):
                                                 status={"Fitting": False})
 
     assert "fit failed" in (mail_config.results_path / "automl_report.html").read_text(encoding="utf-8")
+
+
+def test_mails_do_not_render_images(mail_config, smtp, automl_result, monkeypatch):
+    def write_image(*args, **kwargs):
+        raise AssertionError("PNG export needs kaleido, which can hang on Windows")
+    monkeypatch.setattr(go.Figure, "write_image", write_image)
+
+    AutoMLReviewEMail(config=mail_config).success_mail(automl_result)
+
+    assert sent_attachments(smtp) == ["first figure.html"]

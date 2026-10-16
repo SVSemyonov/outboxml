@@ -111,6 +111,23 @@ class Mail:
 
         self.body = self.body + "<br>" * n_line_breaks
 
+    def add_html_attachment(self, html: str, filename: str, n_line_breaks: int = 0):
+        """Attach an HTML file, e.g. an interactive plotly figure, and mention it in the body.
+
+        :param html: HTML document.
+        :type html: str
+        :param filename: Attachment file name.
+        :type filename: str
+        :param n_line_breaks: Line breaks after the mention in the body.
+        :type n_line_breaks: int
+        :return: None
+        :rtype: None
+        """
+        attachment = MIMEText(html, "html", "utf-8")
+        attachment.add_header("Content-Disposition", "attachment", filename=filename)
+        self.msg.attach(attachment)
+        self.add_text(f"Вложение: {filename}", n_line_breaks=n_line_breaks)
+
     def add_text(self, text, properties: List = [], n_line_breaks: int = 0):
         """Add formatted text to the email body.
 

@@ -2,7 +2,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import plotly.graph_objects as go
 import pytest
 
 from outboxml.core.email import AutoMLReviewEMail, EMail, EMailDSCompareResult, EMailDSResult, EMailMonitoring
@@ -44,14 +43,6 @@ def test_release_mail_is_saved(mail_config, smtp):
     smtp.sendmail.assert_called_once()
 
 
-@pytest.fixture(autouse=True)
-def fake_write_image(monkeypatch):
-    """Rendering is plotly/kaleido's job; kaleido 0.2.1 can hang on Windows."""
-    def write_image(self, file, *args, **kwargs):
-        Path(file).write_bytes(bytes.fromhex("89504e470d0a1a0a"))
-    monkeypatch.setattr(go.Figure, "write_image", write_image)
-
-
 @pytest.fixture(scope="module")
 def ds_result():
     config_name = Path(__file__).resolve().parent / "test_configs" / "config-example-titanic.json"
@@ -64,7 +55,8 @@ def test_ds_result_mail(mail_config, smtp, ds_result):
     EMailDSResult(config=mail_config, ds_manager_result=ds_result).success_mail(group_name="titanic_group")
 
     assert "Характеристики моделей" in saved_html(mail_config)
-    assert list(mail_config.results_path.glob("* cohort.png"))
+    assert sorted(p.name for p in mail_config.results_path.glob("* cohort.html")) == ["first cohort.html",
+                                                                                      "second cohort.html"]
     smtp.sendmail.assert_called_once()
 
 
