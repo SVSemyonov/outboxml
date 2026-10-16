@@ -109,6 +109,13 @@ By default containers map to the following ports:
     $ sudo systemctl restart docker
 ```
 
+## Configuration
+
+The environment config (paths, MLflow, database, e-mail) comes from environment variables or a `.env` file
+(dotenv format) read by `outboxml/config.py`. The Jupyter examples pass a Python config module instead, e.g.
+`examples/titanic/external_config_for_titanic_example.py`. See `docs/sphinx/configuration.rst` for the list of
+settings and the JSON configs of models, AutoML and monitoring.
+
 ## Contributing
 We welcome contributions from the community! If you'd like to contribute, please follow the contributing guidelines outlined in docs/CONTRIBUTING.md.
 
