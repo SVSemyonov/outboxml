@@ -11,6 +11,7 @@ OutBoxML is an open-source framework designed to improve the process of automati
 
    installation
    quickstart
+   configuration
    modules/index
    examples/index
    contributing
