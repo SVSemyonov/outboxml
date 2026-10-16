@@ -34,6 +34,7 @@ def tuning(data, sampler="TPE", pass_objective=True, **config) -> HPTuning:
     (dict(wrapper="catboost", objective="poisson", target="CLAIMS", exposure="EXPOSURE"), catboost_space, "TPE"),
     (dict(wrapper="catboost", objective="binary", target="SURVIVED"), catboost_space, "RandomSampler"),
     (dict(wrapper="catboost", objective="RMSE", target="FARE_TARGET"), catboost_space, "unknown_sampler"),
+    (dict(wrapper="catboost", objective="poisson", target="CLAIMS"), catboost_space, "CmaEsSampler"),
     (dict(wrapper="xgboost", objective="poisson", target="CLAIMS"), xgboost_space, "TPE"),
     (dict(wrapper="xgboost", objective="gamma", target="FARE_TARGET"), xgboost_space, "TPE"),
     (dict(wrapper="xgboost", objective="binary", target="SURVIVED"), xgboost_space, "TPE"),
