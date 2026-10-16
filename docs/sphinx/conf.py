@@ -7,10 +7,11 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 import sys
+import tomllib
 from pathlib import Path
 
 # Add the project root to the Python path
-project_root = Path(__file__).parent.parent.parent
+project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 # Try to import the module to verify it's accessible
@@ -23,8 +24,10 @@ except ImportError as e:
 project = 'OutBoxML'
 copyright = '2025, OutBoxML Contributors'
 author = 'OutBoxML Team'
-release = '0.9.5'
-version = '0.9.5'
+# the package version from pyproject.toml
+with open(project_root / "pyproject.toml", "rb") as f:
+    release = tomllib.load(f)["project"]["version"]
+version = release
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -107,7 +110,8 @@ def setup(app):
 autodoc_mock_imports = [
     'mlflow', 'loguru', 'pandas', 'numpy', 'sklearn', 'plotly', 
     'optuna', 'catboost', 'xgboost', 'dotenv', 'pydantic',
-    'sqlalchemy', 'psycopg2', 'lightgbm', 'scikit-learn', 'environs'
+    'sqlalchemy', 'psycopg2', 'lightgbm', 'scikit-learn', 'environs',
+    'fastapi', 'uvicorn',  # fastapi needs the real pydantic, which is mocked above
 ]
 autodoc_inherit_docstrings = True
 autodoc_typehints = 'description'

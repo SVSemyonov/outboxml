@@ -14,6 +14,8 @@ Core utilities and base classes for OutBoxML.
    validators
    predict
    monitoring_factory
+   prepared_datasets
+   errors
 
 Email Module
 ------------

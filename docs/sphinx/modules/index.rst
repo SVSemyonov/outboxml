@@ -21,6 +21,15 @@ Core Modules
    monitoring_manager
    plots
    export_results
+   ensemble
+   main_predict
+   main_release
+   automl_utils
+   feature_importance
+   dataset_retro
+   monitoring_result
+   analysis_tools
+   mailing
 
 Core Package
 ------------
