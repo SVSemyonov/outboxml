@@ -178,6 +178,16 @@ class EMail:
             n_line_breaks=2,
         )
 
+    def _attach_figure(self, figure, name: str):
+        """Save a plotly figure as interactive HTML in results_path and attach it to the mail.
+
+        Images are not rendered: PNG export needs kaleido, which can hang on Windows.
+        """
+        path = os.path.join(self.config.results_path, f"{name}.html")
+        figure.write_html(path, include_plotlyjs="cdn")
+        with open(path, encoding="utf-8") as f:
+            self.mail.add_html_attachment(f.read(), filename=os.path.basename(path), n_line_breaks=1)
+
     def add_image_to_mail(self, figure):
         """Add an image to the email body.
         
@@ -506,10 +516,7 @@ class EMailDSResult(EMail):
                                                            cohort_base='model',
                                                            )
 
-            figure_cohort.write_image(os.path.join(self.config.results_path, key + ' cohort.png'))
-            with open(os.path.join(self.config.results_path, key + ' cohort.png'), "rb") as f:
-                fig_cohort_png = f.read()
-            self.mail.add_image(fig_cohort_png, size_pixel=(750, 500), n_line_breaks=1)
+            self._attach_figure(figure_cohort, key + ' cohort')
 
     def success_mail(self, group_name: str = 'Test Email'):
         """Send a success email with model metrics and cohort plots.
@@ -693,10 +700,7 @@ class EMailDSCompareResult(EMailDSResult):
                                                                cohort_base='model1',
                                                                )
 
-            figure_cohort.write_image(os.path.join(self.config.results_path, key + ' cohort.png'))
-            with open(os.path.join(self.config.results_path, key + ' cohort.png'), "rb") as f:
-                fig_cohort_png = f.read()
-            self.mail.add_image(fig_cohort_png, size_pixel=(750, 500), n_line_breaks=1)
+            self._attach_figure(figure_cohort, key + ' cohort')
 
 
 class AutoMLReviewEMail(EMail):
@@ -938,10 +942,7 @@ class AutoMLReviewEMail(EMail):
             )
 
             for key in figures.keys():
-                figures[key].write_image(os.path.join(self.config.results_path, key + ' figure.png'))
-                with open(os.path.join(self.config.results_path, key + ' figure.png'), "rb") as f:
-                    fig_cohort_png = f.read()
-                self.mail.add_image(fig_cohort_png, size_pixel=(750, 500), n_line_breaks=1)
+                self._attach_figure(figures[key], key + ' figure')
 
 
 class EMailMonitoring(EMail):

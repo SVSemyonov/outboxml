@@ -7,7 +7,6 @@ statsmodels==0.14.5
 pyarrow==22.0.0
 SQLAlchemy>=2.0.31
 plotly==5.22.0
-kaleido==0.2.1
 mlflow==3.6.0
 pandas==2.3.3
 polars>=1.35.1,<2
