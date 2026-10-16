@@ -108,3 +108,31 @@ def test_main_predict_with_ensemble_pickle(ensemble, ensemble_config, titanic, m
 
     assert result["main_response"]["usage_model"] == saved.stem
     assert set(result["main_response"]["result"]) == {"first", "second"}
+
+
+@pytest.mark.parametrize("condition, expected", [
+    ("SEX == 'male'", True),
+    ("SEX=='male'", True),
+    ("SEX == 'male' and AGE > 30", False),
+    ("SEX == 'male' and AGE <= 30", True),
+    ("PCLASS in [1, 2]", False),
+    ("MISSING_FEATURE > 1", False),
+])
+def test_one_row_condition_matching(condition, expected):
+    from outboxml.core.predict import _row_matches
+
+    row = pd.DataFrame([{"SEX": "male", "AGE": 22.0, "PCLASS": 3}])
+
+    assert _row_matches(row, condition) is expected
+
+
+def test_ensemble_predict_single_row_with_compound_conditions(ensemble_config, titanic):
+    ensemble = Ensemble(config=ensemble_config)
+    ensemble.make_ensemble(ensemble_name="titanic_by_sex_age", models_names=["first"],
+                           groups=[("SEX=='male' and AGE > 30", "group_male"),
+                                   ("not (SEX=='male' and AGE > 30)", "group_female")])
+    row = {"SEX": "male", "AGE": 22.0, "SIBSP": 1}
+
+    result = asyncio.run(ensemble_predict("titanic_by_sex_age", ensemble._result_pickle[0], row, log=False))
+
+    assert set(result["result"]) == {"first"}
