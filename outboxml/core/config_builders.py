@@ -6,6 +6,7 @@ import pandas as pd
 from loguru import logger
 from pydantic import BaseModel
 
+from outboxml.core.data_prepare import to_str
 from outboxml.core.enums import FeaturesTypes, FeatureEngineering, EncodingNames
 from outboxml.core.pydantic_models import FeatureModelConfig, ModelConfig, FeatureSelectionConfig, HPTuneConfig, \
     ModelInferenceConfig, AutoMLConfig, AllModelsConfig, DataConfig, DataModelConfig, SeparationModelConfig
@@ -96,8 +97,9 @@ class FeatureBuilder(ConfigBuilder):
             return {"_TYPE_": "_NUM_"}
         else:
             if self.type == FeaturesTypes.categorical and self.feature_values is not None:
-                return dict(
-                    (value, FeatureEngineering.not_changed) for value in list(self.feature_values.unique()))
+                # keys as data preparation normalizes values (to_str: upper case); missing values use the default
+                return {to_str(value): FeatureEngineering.not_changed
+                        for value in self.feature_values.unique() if not pd.isnull(value)}
 
 
 
