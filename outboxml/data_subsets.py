@@ -14,6 +14,7 @@ from loguru import logger
 from outboxml import config
 from outboxml.core.data_prepare import prepare_dataset
 from outboxml.core.enums import ColumnsNames
+from outboxml.core.utils import ensure_dir
 from outboxml.core.errors import ConfigError
 from outboxml.core.prepared_datasets import PrepareDataset, TrainTestIndexes, TrainTestIndexesPl, PrepareDatasetPl
 from outboxml.core.pydantic_models import DataConfig, DataModelConfig, SeparationModelConfig, ModelConfig
@@ -894,6 +895,7 @@ class PickleModelSubset:
             logger.warning(f'{model_name}||File {file_path} already exists.')
         else:
             logger.info(model_name + '_v' + self.version  + '||Saving subset to pickle')
+            ensure_dir(self.results_path)
             with open(file_path, "wb") as f:
                 pickle.dump(subset, f)
 
@@ -944,6 +946,7 @@ class ParquetDataset:
 
         else:
             logger.info('||Saving dataset to parquet')
+            ensure_dir(self.results_path)
             if isinstance(data, pd.DataFrame):
                 data.to_parquet(file_path)
             elif isinstance(data, pl.DataFrame):
@@ -1042,6 +1045,7 @@ class ModelConfigPickle:
             logger.warning(f'model config {model_name}||File {file_path} already exists.')
         else:
             logger.info(model_name + '_v' + self.version + '_prepare_model_config.pickle' + '||Saving pickle')
+            ensure_dir(self.results_path)
             with open(file_path, "wb") as f:
                 pickle.dump(model_config, f)
 

@@ -8,7 +8,7 @@ from typing import List, Dict, Tuple, Optional, Any
 
 from outboxml.core.pydantic_models import ModelConfig
 from outboxml.core.errors import EnsembleError
-from outboxml.core.utils import ResultPickle
+from outboxml.core.utils import ResultPickle, ensure_dir
 
 from outboxml import config as env_config
 
@@ -256,7 +256,7 @@ class Ensemble:
         # Save pickle file locally
         now_time = datetime.now()
         result_pickle_name = ResultPickle().generate_name(self._ensemble_name, now_time)
-        with open(os.path.join(self.config.results_path, result_pickle_name), "wb") as f:
+        with open(os.path.join(ensure_dir(self.config.results_path), result_pickle_name), "wb") as f:
             pickle.dump(self._result_pickle, f)
         logger.info(f"saved ensemble to `{result_pickle_name}`")
 

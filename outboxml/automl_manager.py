@@ -23,7 +23,7 @@ from outboxml.core.email import EMail, AutoMLReviewEMail, HTMLReport
 from outboxml.core.enums import ModelsParams
 from outboxml.core.prepared_datasets import FeatureSelectionPrepareDataset
 from outboxml.core.pydantic_models import AutoMLConfig
-from outboxml.core.utils import ResultPickle
+from outboxml.core.utils import ResultPickle, ensure_dir
 from outboxml.dataset_retro import RetroDataset
 from outboxml.datasets_manager import DataSetsManager, ModelDataSubset
 from outboxml.export_results import ResultExport, GrafanaExport
@@ -937,7 +937,7 @@ class AutoMLManager(DataSetsManager):
         self.automl_results.result_pickle_name = result_pickle_name
         self.automl_results.all_models_config = f"{group_name}_{saving_start_time.strftime('%Y_%m_%d_%H_%M_%S')}.json"
 
-        with open(os.path.join(self._external_config.results_path, result_pickle_name), "wb") as f:
+        with open(os.path.join(ensure_dir(self._external_config.results_path), result_pickle_name), "wb") as f:
             pickle.dump(models_results, f)
         self._save_model_json()
 
@@ -1408,7 +1408,8 @@ class AutoMLManager(DataSetsManager):
                     if isinstance(feature.mapping, dict):
                         if not all(isinstance(key, str) for key in feature.mapping):
                             feature.mapping = {str(key): value for key, value in feature.mapping.items()}
-        with open(os.path.join(self._external_config.results_path, self.automl_results.all_models_config), "wb") as f:
+        with open(os.path.join(ensure_dir(self._external_config.results_path), self.automl_results.all_models_config),
+                  "wb") as f:
             pickle.dump(config_to_save.json(), f)
 
     def _init_logger(self):

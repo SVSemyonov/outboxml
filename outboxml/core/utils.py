@@ -119,6 +119,13 @@ def find_drop_values_pl(data_train: pl.Series, replace_dict: dict) -> List:
     return drop_values
 
 
+def ensure_dir(path) -> Path:
+    """Create the directory with its parents if needed and return it as a Path."""
+    path = Path(path)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def td_to_hms(td: timedelta) -> str:
     return str(td.seconds // 3600) + "h " + str((td.seconds // 60) % 60) + "m " + str(td.seconds % 60) + "s"
 
@@ -187,8 +194,7 @@ def save_results(
         config=None
 ) -> None:
     os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"
-    results_path = config.results_path
-    results_path.mkdir(exist_ok=True)
+    results_path = ensure_dir(config.results_path)
     group_path = results_path / group_name
     group_path.mkdir(exist_ok=True)
     model_path = config.results_path / group_name / model_config.name
