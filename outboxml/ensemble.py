@@ -169,7 +169,7 @@ class Ensemble:
             raise EnsembleError("invalid groups")
 
         self._all_groups = {}
-        unique_group_names = set()
+        unique_parts = set()  # a group may serve several conditions, but each (condition, group) only once
         for group in groups:
             if not isinstance(group, tuple) or len(group) != 2:
                 raise EnsembleError("invalid groups")
@@ -180,10 +180,9 @@ class Ensemble:
                 raise EnsembleError("invalid group_name")
             group_name = group_name.replace(".pickle", "")
 
-            if group_name in unique_group_names:
-                raise EnsembleError("not unique group names in `groups`")
-            else:
-                unique_group_names.add(group_name)
+            if (condition, group_name) in unique_parts:
+                raise EnsembleError(f"repeated condition and group in `groups`: ({condition!r}, {group_name!r})")
+            unique_parts.add((condition, group_name))
 
             if group_name not in self._all_groups:
                 self._load_group(group_name)
