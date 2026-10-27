@@ -78,3 +78,15 @@ def test_last_group_name_errors(tmp_path):
     write_pickles(tmp_path, ["titanic_without_date.pickle"])
     with pytest.raises(FileNotFoundError, match="no actual models"):
         ResultPickle(SimpleNamespace(prod_models_path=tmp_path)).get_last_group_name("titanic")
+
+
+def test_last_group_name_does_not_take_another_group_with_the_same_prefix(tmp_path):
+    now = datetime.now()
+    result_pickle = ResultPickle(SimpleNamespace(prod_models_path=tmp_path))
+    own = result_pickle.generate_name("titanic", now - timedelta(days=2))
+    write_pickles(tmp_path, [own, result_pickle.generate_name("titanic_by_sex", now - timedelta(days=1))])
+
+    assert result_pickle.get_last_group_name("titanic") == own.replace(".pickle", "")
+    assert result_pickle.get_last_group_name(own.replace(".pickle", "")) == own.replace(".pickle", "")
+    # a partial name without pickles of its own still finds by substring
+    assert result_pickle.get_last_group_name("by_sex").startswith("titanic_by_sex_")

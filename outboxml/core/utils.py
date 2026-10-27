@@ -153,6 +153,10 @@ class ResultPickle:
 
         return pickle_date_time
 
+    def _is_group_pickle(self, pickle_file: str, group_name: str) -> bool:
+        name = pickle_file.replace(".pickle", "")
+        return name == group_name or name[:-(self.date_time_len + 1)] == group_name
+
     def get_last_group_name(self, group_name: str=None) -> str:
         prod_models_path = Path(self.config.prod_models_path)
         if not prod_models_path.exists():
@@ -161,6 +165,15 @@ class ResultPickle:
         models_list = [f for f in os.listdir(prod_models_path) if f.endswith(FilesNames.pickle)]
         if not models_list:
             raise FileNotFoundError(f"Directory {prod_models_path} is empty.")
+
+        if group_name is not None:
+            # pickles of exactly this group ("<group>_<date>.pickle") go first: a substring match would also take
+            # other groups with the same prefix, e.g. "titanic_by_sex_<date>" for "titanic"
+            own_pickles = [f for f in models_list if self._is_group_pickle(f, group_name)]
+            if any(self.get_date_time(f, group_name) != self.date_time_default for f in own_pickles):
+                models_list = own_pickles
+            else:
+                logger.warning(f"No pickles of group {group_name}, searching by substring")
 
         models_date_time = [self.get_date_time(pickle_name, group_name) for pickle_name in models_list]
         if max(models_date_time) == self.date_time_default:
