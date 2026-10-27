@@ -16,6 +16,7 @@ from sklearn.preprocessing import LabelEncoder
 
 from outboxml.feature_importance import FeatureImportance
 from outboxml.monitoring_result import DataContext
+from outboxml.core.errors import ConfigError
 from outboxml.core.enums import ModelsParams
 from outboxml.data_subsets import DataPreprocessor, ModelDataSubset
 from outboxml.dataset_retro import RetroDataset
@@ -904,7 +905,6 @@ class DataSetsManager:
         :raises ValueError: If prepare engine is unknown.
         """
 
-        i = 0
         if self._prepare_datasets is None and self._prepare_engine == "pandas":
             self._prepare_datasets = {}
             logger.info("Load models prepare datasets")
@@ -927,11 +927,13 @@ class DataSetsManager:
 
         else:
             logger.info("User models prepare datasets")
-            for value in self._prepare_datasets.values():
+            models_configs = {model_config.name: model_config for model_config in self._models_configs}
+            for model_name, value in self._prepare_datasets.items():
                 if value.get_model_config() is None:
-                    logger.info(f"Load config  from DS Manager")
-                    value.load_model_config(model_config=self._models_configs[i])
-                    i += 1
+                    if model_name not in models_configs:
+                        raise ConfigError(f"No model '{model_name}' in models_configs for its prepared dataset")
+                    logger.info(f"Load config  from DS Manager||{model_name}")
+                    value.load_model_config(model_config=models_configs[model_name])
         self._default_name = list(self._prepare_datasets.keys())[0]
 
     def __load_models(self):
