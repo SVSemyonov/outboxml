@@ -82,3 +82,12 @@ def test_monitoring_error_mail_is_sent(mail_config, smtp):
 
     smtp.sendmail.assert_called_once()
     assert "PSI" in saved_html(mail_config)
+
+
+def test_release_mail_lists_only_models_with_new_features(mail_config, smtp):
+    EMail(config=mail_config).success_release_mail(group_name="example",
+                                                   new_features={"first": ["CABIN"], "second": [], "third": None})
+
+    html = saved_html(mail_config)
+    assert "first" in html and "CABIN" in html
+    assert "second" not in html and "third" not in html
