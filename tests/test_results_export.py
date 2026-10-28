@@ -151,3 +151,12 @@ class TestPlotExport(TestCase):
 
 if __name__ == '__main__':
     main()
+
+
+def test_result_export_with_config_without_base_path(tmp_path):
+    from types import SimpleNamespace
+
+    ds_manager = DataSetsManager(config_name=str(config_name))
+    export = ResultExport(ds_manager=ds_manager, config=SimpleNamespace(results_path=tmp_path / "results"))
+
+    assert export.config.results_path == tmp_path / "results"

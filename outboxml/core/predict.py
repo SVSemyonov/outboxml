@@ -104,7 +104,8 @@ async def ensemble_predict(
         version_model_filtered = {}
         df_filtered = {}
 
-        for condition, group_name, model in models:
+        # keyed by the condition position: one group may serve several conditions
+        for part, (condition, group_name, model) in enumerate(models):
             if not (data_filtered := data.query(condition)).empty:
                 result = one_model_predict(
                     group_name=group_name,
@@ -114,9 +115,9 @@ async def ensemble_predict(
                     modify_dtypes=modify_dtypes,
                     raise_on_encoding_error=raise_on_encoding_error,
                 )
-                result_filtered[group_name] = pd.Series(result["result"][model_name])
-                version_model_filtered[group_name] = pd.Series(result["version_model"][model_name])
-                df_filtered[group_name] = pd.DataFrame.from_dict(result["df"][model_name])
+                result_filtered[part] = pd.Series(result["result"][model_name])
+                version_model_filtered[part] = pd.Series(result["version_model"][model_name])
+                df_filtered[part] = pd.DataFrame.from_dict(result["df"][model_name])
 
         if len(result_filtered) > 1:
             result = pd.concat(

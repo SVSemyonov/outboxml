@@ -357,7 +357,7 @@ class EMail:
         self.mail.add_line_breaks(1)
         if new_features is not None:
             for key in new_features.keys():
-                if new_features[key] is not None or new_features[key] != []:
+                if new_features[key]:  # only models that got new features
                     self.mail.add_text(f"В модель {key} добавлены новые фичи: " + str(new_features[key]),
                         n_line_breaks=1,
                     )

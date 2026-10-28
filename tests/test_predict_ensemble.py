@@ -93,9 +93,6 @@ def test_group_validator_rejects_invalid_groups():
         GroupValidator([]).validate()
     with pytest.raises(NotImplementedError):
         GroupValidator(["not a model"]).validate()
-    duplicated = EnsembleResult(model_name="first", models=[("A > 1", "g", {}), ("A <= 1", "g", {})])
-    with pytest.raises(NotImplementedError):
-        GroupValidator([duplicated]).validate()
 
 
 def test_main_predict_with_ensemble_pickle(ensemble, ensemble_config, titanic, monkeypatch):
@@ -136,3 +133,27 @@ def test_ensemble_predict_single_row_with_compound_conditions(ensemble_config, t
     result = asyncio.run(ensemble_predict("titanic_by_sex_age", ensemble._result_pickle[0], row, log=False))
 
     assert set(result["result"]) == {"first"}
+
+
+def test_one_group_under_several_conditions(ensemble_config, titanic):
+    ensemble = Ensemble(config=ensemble_config)
+    ensemble.make_ensemble(ensemble_name="same_group", models_names=["first"],
+                           groups=[("SEX == 'male'", "group_male"), ("SEX == 'female'", "group_male")])
+    result_pickle = ensemble._result_pickle
+    GroupValidator(result_pickle).validate()
+    data = titanic.head(30)
+
+    result = asyncio.run(ensemble_predict("same_group", result_pickle[0], data, log=False))
+
+    predictions = pd.Series(result["result"]["first"])
+    assert sorted(predictions.index) == sorted(data.index)
+
+
+def test_repeated_condition_and_group_is_rejected(ensemble_config):
+    with pytest.raises(EnsembleError, match="repeated"):
+        Ensemble(config=ensemble_config).make_ensemble(
+            ensemble_name="dup", models_names=["first"],
+            groups=[("SEX == 'male'", "group_male"), ("SEX == 'male'", "group_male")])
+    duplicated = EnsembleResult(model_name="first", models=[("A > 1", "g", {}), ("A > 1", "g", {})])
+    with pytest.raises(NotImplementedError):
+        GroupValidator([duplicated]).validate()

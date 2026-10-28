@@ -600,6 +600,8 @@ class AutoMLManager(DataSetsManager):
         print(result.deployment)  # Check deployment decision
         """
 
+    _log_sink_id = None  # loguru sink of the current log.log, see _init_logger
+
     def __init__(self,
                  auto_ml_config,
                  models_config,
@@ -1436,6 +1438,13 @@ class AutoMLManager(DataSetsManager):
             automl._init_logger()
             # Logger configured to write to results_path/log.log
         """
+        # one log.log sink per process: drop the previous run's sink first, it also keeps the file open
+        if AutoMLManager._log_sink_id is not None:
+            try:
+                logger.remove(AutoMLManager._log_sink_id)
+            except ValueError:
+                pass  # already removed elsewhere, e.g. by logger.remove()
+            AutoMLManager._log_sink_id = None
         log_path = Path(str(self._external_config.results_path)) / 'log.log'
 
         if log_path.exists():
@@ -1459,4 +1468,4 @@ class AutoMLManager(DataSetsManager):
                 except:
                     pass  # If copying fails, just continue
 
-        logger.add(Path(str(self._external_config.results_path) + '/log.log'))
+        AutoMLManager._log_sink_id = logger.add(Path(str(self._external_config.results_path) + '/log.log'))

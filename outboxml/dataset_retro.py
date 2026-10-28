@@ -72,6 +72,7 @@ class RetroDataset(ABC):
             logger.info('Removed ' + str(i) +' features for model ' + model.name)
 
             model.features = features_for_retro
+            model.relative_features = relative_features_for_retro
 
         for column in target_columns_names:
             if column not in retro_columns:
