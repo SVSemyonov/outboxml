@@ -945,8 +945,9 @@ class AutoMLManager(DataSetsManager):
 
         try:
             logger.debug('Loading metrics to grafana')
-            df = ResultExport(ds_manager=ds_manager_for_save).grafana_export(project_name=group_name,
-                                                                             date_time=datetime.now())
+            df = ResultExport(ds_manager=ds_manager_for_save,
+                              config=self._external_config).grafana_export(project_name=group_name,
+                                                                           date_time=datetime.now())
 
             GrafanaExport(df=df, table_name=self._auto_ml_config.grafana_table_name,
                           connection=self.__grafana_connection).load_data_to_db()
@@ -1265,9 +1266,9 @@ class AutoMLManager(DataSetsManager):
         df = pd.DataFrame()
         for key in self._results.keys():
             model_config = self._results[key].config
-            ds = DataSetsManager(config_name=self.__default_models_config)
+            ds = DataSetsManager(config_name=self.__default_models_config, external_config=self._external_config)
             ds._all_models_config = model_config
-            res_export = ResultExport(ds_manager=ds)
+            res_export = ResultExport(ds_manager=ds, config=self._external_config)
             res_export.result = self._results
             try:
                 if result_to_compare is not None:

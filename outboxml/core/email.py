@@ -445,9 +445,9 @@ class EMailDSResult(EMail):
 
         for key in self._ds_manager_result.keys():
             model_config = self._ds_manager_result[key].config
-            ds = DataSetsManager(config_name=model_config.model_dump(mode='json'))
+            ds = DataSetsManager(config_name=model_config.model_dump(mode='json'), external_config=self.config)
             ds._all_models_config = model_config
-            res_export = ResultExport(ds_manager=ds)
+            res_export = ResultExport(ds_manager=ds, config=self.config)
             res_export.result = self._ds_manager_result[key]
             try:
                 df1 = res_export.metrics_df(model_name=key,
@@ -456,7 +456,7 @@ class EMailDSResult(EMail):
                                             self._ds_manager_result[key].metrics)
                 df1 = df1.reset_index()[['index', 'full']]
                 df1.columns = [ResultNames.metric, ResultNames.new_result_train]
-                df2 = ResultExport(ds_manager=ds).metrics_df(model_name=key,
+                df2 = ResultExport(ds_manager=ds, config=self.config).metrics_df(model_name=key,
                                                              train_test='test',
                                                              metrics_dict=
                                                              self._ds_manager_result[
@@ -634,9 +634,9 @@ class EMailDSCompareResult(EMailDSResult):
 
         for key in self._ds_manager_result.keys():
             model_config = self._ds_manager_result[key].config
-            ds = DataSetsManager(config_name=model_config.model_dump(mode='json'))
+            ds = DataSetsManager(config_name=model_config.model_dump(mode='json'), external_config=self.config)
             ds._all_models_config = model_config
-            res_export = ResultExport(ds_manager=ds)
+            res_export = ResultExport(ds_manager=ds, config=self.config)
             res_export.result = self._ds_manager_result
             try:
                 metrics_df = res_export.compare_metrics(model_name=key,
