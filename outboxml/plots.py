@@ -1184,11 +1184,13 @@ class PlotlyWrapper:
         """
         if self.plotly_params is not None:
             logger.info('loading plotly parmas||PlotlyWrapper')
-            iteration = deepcopy(self.plotly_params)
-            for key in iteration.keys():
-                try:
-                    new_value = deepcopy(self.plotly_params[key])
+            for key, new_value in deepcopy(self.plotly_params).items():
+                if key in ('colors', 'mode', 'names') and isinstance(new_value, dict):
+                    # traces read self.colors/self.mode/self.names: update them, keep unspecified defaults
+                    getattr(self, key).update(new_value)
+                elif key in self.params:
                     self.params[key] = new_value
-                    logger.info('Updating ' + str(key) + '||PlotlyWrapper')
-                except:
-                    logger.error('Wrong plotly param' + key)
+                else:
+                    logger.error('Wrong plotly param ' + str(key))
+                    continue
+                logger.info('Updating ' + str(key) + '||PlotlyWrapper')
