@@ -11,6 +11,7 @@ from outboxml.dsml.mailing import Mail
 from outboxml.export_results import ResultExport
 from outboxml.plots import MLPlot, DataframeForPlots, CompareModelsPlot
 from outboxml.core.enums import ResultNames
+from outboxml.core.utils import ensure_dir
 
 
 class EMail:
@@ -83,7 +84,7 @@ class EMail:
         """
         # The body is attached to the MIME message only in Mail.send_mail, so save the HTML body itself
         logger.info('Saving mail as html in results path')
-        with open(os.path.join(self.config.results_path, 'email.html'), 'w', encoding='utf-8') as f:
+        with open(os.path.join(ensure_dir(self.config.results_path), 'email.html'), 'w', encoding='utf-8') as f:
             f.write(self.mail.body)
 
     def header(self, group_name: str = 'Test Email'):
@@ -183,7 +184,7 @@ class EMail:
 
         Images are not rendered: PNG export needs kaleido, which can hang on Windows.
         """
-        path = os.path.join(self.config.results_path, f"{name}.html")
+        path = os.path.join(ensure_dir(self.config.results_path), f"{name}.html")
         figure.write_html(path, include_plotlyjs="cdn")
         with open(path, encoding="utf-8") as f:
             self.mail.add_html_attachment(f.read(), filename=os.path.basename(path), n_line_breaks=1)
@@ -1222,7 +1223,7 @@ class HTMLReport:
             # Adds: <iframe src="bar_chart.html" width="800" height="500"></iframe>
         """
         if figure:
-            plot_path = os.path.join(self.config.results_path, f"{plot_name}.html")
+            plot_path = os.path.join(ensure_dir(self.config.results_path), f"{plot_name}.html")
             figure.write_html(plot_path)
             self.html_content.append(f'<iframe src="{plot_path}" width="800" height="500"></iframe>')
 
@@ -1268,6 +1269,7 @@ class HTMLReport:
             </html>
             """
 
+        ensure_dir(os.path.dirname(self.report_path))
         with open(self.report_path, "w", encoding="utf-8") as f:
             f.write(full_html)
         print(f"Report saved to: {self.report_path}")
