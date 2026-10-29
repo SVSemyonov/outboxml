@@ -128,7 +128,8 @@ class FeatureSelectionInterface(SelectionInterface):
         res = pd.DataFrame([summary['eliminated_features_names'] + summary['selected_features_names'],
                             summary['loss_graph']['loss_values']]).T  # .plot()
         rank = self._config.top_features_to_select
-        self.last = list(res[res.index >= (res.index.max() - rank)][0].values)
+        # the last `rank` features of the elimination order are the best ones
+        self.last = list(res[res.index > (res.index.max() - rank)][0].values)
         logger.info('Choosing top ' + str(rank) + str(' features') + '||' + str(self.last))
         if self._config.max_corr_value is not None:
             self.to_drop = CorrelationMatrix(data=data_subset.X,

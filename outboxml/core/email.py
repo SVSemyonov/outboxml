@@ -11,6 +11,7 @@ from outboxml.dsml.mailing import Mail
 from outboxml.export_results import ResultExport
 from outboxml.plots import MLPlot, DataframeForPlots, CompareModelsPlot
 from outboxml.core.enums import ResultNames
+from outboxml.core.utils import ensure_dir
 
 
 class EMail:
@@ -83,7 +84,7 @@ class EMail:
         """
         # The body is attached to the MIME message only in Mail.send_mail, so save the HTML body itself
         logger.info('Saving mail as html in results path')
-        with open(os.path.join(self.config.results_path, 'email.html'), 'w', encoding='utf-8') as f:
+        with open(os.path.join(ensure_dir(self.config.results_path), 'email.html'), 'w', encoding='utf-8') as f:
             f.write(self.mail.body)
 
     def header(self, group_name: str = 'Test Email'):
@@ -183,7 +184,7 @@ class EMail:
 
         Images are not rendered: PNG export needs kaleido, which can hang on Windows.
         """
-        path = os.path.join(self.config.results_path, f"{name}.html")
+        path = os.path.join(ensure_dir(self.config.results_path), f"{name}.html")
         figure.write_html(path, include_plotlyjs="cdn")
         with open(path, encoding="utf-8") as f:
             self.mail.add_html_attachment(f.read(), filename=os.path.basename(path), n_line_breaks=1)
@@ -356,7 +357,7 @@ class EMail:
         self.mail.add_line_breaks(1)
         if new_features is not None:
             for key in new_features.keys():
-                if new_features[key] is not None or new_features[key] != []:
+                if new_features[key]:  # only models that got new features
                     self.mail.add_text(f"В модель {key} добавлены новые фичи: " + str(new_features[key]),
                         n_line_breaks=1,
                     )
@@ -444,9 +445,9 @@ class EMailDSResult(EMail):
 
         for key in self._ds_manager_result.keys():
             model_config = self._ds_manager_result[key].config
-            ds = DataSetsManager(config_name=model_config.model_dump(mode='json'))
+            ds = DataSetsManager(config_name=model_config.model_dump(mode='json'), external_config=self.config)
             ds._all_models_config = model_config
-            res_export = ResultExport(ds_manager=ds)
+            res_export = ResultExport(ds_manager=ds, config=self.config)
             res_export.result = self._ds_manager_result[key]
             try:
                 df1 = res_export.metrics_df(model_name=key,
@@ -455,7 +456,7 @@ class EMailDSResult(EMail):
                                             self._ds_manager_result[key].metrics)
                 df1 = df1.reset_index()[['index', 'full']]
                 df1.columns = [ResultNames.metric, ResultNames.new_result_train]
-                df2 = ResultExport(ds_manager=ds).metrics_df(model_name=key,
+                df2 = ResultExport(ds_manager=ds, config=self.config).metrics_df(model_name=key,
                                                              train_test='test',
                                                              metrics_dict=
                                                              self._ds_manager_result[
@@ -633,9 +634,9 @@ class EMailDSCompareResult(EMailDSResult):
 
         for key in self._ds_manager_result.keys():
             model_config = self._ds_manager_result[key].config
-            ds = DataSetsManager(config_name=model_config.model_dump(mode='json'))
+            ds = DataSetsManager(config_name=model_config.model_dump(mode='json'), external_config=self.config)
             ds._all_models_config = model_config
-            res_export = ResultExport(ds_manager=ds)
+            res_export = ResultExport(ds_manager=ds, config=self.config)
             res_export.result = self._ds_manager_result
             try:
                 metrics_df = res_export.compare_metrics(model_name=key,
@@ -1222,7 +1223,7 @@ class HTMLReport:
             # Adds: <iframe src="bar_chart.html" width="800" height="500"></iframe>
         """
         if figure:
-            plot_path = os.path.join(self.config.results_path, f"{plot_name}.html")
+            plot_path = os.path.join(ensure_dir(self.config.results_path), f"{plot_name}.html")
             figure.write_html(plot_path)
             self.html_content.append(f'<iframe src="{plot_path}" width="800" height="500"></iframe>')
 
@@ -1268,6 +1269,7 @@ class HTMLReport:
             </html>
             """
 
+        ensure_dir(os.path.dirname(self.report_path))
         with open(self.report_path, "w", encoding="utf-8") as f:
             f.write(full_html)
         print(f"Report saved to: {self.report_path}")

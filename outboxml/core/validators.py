@@ -20,12 +20,12 @@ class GroupValidator(BaseValidator):
     @staticmethod
     def validate_ensemble(ensemble: EnsembleResult):
         models = ensemble.models  # List[tuple[condition: str, group_name: str,  model: ModelsResult]]
-        unique_group_names = set()
+        # a group may serve several conditions, but each (condition, group) only once
+        unique_parts = set()
         for condition, group_name, model in models:
-            if group_name in unique_group_names:
-                raise NotImplementedError(f"Not unique group names in ensemble: {group_name}")
-            else:
-                unique_group_names.add(group_name)
+            if (condition, group_name) in unique_parts:
+                raise NotImplementedError(f"Repeated condition and group in ensemble: ({condition}, {group_name})")
+            unique_parts.add((condition, group_name))
 
     def validate(self):
 

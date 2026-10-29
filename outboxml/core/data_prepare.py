@@ -1302,7 +1302,7 @@ def prepare_dataset(
 
     if save_data and not as_dict:
         results_path = model_config.results_path
-        results_path.mkdir(exist_ok=True)
+        results_path.mkdir(parents=True, exist_ok=True)
         group_path = results_path / group_name
         group_path.mkdir(exist_ok=True)
         model_path = model_config.results_path / group_name / model_config.name

@@ -81,9 +81,8 @@ class ResultExport:
         else:
             self.config = config
 
-        self.__base_path = self.config.base_path
         self.__results_path = self.config.results_path
-        self.__results_path.mkdir(exist_ok=True)
+        self.__results_path.mkdir(parents=True, exist_ok=True)
         self._ds_manager_to_compare = ds_manager_to_compare
         self.result_to_compare = None
 

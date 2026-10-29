@@ -8,7 +8,7 @@ from typing import List, Dict, Tuple, Optional, Any
 
 from outboxml.core.pydantic_models import ModelConfig
 from outboxml.core.errors import EnsembleError
-from outboxml.core.utils import ResultPickle
+from outboxml.core.utils import ResultPickle, ensure_dir
 
 from outboxml import config as env_config
 
@@ -169,7 +169,7 @@ class Ensemble:
             raise EnsembleError("invalid groups")
 
         self._all_groups = {}
-        unique_group_names = set()
+        unique_parts = set()  # a group may serve several conditions, but each (condition, group) only once
         for group in groups:
             if not isinstance(group, tuple) or len(group) != 2:
                 raise EnsembleError("invalid groups")
@@ -180,10 +180,9 @@ class Ensemble:
                 raise EnsembleError("invalid group_name")
             group_name = group_name.replace(".pickle", "")
 
-            if group_name in unique_group_names:
-                raise EnsembleError("not unique group names in `groups`")
-            else:
-                unique_group_names.add(group_name)
+            if (condition, group_name) in unique_parts:
+                raise EnsembleError(f"repeated condition and group in `groups`: ({condition!r}, {group_name!r})")
+            unique_parts.add((condition, group_name))
 
             if group_name not in self._all_groups:
                 self._load_group(group_name)
@@ -256,7 +255,7 @@ class Ensemble:
         # Save pickle file locally
         now_time = datetime.now()
         result_pickle_name = ResultPickle().generate_name(self._ensemble_name, now_time)
-        with open(os.path.join(self.config.results_path, result_pickle_name), "wb") as f:
+        with open(os.path.join(ensure_dir(self.config.results_path), result_pickle_name), "wb") as f:
             pickle.dump(self._result_pickle, f)
         logger.info(f"saved ensemble to `{result_pickle_name}`")
 

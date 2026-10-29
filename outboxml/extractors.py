@@ -282,11 +282,15 @@ def get_useful_columns(data_config: DataModelConfig, models_configs: List[ModelC
 
     features = list(set(
         [f.name for mc in models_configs for f in mc.features]
+        # relative features are computed from these source columns
+        + [column for mc in models_configs for rf in (mc.relative_features or [])
+           for column in (rf.numerator, rf.denominator)]
     ))
 
     targets = list(set(
         [mc.column_target for mc in models_configs]
         + [mc.column_exposure for mc in models_configs if mc.column_exposure]
+        + [mc.column_weight for mc in models_configs if mc.column_weight]
     ))
 
     extra_columns = list(set(

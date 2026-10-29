@@ -23,7 +23,7 @@ from outboxml.core.email import EMail, AutoMLReviewEMail, HTMLReport
 from outboxml.core.enums import ModelsParams
 from outboxml.core.prepared_datasets import FeatureSelectionPrepareDataset
 from outboxml.core.pydantic_models import AutoMLConfig
-from outboxml.core.utils import ResultPickle
+from outboxml.core.utils import ResultPickle, ensure_dir
 from outboxml.dataset_retro import RetroDataset
 from outboxml.datasets_manager import DataSetsManager, ModelDataSubset
 from outboxml.export_results import ResultExport, GrafanaExport
@@ -600,6 +600,8 @@ class AutoMLManager(DataSetsManager):
         print(result.deployment)  # Check deployment decision
         """
 
+    _log_sink_id = None  # loguru sink of the current log.log, see _init_logger
+
     def __init__(self,
                  auto_ml_config,
                  models_config,
@@ -937,14 +939,15 @@ class AutoMLManager(DataSetsManager):
         self.automl_results.result_pickle_name = result_pickle_name
         self.automl_results.all_models_config = f"{group_name}_{saving_start_time.strftime('%Y_%m_%d_%H_%M_%S')}.json"
 
-        with open(os.path.join(self._external_config.results_path, result_pickle_name), "wb") as f:
+        with open(os.path.join(ensure_dir(self._external_config.results_path), result_pickle_name), "wb") as f:
             pickle.dump(models_results, f)
         self._save_model_json()
 
         try:
             logger.debug('Loading metrics to grafana')
-            df = ResultExport(ds_manager=ds_manager_for_save).grafana_export(project_name=group_name,
-                                                                             date_time=datetime.now())
+            df = ResultExport(ds_manager=ds_manager_for_save,
+                              config=self._external_config).grafana_export(project_name=group_name,
+                                                                           date_time=datetime.now())
 
             GrafanaExport(df=df, table_name=self._auto_ml_config.grafana_table_name,
                           connection=self.__grafana_connection).load_data_to_db()
@@ -1263,9 +1266,9 @@ class AutoMLManager(DataSetsManager):
         df = pd.DataFrame()
         for key in self._results.keys():
             model_config = self._results[key].config
-            ds = DataSetsManager(config_name=self.__default_models_config)
+            ds = DataSetsManager(config_name=self.__default_models_config, external_config=self._external_config)
             ds._all_models_config = model_config
-            res_export = ResultExport(ds_manager=ds)
+            res_export = ResultExport(ds_manager=ds, config=self._external_config)
             res_export.result = self._results
             try:
                 if result_to_compare is not None:
@@ -1408,7 +1411,8 @@ class AutoMLManager(DataSetsManager):
                     if isinstance(feature.mapping, dict):
                         if not all(isinstance(key, str) for key in feature.mapping):
                             feature.mapping = {str(key): value for key, value in feature.mapping.items()}
-        with open(os.path.join(self._external_config.results_path, self.automl_results.all_models_config), "wb") as f:
+        with open(os.path.join(ensure_dir(self._external_config.results_path), self.automl_results.all_models_config),
+                  "wb") as f:
             pickle.dump(config_to_save.json(), f)
 
     def _init_logger(self):
@@ -1435,6 +1439,13 @@ class AutoMLManager(DataSetsManager):
             automl._init_logger()
             # Logger configured to write to results_path/log.log
         """
+        # one log.log sink per process: drop the previous run's sink first, it also keeps the file open
+        if AutoMLManager._log_sink_id is not None:
+            try:
+                logger.remove(AutoMLManager._log_sink_id)
+            except ValueError:
+                pass  # already removed elsewhere, e.g. by logger.remove()
+            AutoMLManager._log_sink_id = None
         log_path = Path(str(self._external_config.results_path)) / 'log.log'
 
         if log_path.exists():
@@ -1458,4 +1469,4 @@ class AutoMLManager(DataSetsManager):
                 except:
                     pass  # If copying fails, just continue
 
-        logger.add(Path(str(self._external_config.results_path) + '/log.log'))
+        AutoMLManager._log_sink_id = logger.add(Path(str(self._external_config.results_path) + '/log.log'))
