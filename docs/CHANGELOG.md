@@ -5,7 +5,7 @@ This project is based on [Semantic Versioning](https://semver.org/) and the [Kee
 
 ---
 
-## [Unreleased]
+## [1.0.0]
 
 ### Added
 - Test suite runs without Docker: pytest with an isolated config, a local MLflow file store and SQLite
