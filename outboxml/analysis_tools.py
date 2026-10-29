@@ -124,7 +124,9 @@ class CorrelationMatrix(Analysis):
                 """
         self.X = self.X[reversed(self.last)]  # упорядочен по значимости
         logger.debug('Feature selection||Calculating correlations')
-        phik_matrix = self.X.phik_matrix(interval_cols=self.features_numerical)
+        # njobs=1: phik's loky worker pool can fail to shut down on Windows, and the failure
+        # would end feature selection with no features selected
+        phik_matrix = self.X.phik_matrix(interval_cols=self.features_numerical, njobs=1)
         upper = phik_matrix.where(np.triu(np.ones(phik_matrix.shape), k=1).astype(
             bool))  # берем из набора скоррелированных только самую значимую
 
